@@ -54,47 +54,47 @@ contract ZENTVesting {
     /// @notice Fund and set vesting schedule for a batch of beneficiaries.
     /// @dev Must be called after ZENT has been approved for transfer.
     function fund(
-        address[] calldata _beneficiaries,
-        uint256[] calldata _amounts,
-        uint64[] calldata _cliffs,
-        uint64[] calldata _vestDurations,
-        bool[] calldata _revocables,
+        address[] calldata scheduleBeneficiaries,
+        uint256[] calldata scheduleAmounts,
+        uint64[] calldata scheduleCliffs,
+        uint64[] calldata scheduleVestDurations,
+        bool[] calldata scheduleRevocables,
         uint64 startTime_
     ) external onlyDeployer {
-        require(_beneficiaries.length == _amounts.length, "ZENTVesting: length mismatch");
-        require(_beneficiaries.length == _cliffs.length, "ZENTVesting: length mismatch");
-        require(_beneficiaries.length == _vestDurations.length, "ZENTVesting: length mismatch");
-        require(_beneficiaries.length == _revocables.length, "ZENTVesting: length mismatch");
+        require(scheduleBeneficiaries.length == scheduleAmounts.length, "ZENTVesting: length mismatch");
+        require(scheduleBeneficiaries.length == scheduleCliffs.length, "ZENTVesting: length mismatch");
+        require(scheduleBeneficiaries.length == scheduleVestDurations.length, "ZENTVesting: length mismatch");
+        require(scheduleBeneficiaries.length == scheduleRevocables.length, "ZENTVesting: length mismatch");
 
-        uint256 totalToFund;
-        for (uint256 i = 0; i < _beneficiaries.length; i++) {
-            require(_beneficiaries[i] != address(0), "ZENTVesting: zero beneficiary");
-            require(_amounts[i] > 0, "ZENTVesting: zero amount");
-            require(_vestDurations[i] > 0, "ZENTVesting: zero duration");
+        uint256 totalToFund = 0;
+        for (uint256 i = 0; i < scheduleBeneficiaries.length; i++) {
+            require(scheduleBeneficiaries[i] != address(0), "ZENTVesting: zero beneficiary");
+            require(scheduleAmounts[i] > 0, "ZENTVesting: zero amount");
+            require(scheduleVestDurations[i] > 0, "ZENTVesting: zero duration");
 
             for (uint256 j = 0; j < i; j++) {
-                require(_beneficiaries[i] != _beneficiaries[j], "ZENTVesting: duplicate beneficiary");
+                require(scheduleBeneficiaries[i] != scheduleBeneficiaries[j], "ZENTVesting: duplicate beneficiary");
             }
 
-            require(schedules[_beneficiaries[i]].totalAmount == 0, "ZENTVesting: schedule exists");
-            totalToFund += _amounts[i];
+            require(schedules[scheduleBeneficiaries[i]].totalAmount == 0, "ZENTVesting: schedule exists");
+            totalToFund += scheduleAmounts[i];
         }
 
-        for (uint256 i = 0; i < _beneficiaries.length; i++) {
-            beneficiaries.push(_beneficiaries[i]);
-            schedules[_beneficiaries[i]] = VestingSchedule({
-                totalAmount: _amounts[i].toUint128(),
+        for (uint256 i = 0; i < scheduleBeneficiaries.length; i++) {
+            beneficiaries.push(scheduleBeneficiaries[i]);
+            schedules[scheduleBeneficiaries[i]] = VestingSchedule({
+                totalAmount: scheduleAmounts[i].toUint128(),
                 startTime: startTime_,
-                cliffDuration: _cliffs[i],
-                vestDuration: _vestDurations[i],
+                cliffDuration: scheduleCliffs[i],
+                vestDuration: scheduleVestDurations[i],
                 claimed: 0,
-                revocable: _revocables[i],
+                revocable: scheduleRevocables[i],
                 revoked: false
             });
         }
 
-        require(zent.transferFrom(msg.sender, address(this), totalToFund), "ZENTVesting: transfer failed");
         emit Funded(msg.sender, totalToFund);
+        require(zent.transferFrom(msg.sender, address(this), totalToFund), "ZENTVesting: transfer failed");
     }
 
     /// @notice Number of beneficiaries
@@ -105,6 +105,8 @@ contract ZENTVesting {
     /// @notice Compute the vested amount for a beneficiary at the current timestamp.
     function vestedAmount(address beneficiary) public view returns (uint256) {
         VestingSchedule memory s = schedules[beneficiary];
+        // Intentional existence check — a zero total means no schedule set.
+        // slither-disable-next-line incorrect-equality
         if (s.totalAmount == 0) return 0;
         uint256 vested = s.revoked ? s.totalAmount : _vestedTotal(s, block.timestamp);
         if (vested <= s.claimed) return 0;
@@ -112,15 +114,16 @@ contract ZENTVesting {
     }
 
     /// @notice Claim available vested tokens to the beneficiary's own address.
-    function claim() external returns (uint256) {
+    function claim() external returns (uint256 amount) {
         address beneficiary = msg.sender;
-        uint256 claimable = vestedAmount(beneficiary);
-        require(claimable > 0, "ZENTVesting: nothing to claim");
+        amount = vestedAmount(beneficiary);
+        require(amount > 0, "ZENTVesting: nothing to claim");
 
-        schedules[beneficiary].claimed = (schedules[beneficiary].claimed + claimable).toUint128();
-        require(zent.transfer(beneficiary, claimable), "ZENTVesting: transfer failed");
-        emit Claimed(beneficiary, claimable);
-        return claimable;
+        uint256 newClaimed = uint256(schedules[beneficiary].claimed) + amount;
+        schedules[beneficiary].claimed = newClaimed.toUint128();
+
+        emit Claimed(beneficiary, amount);
+        require(zent.transfer(beneficiary, amount), "ZENTVesting: transfer failed");
     }
 
     /// @notice Deployer can revoke a revocable schedule and reclaim unvested tokens.

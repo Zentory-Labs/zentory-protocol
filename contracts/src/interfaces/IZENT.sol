@@ -12,5 +12,6 @@ interface IZENT is IERC20, IERC20Metadata, IERC5805 {
     error ZENT_Locked();
 
     /// @notice Returns the fixed token supply cap.
+    // slither-disable-next-line naming-convention
     function CAP() external view returns (uint256);
 }

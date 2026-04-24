@@ -22,17 +22,17 @@ contract BaseVault is ERC4626, AccessControl, IVault {
     bytes32 public constant RISK_COUNCIL_ROLE = keccak256("RISK_COUNCIL_ROLE");
 
     // ─── Immutable Risk Rails ──────────────────────────────────────────────
-    uint256 public override maxLeverage;
-    uint256 public maxPositionSizeBPS;
-    uint256 public circuitBreakerDrawdownBPS;
-    uint256 public rebalanceThresholdBPS;
+    uint256 public immutable override maxLeverage;
+    uint256 public immutable maxPositionSizeBPS;
+    uint256 public immutable circuitBreakerDrawdownBPS;
+    uint256 public immutable rebalanceThresholdBPS;
 
     // ─── State ──────────────────────────────────────────────────────────────
     uint256 public override highWaterMark;
     uint256 public override lastNavPerShare;
-    uint256 public override performanceFee;
+    uint256 public immutable override performanceFee;
     /// @inheritdoc IVault
-    address public override feeRecipient;
+    address public immutable override feeRecipient;
     uint256 public performanceFeeAccrued;
     bool public override isCircuitBreakerActive;
     int8 public override currentDirection;
@@ -52,62 +52,41 @@ contract BaseVault is ERC4626, AccessControl, IVault {
 
     // ─── Constructor ───────────────────────────────────────────────────────
     constructor(
-        address _asset,
-        string memory _name,
-        string memory _symbol,
-        uint256 _maxLeverage,
-        uint256 _maxPositionSizeBPS,
-        uint256 _circuitBreakerDrawdownBPS,
-        uint256 _rebalanceThresholdBPS,
-        uint256 _performanceFeeBPS,
-        address _feeRecipient,
-        address _admin
-    )
-        ERC20(_name, _symbol)
-        ERC4626(IERC20(
-                _validateConstructorConfig(
-                    _asset,
-                    _maxPositionSizeBPS,
-                    _circuitBreakerDrawdownBPS,
-                    _rebalanceThresholdBPS,
-                    _performanceFeeBPS,
-                    _feeRecipient,
-                    _admin
-                )
-            ))
-        AccessControl()
-    {
-        maxLeverage = _maxLeverage;
-        maxPositionSizeBPS = _maxPositionSizeBPS;
-        circuitBreakerDrawdownBPS = _circuitBreakerDrawdownBPS;
-        rebalanceThresholdBPS = _rebalanceThresholdBPS;
-        performanceFee = _performanceFeeBPS;
-        feeRecipient = _feeRecipient;
+        address asset_,
+        string memory name_,
+        string memory symbol_,
+        uint256 maxLeverage_,
+        uint256 maxPositionSizeBPS_,
+        uint256 circuitBreakerDrawdownBPS_,
+        uint256 rebalanceThresholdBPS_,
+        uint256 performanceFeeBPS_,
+        address feeRecipient_,
+        address admin_
+    ) ERC20(name_, symbol_) ERC4626(IERC20(_validateAsset(asset_))) {
+        require(feeRecipient_ != address(0), "BaseVault: zero fee recipient");
+        require(admin_ != address(0), "BaseVault: zero admin");
+        require(maxPositionSizeBPS_ <= 10000, "BaseVault: invalid position limit");
+        require(circuitBreakerDrawdownBPS_ <= 10000, "BaseVault: invalid drawdown");
+        require(rebalanceThresholdBPS_ <= 10000, "BaseVault: invalid rebalance threshold");
+        require(performanceFeeBPS_ <= 10000, "BaseVault: invalid performance fee");
 
-        uint256 assetUnit = 10 ** IERC20Metadata(_asset).decimals();
+        maxLeverage = maxLeverage_;
+        maxPositionSizeBPS = maxPositionSizeBPS_;
+        circuitBreakerDrawdownBPS = circuitBreakerDrawdownBPS_;
+        rebalanceThresholdBPS = rebalanceThresholdBPS_;
+        performanceFee = performanceFeeBPS_;
+        feeRecipient = feeRecipient_;
+
+        uint256 assetUnit = 10 ** IERC20Metadata(asset_).decimals();
         lastNavPerShare = assetUnit;
         highWaterMark = assetUnit;
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 
-    function _validateConstructorConfig(
-        address _asset,
-        uint256 _maxPositionSizeBPS,
-        uint256 _circuitBreakerDrawdownBPS,
-        uint256 _rebalanceThresholdBPS,
-        uint256 _performanceFeeBPS,
-        address _feeRecipient,
-        address _admin
-    ) private pure returns (address) {
-        require(_asset != address(0), "BaseVault: zero asset");
-        require(_feeRecipient != address(0), "BaseVault: zero fee recipient");
-        require(_admin != address(0), "BaseVault: zero admin");
-        require(_maxPositionSizeBPS <= 10000, "BaseVault: invalid position limit");
-        require(_circuitBreakerDrawdownBPS <= 10000, "BaseVault: invalid drawdown");
-        require(_rebalanceThresholdBPS <= 10000, "BaseVault: invalid rebalance threshold");
-        require(_performanceFeeBPS <= 10000, "BaseVault: invalid performance fee");
-        return _asset;
+    function _validateAsset(address asset_) private pure returns (address) {
+        require(asset_ != address(0), "BaseVault: zero asset");
+        return asset_;
     }
 
     // ─── ERC4626 Overrides ─────────────────────────────────────────────────
@@ -120,6 +99,8 @@ contract BaseVault is ERC4626, AccessControl, IVault {
     {
         uint256 balanceBefore = IERC20(asset()).balanceOf(address(this));
         uint256 shares = super.deposit(assets, receiver);
+        // The vault intentionally rejects fee-on-transfer or rebasing assets.
+        // slither-disable-next-line incorrect-equality
         require(IERC20(asset()).balanceOf(address(this)) - balanceBefore == assets, "BaseVault: unsupported asset");
         return shares;
     }
@@ -128,6 +109,8 @@ contract BaseVault is ERC4626, AccessControl, IVault {
         uint256 balanceBefore = IERC20(asset()).balanceOf(address(this));
         uint256 assets = previewMint(shares);
         uint256 mintedShares = super.mint(shares, receiver);
+        // The vault intentionally rejects fee-on-transfer or rebasing assets.
+        // slither-disable-next-line incorrect-equality
         require(IERC20(asset()).balanceOf(address(this)) - balanceBefore == assets, "BaseVault: unsupported asset");
         return mintedShares;
     }
@@ -145,6 +128,7 @@ contract BaseVault is ERC4626, AccessControl, IVault {
     /// @inheritdoc IVault
     function getNavPerShare() public view returns (uint256) {
         uint256 supply = totalSupply();
+        // slither-disable-next-line incorrect-equality
         if (supply == 0) return lastNavPerShare;
         uint256 assetUnit = 10 ** IERC20Metadata(asset()).decimals();
         return (totalAssets() * assetUnit) / supply;

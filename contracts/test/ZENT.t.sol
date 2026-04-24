@@ -45,22 +45,22 @@ contract ZENTTest is Test {
     function test_transfer() external {
         address alice = makeAddr("alice");
         uint256 amount = 1000e18;
-        zent.transfer(alice, amount);
+        assertTrue(zent.transfer(alice, amount));
         assertEq(zent.balanceOf(alice), amount);
         assertEq(zent.balanceOf(address(this)), TOTAL_SUPPLY - amount);
     }
 
     function test_transferToZeroReverts() external {
-        vm.expectRevert();
-        zent.transfer(address(0), 1000e18);
+        (bool success,) = address(zent).call(abi.encodeCall(zent.transfer, (address(0), 1000e18)));
+        assertFalse(success);
     }
 
     function test_transferFrom() external {
         address alice = makeAddr("alice");
         uint256 amount = 500e18;
-        zent.approve(alice, amount);
+        assertTrue(zent.approve(alice, amount));
         vm.prank(alice);
-        zent.transferFrom(address(this), alice, amount);
+        assertTrue(zent.transferFrom(address(this), alice, amount));
         assertEq(zent.balanceOf(alice), amount);
     }
 
@@ -77,9 +77,9 @@ contract ZENTTest is Test {
     function test_burnFrom() external {
         address alice = makeAddr("alice");
         uint256 amount = 200e18;
-        zent.transfer(alice, amount);
+        assertTrue(zent.transfer(alice, amount));
         vm.prank(alice);
-        zent.approve(address(this), amount);
+        assertTrue(zent.approve(address(this), amount));
         zent.burnFrom(alice, amount);
         assertEq(zent.balanceOf(alice), 0);
         assertEq(zent.totalSupply(), TOTAL_SUPPLY - amount);
@@ -107,7 +107,7 @@ contract ZENTTest is Test {
 
     function test_delegate() external {
         address voter = makeAddr("voter");
-        zent.transfer(voter, 1000e18);
+        assertTrue(zent.transfer(voter, 1000e18));
         vm.prank(voter);
         zent.delegate(voter);
         assertEq(zent.getVotes(voter), 1000e18);
@@ -116,7 +116,7 @@ contract ZENTTest is Test {
     function test_delegationTransfersCheckpoint() external {
         address from = makeAddr("from");
         address to = makeAddr("to");
-        zent.transfer(from, 500e18);
+        assertTrue(zent.transfer(from, 500e18));
         vm.prank(from);
         zent.delegate(to);
         assertEq(zent.getVotes(to), 500e18);

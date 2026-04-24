@@ -5,10 +5,11 @@ import {BaseVault} from "./BaseVault.sol";
 
 /// @title zBTCVault
 /// @notice zBTC — benchmark-denominated vault tracking Bitcoin (WBTC).
+// slither-disable-next-line naming-convention
 contract zBTCVault is BaseVault {
-    constructor(address _asset, address _feeRecipient, address _admin)
+    constructor(address asset_, address feeRecipient_, address admin_)
         BaseVault(
-            _asset,
+            asset_,
             "zBTC Share",
             "zBTC",
             30000, // maxLeverage: 3x
@@ -16,8 +17,8 @@ contract zBTCVault is BaseVault {
             2000, // circuitBreakerDrawdownBPS: 20% drawdown
             500, // rebalanceThresholdBPS: 5% NAV drift
             2000, // performanceFeeBPS: 20%
-            _feeRecipient,
-            _admin
+            feeRecipient_,
+            admin_
         )
     {}
 }

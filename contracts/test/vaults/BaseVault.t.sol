@@ -69,7 +69,7 @@ contract BaseVaultTest is Test {
         vault.grantRole(vault.RISK_COUNCIL_ROLE(), address(this));
 
         // Give some assets to alice for tests
-        asset.transfer(alice, 1000 * ASSET_UNIT);
+        _transferAsset(alice, 1000 * ASSET_UNIT);
     }
 
     // ─── Initial State ───────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ contract BaseVaultTest is Test {
 
     function test_firstDepositorGetsOneToOneShares() external {
         uint256 depositAmount = 10 * ASSET_UNIT;
-        asset.transfer(alice, depositAmount);
+        _transferAsset(alice, depositAmount);
 
         vm.prank(alice);
         asset.approve(address(vault), depositAmount);
@@ -108,18 +108,18 @@ contract BaseVaultTest is Test {
     function test_secondDepositorGetsProportionalShares() external {
         // Alice deposits first
         uint256 aliceDeposit = 10 * ASSET_UNIT;
-        asset.transfer(alice, aliceDeposit);
+        _transferAsset(alice, aliceDeposit);
         vm.prank(alice);
         asset.approve(address(vault), aliceDeposit);
         vm.prank(alice);
         vault.deposit(aliceDeposit, alice);
 
         // Simulate yield: transfer more asset to vault
-        asset.transfer(address(vault), 5 * ASSET_UNIT);
+        _transferAsset(address(vault), 5 * ASSET_UNIT);
         // totalAssets = 15, totalShares = 10, nav = 1.5
 
         uint256 bobDeposit = 15 * ASSET_UNIT;
-        asset.transfer(bob, bobDeposit);
+        _transferAsset(bob, bobDeposit);
         vm.prank(bob);
         asset.approve(address(vault), bobDeposit);
         vm.prank(bob);
@@ -134,7 +134,7 @@ contract BaseVaultTest is Test {
 
     function test_noFeeWhenNavBelowHwm() external {
         uint256 deposit = 10 * ASSET_UNIT;
-        asset.transfer(alice, deposit);
+        _transferAsset(alice, deposit);
         vm.prank(alice);
         asset.approve(address(vault), deposit);
         vm.prank(alice);
@@ -147,14 +147,14 @@ contract BaseVaultTest is Test {
 
     function test_feeChargedOnAlphaAboveHwm() external {
         uint256 deposit = 100 * ASSET_UNIT;
-        asset.transfer(alice, deposit);
+        _transferAsset(alice, deposit);
         vm.prank(alice);
         asset.approve(address(vault), deposit);
         vm.prank(alice);
         vault.deposit(deposit, alice);
 
         // Simulate alpha: vault grows to 120 (20% gain)
-        asset.transfer(address(vault), 20 * ASSET_UNIT);
+        _transferAsset(address(vault), 20 * ASSET_UNIT);
 
         uint256 hwmBefore = vault.highWaterMark();
         vault.evaluateFees();
@@ -196,7 +196,7 @@ contract BaseVaultTest is Test {
 
     function test_hwmNotUpdatedWhenNavBelowHwm() external {
         uint256 deposit = 100 * ASSET_UNIT;
-        asset.transfer(alice, deposit);
+        _transferAsset(alice, deposit);
         vm.prank(alice);
         asset.approve(address(vault), deposit);
         vm.prank(alice);
@@ -204,7 +204,7 @@ contract BaseVaultTest is Test {
 
         // Simulate loss — NAV drops below HWM
         vm.prank(address(vault));
-        IERC20(asset).transfer(address(1), 20 * ASSET_UNIT);
+        assertTrue(IERC20(asset).transfer(address(1), 20 * ASSET_UNIT));
 
         uint256 hwmBefore = vault.highWaterMark();
         vault.evaluateFees();
@@ -238,7 +238,7 @@ contract BaseVaultTest is Test {
     function test_circuitBreakerBlocksDeposit() external {
         vault.activateCircuitBreaker("Risk council");
 
-        asset.transfer(alice, 10 * ASSET_UNIT);
+        _transferAsset(alice, 10 * ASSET_UNIT);
         vm.prank(alice);
         asset.approve(address(vault), 10 * ASSET_UNIT);
 
@@ -250,7 +250,7 @@ contract BaseVaultTest is Test {
     function test_circuitBreakerBlocksMint() external {
         vault.activateCircuitBreaker("Risk council");
 
-        asset.transfer(alice, 10 * ASSET_UNIT);
+        _transferAsset(alice, 10 * ASSET_UNIT);
         vm.prank(alice);
         asset.approve(address(vault), 10 * ASSET_UNIT);
 
@@ -274,7 +274,7 @@ contract BaseVaultTest is Test {
 
     function test_withdrawReturnsAssets() external {
         uint256 deposit = 10 * ASSET_UNIT;
-        asset.transfer(alice, deposit);
+        _transferAsset(alice, deposit);
         vm.prank(alice);
         asset.approve(address(vault), deposit);
         vm.prank(alice);
@@ -294,13 +294,13 @@ contract BaseVaultTest is Test {
 
     function test_claimFeesTransfersToFeeRecipient() external {
         uint256 deposit = 100 * ASSET_UNIT;
-        asset.transfer(alice, deposit);
+        _transferAsset(alice, deposit);
         vm.prank(alice);
         asset.approve(address(vault), deposit);
         vm.prank(alice);
         vault.deposit(deposit, alice);
 
-        asset.transfer(address(vault), 20 * ASSET_UNIT);
+        _transferAsset(address(vault), 20 * ASSET_UNIT);
         vault.evaluateFees();
 
         uint256 feeBalBefore = asset.balanceOf(feeRecipient);
@@ -335,5 +335,9 @@ contract BaseVaultTest is Test {
 
     function test_defaultAdminIsAdmin() external view {
         assertTrue(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), address(this)));
+    }
+
+    function _transferAsset(address to, uint256 amount) internal {
+        assertTrue(asset.transfer(to, amount));
     }
 }

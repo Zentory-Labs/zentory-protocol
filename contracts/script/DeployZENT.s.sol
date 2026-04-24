@@ -48,7 +48,7 @@ contract DeployZENT is Script {
         // ZENT has no admin or mint surface to renounce.
         uint256 remainder = zent.balanceOf(deployer);
         if (remainder > 0) {
-            zent.transfer(treasury, remainder);
+            require(zent.transfer(treasury, remainder), "DeployZENT: treasury transfer failed");
             console2.log("Transferred remainder to treasury:", remainder);
         }
 
