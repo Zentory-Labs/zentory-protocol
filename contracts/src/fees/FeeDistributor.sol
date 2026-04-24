@@ -73,10 +73,14 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
     function accumulate(address vault, uint256 amount) external {
         require(vault != address(0), "FeeDistributor: zero vault");
         require(amount > 0, "FeeDistributor: zero amount");
+        // Only the vault contract itself may trigger accumulation — no third-party approval needed.
+        require(msg.sender == vault, "FeeDistributor: not vault");
 
         pendingFees[vault] += amount;
 
         // Pull the accumulated fees from the vault into this contract.
+        // Slither false positive: msg.sender == vault is enforced above, so this is always a self-transfer.
+        // slither-disable-next-line arbitrary-send-erc20
         asset.safeTransferFrom(vault, address(this), amount);
 
         emit FeeAccumulated(vault, amount);
@@ -127,20 +131,16 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
 
         pools[POOL_BUYBACK] = 0;
 
-        // Grant allowance to the first router in the path.
-        // Production integration: swap through an aggregator (1inch / OpenOcean).
-        // slither-disable-next-line incorrect-equality
-        address router = path[1]; // for test coverage: path[1] is the intermediate / router
-        if (router == address(0)) router = path[0]; // fallback for direct asset→zent paths
-
         emit BuybackTriggered(address(asset), buybackPool);
 
-        // Burn ZENT to the dead address.
-        // In production: router.swapExactTokensForTokens supporting the path.
-        // Here: pull ZENT from caller (who has approved) and burn.
-        // For test: ZENT is transferred to 0xdead directly.
-        if (address(zent) != address(0)) {
-            // No-op path when no DEX available; tests mock this behaviour.
+        // In production: route `buybackPool` of the asset through a DEX aggregator to acquire
+        // ZENT, then transfer the acquired ZENT to 0xdead (burn).  Integration point is
+        // swapExactTokensForTokens(path, buybackPool, minOut, address(this), block.timestamp+30).
+        // For standalone testing (no DEX): pull pre-provided ZENT from the contract and burn.
+        address dead = address(0xdead);
+        uint256 zentBal = zent.balanceOf(address(this));
+        if (zentBal > 0) {
+            zent.safeTransfer(dead, zentBal);
         }
     }
 

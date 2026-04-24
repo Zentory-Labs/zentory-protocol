@@ -6,10 +6,7 @@ pragma solidity ^0.8.28;
 interface IFeeDistributor {
     event FeeAccumulated(address indexed vault, uint256 amount);
     event FeesDistributed(
-        uint256 buybackAmount,
-        uint256 gpEngineAmount,
-        uint256 insuranceAmount,
-        uint256 treasuryAmount
+        uint256 buybackAmount, uint256 gpEngineAmount, uint256 insuranceAmount, uint256 treasuryAmount
     );
     event BuybackTriggered(address indexed token, uint256 amount);
     event GovernorUpdated(address indexed previous, address indexed current);

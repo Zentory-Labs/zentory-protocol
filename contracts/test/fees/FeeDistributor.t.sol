@@ -38,14 +38,7 @@ contract FeeDistributorTest is Test {
     function setUp() external {
         wbtc = new MockERC20("Wrapped Bitcoin", "WBTC", 8);
         zent = new MockERC20("Zentory Token", "ZENT", 18);
-        distributor = new FeeDistributor(
-            address(wbtc),
-            address(zent),
-            governor,
-            gpEngine,
-            insurance,
-            treasury
-        );
+        distributor = new FeeDistributor(address(wbtc), address(zent), governor, gpEngine, insurance, treasury);
 
         // Mint WBTC to the vault so it can accumulate fees
         MockERC20(address(wbtc)).mint(vault, 1_000 ether);
@@ -76,8 +69,10 @@ contract FeeDistributorTest is Test {
     // ─── Accumulate ───────────────────────────────────────────────────────
 
     function test_accumulateIncrementsPendingFees() external {
-        vm.prank(vault);
+        vm.startPrank(vault);
+        wbtc.approve(address(distributor), type(uint256).max);
         distributor.accumulate(vault, 1 ether);
+        vm.stopPrank();
 
         assertEq(distributor.pendingFees(vault), 1 ether);
     }
@@ -86,11 +81,15 @@ contract FeeDistributorTest is Test {
         address vault2 = makeAddr("vault2");
         MockERC20(address(wbtc)).mint(vault2, 500 ether);
 
-        vm.prank(vault);
+        vm.startPrank(vault);
+        wbtc.approve(address(distributor), type(uint256).max);
         distributor.accumulate(vault, 1 ether);
+        vm.stopPrank();
 
-        vm.prank(vault2);
+        vm.startPrank(vault2);
+        MockERC20(address(wbtc)).approve(address(distributor), type(uint256).max);
         distributor.accumulate(vault2, 2 ether);
+        vm.stopPrank();
 
         assertEq(distributor.pendingFees(vault), 1 ether);
         assertEq(distributor.pendingFees(vault2), 2 ether);
@@ -112,33 +111,37 @@ contract FeeDistributorTest is Test {
     function test_distributeSplitsFees505251510() external {
         // Vault accumulates 10_000_000 sats (0.0001 BTC = 10M satoshis)
         uint256 fee = 10_000_000;
-        vm.prank(vault);
+        vm.startPrank(vault);
+        wbtc.approve(address(distributor), type(uint256).max);
         distributor.accumulate(vault, fee);
+        vm.stopPrank();
 
         vm.prank(stranger);
         distributor.distribute(vault);
 
         // 50% buyback: 5_000_000 sats
         assertEq(wbtc.balanceOf(address(distributor)), fee - fee / 2);
-        assertEq(wbtc.balanceOf(gpEngine), fee * 25 / 100);    // 25% → 2_500_000
-        assertEq(wbtc.balanceOf(insurance), fee * 15 / 100);    // 15% → 1_500_000
-        assertEq(wbtc.balanceOf(treasury), fee * 10 / 100);     // 10% → 1_000_000
+        assertEq(wbtc.balanceOf(gpEngine), fee * 25 / 100); // 25% → 2_500_000
+        assertEq(wbtc.balanceOf(insurance), fee * 15 / 100); // 15% → 1_500_000
+        assertEq(wbtc.balanceOf(treasury), fee * 10 / 100); // 10% → 1_000_000
 
         assertEq(distributor.pendingFees(vault), 0);
     }
 
     function test_distributeEmitsEvent() external {
         uint256 fee = 10_000_000;
-        vm.prank(vault);
+        vm.startPrank(vault);
+        wbtc.approve(address(distributor), type(uint256).max);
         distributor.accumulate(vault, fee);
+        vm.stopPrank();
 
         vm.prank(stranger);
         vm.expectEmit();
         emit IFeeDistributor.FeesDistributed(
-            fee * 50 / 100,  // buyback stays in distributor
-            fee * 25 / 100,  // gpEngine
-            fee * 15 / 100,  // insurance
-            fee * 10 / 100   // treasury
+            fee * 50 / 100, // buyback stays in distributor
+            fee * 25 / 100, // gpEngine
+            fee * 15 / 100, // insurance
+            fee * 10 / 100 // treasury
         );
         distributor.distribute(vault);
     }
@@ -158,9 +161,17 @@ contract FeeDistributorTest is Test {
     // ─── Trigger Buyback ─────────────────────────────────────────────────
 
     function test_triggerBuybackBurnsZent() external {
-        // Seed the distributor with WBTC (buyback pool)
-        MockERC20(address(wbtc)).mint(address(distributor), 1 ether);
-        // Seed distributor with ZENT so it can burn (production: DEX swap acquires ZENT first)
+        // Seed vault WBTC and accumulate → distribute to populate the buyback pool
+        uint256 fee = 1 ether;
+        vm.startPrank(vault);
+        wbtc.approve(address(distributor), type(uint256).max);
+        distributor.accumulate(vault, fee);
+        vm.stopPrank();
+
+        vm.prank(stranger);
+        distributor.distribute(vault);
+
+        // Seed distributor with ZENT so it has something to burn (production: DEX swap acquires ZENT)
         MockERC20(address(zent)).mint(address(distributor), 1000 ether);
 
         address[] memory path = new address[](2);
@@ -195,30 +206,34 @@ contract FeeDistributorTest is Test {
     function test_withdrawToTransfersFromGpEnginePool() external {
         // Seed GP engine pool via distribute
         uint256 fee = 10_000_000;
-        vm.prank(vault);
+        vm.startPrank(vault);
+        wbtc.approve(address(distributor), type(uint256).max);
         distributor.accumulate(vault, fee);
+        vm.stopPrank();
 
         vm.prank(stranger);
         distributor.distribute(vault);
 
         uint256 gpBalanceBefore = wbtc.balanceOf(gpEngine);
         vm.prank(governor);
-        distributor.withdrawTo(gpEngine, 500_000, FeeDistributor.POOL_GP_ENGINE);
+        distributor.withdrawTo(gpEngine, 500_000, 1); // POOL_GP_ENGINE = 1
 
         assertEq(wbtc.balanceOf(gpEngine), gpBalanceBefore + 500_000);
     }
 
     function test_withdrawToTransfersFromTreasuryPool() external {
         uint256 fee = 10_000_000;
-        vm.prank(vault);
+        vm.startPrank(vault);
+        wbtc.approve(address(distributor), type(uint256).max);
         distributor.accumulate(vault, fee);
+        vm.stopPrank();
 
         vm.prank(stranger);
         distributor.distribute(vault);
 
         uint256 treasuryBalanceBefore = wbtc.balanceOf(treasury);
         vm.prank(governor);
-        distributor.withdrawTo(treasury, 200_000, FeeDistributor.POOL_TREASURY);
+        distributor.withdrawTo(treasury, 200_000, 3); // POOL_TREASURY = 3
 
         assertEq(wbtc.balanceOf(treasury), treasuryBalanceBefore + 200_000);
     }
@@ -228,7 +243,7 @@ contract FeeDistributorTest is Test {
 
         vm.prank(governor);
         vm.expectRevert(bytes("FeeDistributor: not directly withdrawable"));
-        distributor.withdrawTo(gpEngine, 100_000, FeeDistributor.POOL_BUYBACK);
+        distributor.withdrawTo(gpEngine, 100_000, 0); // POOL_BUYBACK = 0
     }
 
     function test_withdrawToRejectsFromInsurancePool() external {
@@ -236,7 +251,7 @@ contract FeeDistributorTest is Test {
 
         vm.prank(governor);
         vm.expectRevert(bytes("FeeDistributor: not directly withdrawable"));
-        distributor.withdrawTo(gpEngine, 100_000, FeeDistributor.POOL_INSURANCE);
+        distributor.withdrawTo(gpEngine, 100_000, 2); // POOL_INSURANCE = 2
     }
 
     function test_withdrawToRejectsFromNonGovernor() external {
@@ -245,7 +260,7 @@ contract FeeDistributorTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, stranger, role)
         );
-        distributor.withdrawTo(gpEngine, 100_000, FeeDistributor.POOL_GP_ENGINE());
+        distributor.withdrawTo(gpEngine, 100_000, 1); // POOL_GP_ENGINE = 1
     }
 
     // ─── Governor Config ─────────────────────────────────────────────────
