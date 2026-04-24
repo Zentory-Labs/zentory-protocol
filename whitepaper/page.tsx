@@ -322,9 +322,11 @@ export default function WhitepaperPage() {
                                     <div className="bg-white/5 rounded-xl p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Execution Infrastructure</h5>
                                         <p className="text-xs text-white/60">
-                                            Strategy signals are generated off-chain by the GP engine. Execution happens through
-                                            whitelisted on-chain venues (decentralised perpetual exchanges) using modular adapter
-                                            contracts. Every fill is recorded on-chain for auditability.
+                                            Strategy signals are generated off-chain by the GP engine. Execution is anchored on
+                                            Hyperliquid — a high-performance Layer 1 with sub-second finality, shared-state composability
+                                            between smart contracts and a native order book, and no bridge attack surface. Strategy
+                                            fills are recorded on-chain for full auditability. The modular adapter architecture
+                                            supports additional venues as the protocol expands cross-chain.
                                         </p>
                                     </div>
                                     <div className="bg-white/5 rounded-xl p-4">
@@ -348,7 +350,11 @@ export default function WhitepaperPage() {
                                     A proprietary genetic programming (GP) engine continuously evolves trading strategies.
                                     Unlike conventional ML models with fixed architectures, GP
                                     <strong className="text-white/90"> discovers entirely new rule structures</strong> through
-                                    evolutionary selection — adapting to market regime changes without human intervention.
+                                    evolutionary selection — adapting to market regime changes without human intervention. The
+                                    core objective: buy assets at a discount to fair value and sell at a premium, capturing
+                                    regime transitions rather than predicting direction. Strategies rotate between long exposure,
+                                    cash equivalents, and short positions based on detected market conditions — always within
+                                    hard-coded risk rails that are immutable at the contract level.
                                 </p>
                                 <div className="grid md:grid-cols-2 gap-4">
                                     <div className="bg-white/5 rounded-xl p-4">
