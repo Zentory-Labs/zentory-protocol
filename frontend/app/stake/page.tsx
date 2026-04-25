@@ -56,7 +56,7 @@ function LockBar({ lockEnd, lockStart }: { lockEnd: bigint; lockStart: bigint })
         <span>{pct}%</span>
       </div>
       <div className="h-2 rounded-full bg-white/10 overflow-hidden">
-        <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+        <div className="h-full bg-gradient-to-r from-[#f59e0b] to-[#fbbf24] rounded-full transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -110,7 +110,9 @@ export default function StakePage() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen relative flex items-center justify-center" style={{ background: "#05070c" }}>
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white mb-4">ZENT Staking</h1>
           <p className="text-white/50">Connect your wallet to stake ZENT</p>
@@ -120,7 +122,10 @@ export default function StakePage() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative" style={{ background: "#05070c" }}>
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+
       <header className="border-b border-white/10 bg-[#0d0d14]/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-2xl font-bold text-white">ZENT Staking</h1>
@@ -136,16 +141,16 @@ export default function StakePage() {
             { label: "Min. Stake Required", value: minStake.data !== undefined ? fmtZENT(minStake.data as bigint) : "—" },
             { label: "Your veZENT Balance", value: userVeBalance.data !== undefined ? fmtVeZENT(userVeBalance.data as bigint) : "—", accent: true },
           ].map(({ label, value, accent }) => (
-            <div key={label} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div key={label} className="glass-card p-6 glass-hover">
               <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">{label}</div>
-              <div className={`text-2xl font-bold font-mono ${accent ? "text-amber-400" : "text-white"}`}>{value}</div>
+              <div className={`text-2xl font-bold font-mono ${accent ? "gradient-text-amber" : "text-white"}`}>{value}</div>
             </div>
           ))}
         </div>
 
         {/* Your Position */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Your Position</h2>
+        <div className="glass-card p-6 glass-hover">
+          <h2 className="text-sm font-semibold text-[#f59e0b] uppercase tracking-wider mb-4">Your Position</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <div className="text-xs text-white/40 mb-1">Staked ZENT</div>
@@ -167,7 +172,7 @@ export default function StakePage() {
             </div>
             <div>
               <div className="text-xs text-white/40 mb-1">veZENT</div>
-              <div className="font-mono font-medium text-amber-400">
+              <div className="font-mono font-medium gradient-text-amber">
                 {userVeBalance.data !== undefined ? fmtVeZENT(userVeBalance.data as bigint) : "—"}
               </div>
             </div>
@@ -180,8 +185,8 @@ export default function StakePage() {
         </div>
 
         {/* Stake Form */}
-        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6">
-          <h2 className="text-lg font-semibold text-amber-400 mb-1">Stake ZENT</h2>
+        <div className="glass-card p-8 glass-hover">
+          <h2 className="text-sm font-semibold text-[#f59e0b] uppercase tracking-wider mb-1">Stake ZENT</h2>
           <p className="text-xs text-white/40 mb-6">Lock ZENT for up to 730 days. Longer locks = more veZENT = more governance power.</p>
 
           <form onSubmit={handleStake} className="space-y-5">
@@ -194,7 +199,7 @@ export default function StakePage() {
                 placeholder="1000"
                 value={stakeAmount}
                 onChange={(e) => setStakeAmount(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 font-mono text-white outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#0d80fa]/50 focus:ring-1 focus:ring-[#0d80fa]/30 transition-colors font-mono text-sm"
               />
             </div>
 
@@ -208,7 +213,7 @@ export default function StakePage() {
                 max={730}
                 value={lockDays}
                 onChange={(e) => setLockDays(Number(e.target.value))}
-                className="w-full accent-amber-500"
+                className="w-full accent-[#0d80fa]"
               />
               <div className="flex justify-between text-xs text-white/40 mt-1">
                 <span>7 days</span>
@@ -238,7 +243,7 @@ export default function StakePage() {
             <button
               type="submit"
               disabled={isPending || !stakeAmount || parseFloat(stakeAmount) <= 0}
-              className="w-full rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-3 transition-colors"
+              className="w-full rounded-xl bg-[#0d80fa] hover:bg-[#0d80fa]/90 text-white font-semibold py-3 transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {isPending ? "Confirm in wallet…" : "Stake ZENT"}
             </button>

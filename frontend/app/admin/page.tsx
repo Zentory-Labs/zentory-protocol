@@ -107,12 +107,15 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-white/10 bg-[#0d0d14]/80 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen relative" style={{ background: "#05070c" }}>
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+
+      <header className="border-b border-white/10 bg-[#0d0d14]/80 backdrop-blur-xl sticky top-0 z-10">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">Admin & Keeper</h1>
-            <span className="text-xs bg-red-950 border border-red-800 text-red-400 rounded-full px-2 py-0.5">
+            <h1 className="text-3xl font-bold gradient-text tracking-tight">Admin Panel</h1>
+            <span className="text-xs bg-red-500/10 border border-red-500/20 text-red-400 rounded-full px-3 py-1">
               Role-gated
             </span>
           </div>
@@ -123,19 +126,19 @@ export default function AdminPage() {
       <main className="mx-auto max-w-4xl px-6 py-10 space-y-8">
         {/* Executor Status */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="glass-card p-5">
             <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">Executor Status</div>
-            <div className={`text-2xl font-bold ${(isPaused.data as boolean) ? "text-red-400" : "text-emerald-400"}`}>
-              {(isPaused.data as boolean) ? "PAUSED" : "Active"}
+            <div className={`text-2xl font-bold ${(isPaused.data as boolean) ? "text-[#f59e0b]" : "text-[#0d80fa]"}`}>
+              {(isPaused.data as boolean) ? "PAUSED" : "Operational"}
             </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="glass-card p-5">
             <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">Keeper Role Hash</div>
             <div className="font-mono text-xs text-white break-all leading-tight">
               {keeperRole.data ? (keeperRole.data as string).slice(0, 16) + "…" : "—"}
             </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="glass-card p-5">
             <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">Guardian Role Hash</div>
             <div className="font-mono text-xs text-white break-all leading-tight">
               {guardianRole.data ? (guardianRole.data as string).slice(0, 16) + "…" : "—"}
@@ -144,25 +147,32 @@ export default function AdminPage() {
         </div>
 
         {/* Emergency Pause */}
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6">
+        <div className="glass-card p-6">
           <h2 className="text-lg font-semibold text-red-400 mb-1">Emergency Pause</h2>
           <p className="text-xs text-white/40 mb-4">
             Immediately halts all trade execution. Guardian role required.
           </p>
           <button
             onClick={handlePauseToggle}
-            className={`rounded-lg px-6 py-2.5 font-bold transition-colors ${
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors bg-[#f59e0b]/20 border border-[#f59e0b]/30 ${
               (isPaused.data as boolean)
-                ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-                : "bg-red-700 hover:bg-red-600 text-white"
+                ? "bg-[#0d80fa]/20 border-[#0d80fa]/30"
+                : "bg-[#f59e0b]/20 border-[#f59e0b]/30"
             }`}
           >
-            {(isPaused.data as boolean) ? "Resume Executor" : "Pause Executor"}
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
+                (isPaused.data as boolean) ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
           </button>
+          <span className="ml-3 text-sm text-white/60">
+            {(isPaused.data as boolean) ? "Executor is paused" : "Executor is operational"}
+          </span>
         </div>
 
         {/* Vault Risk Parameters */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div className="glass-card p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Vault Risk Parameters</h2>
 
           {/* Vault Selector */}
@@ -175,10 +185,10 @@ export default function AdminPage() {
                   <button
                     key={v}
                     onClick={() => setSelectedVault(v)}
-                    className={`rounded-lg border py-2 px-3 text-sm font-medium transition-colors ${
+                    className={`rounded-xl border py-2 px-3 text-sm font-medium transition-all duration-300 ${
                       selectedVault === v
-                        ? "border-amber-500 bg-amber-950/40 text-amber-400"
-                        : "border-white/10 bg-white/5 text-white/60 hover:border-white/30"
+                        ? "border-[#f59e0b]/50 bg-[#f59e0b]/10 text-[#f59e0b]"
+                        : "border-white/10 bg-white/5 text-white/60 hover:border-white/30 hover:bg-white/10"
                     }`}
                   >
                     {m.symbol}
@@ -189,7 +199,7 @@ export default function AdminPage() {
           </div>
 
           {/* Current values */}
-          <div className="grid grid-cols-2 gap-4 mb-5 p-4 rounded-lg bg-white/5 border border-white/10">
+          <div className="grid grid-cols-2 gap-4 mb-5 p-4 rounded-xl bg-white/5 border border-white/10">
             <div>
               <div className="text-xs text-white/40 mb-1">Max Position Size ({meta.symbol})</div>
               <div className="font-mono font-semibold text-white">
@@ -216,12 +226,12 @@ export default function AdminPage() {
                   placeholder="e.g. 10.0"
                   value={maxPosSize}
                   onChange={(e) => setMaxPosSize(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-white text-sm outline-none focus:border-amber-500"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#0d80fa]/50 focus:ring-1 focus:ring-[#0d80fa]/30 transition-colors text-sm"
                 />
                 <button
                   onClick={handleSetMaxPos}
                   disabled={!maxPosSize}
-                  className="rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold px-4 py-2 text-sm transition-colors"
+                  className="rounded-xl bg-[#0d80fa] hover:bg-[#0d80fa]/90 text-white font-semibold px-6 py-3 transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.01]"
                 >
                   Set
                 </button>
@@ -237,12 +247,12 @@ export default function AdminPage() {
                   placeholder="e.g. 300 (= 3x)"
                   value={maxLevBPS}
                   onChange={(e) => setMaxLevBPS(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-white text-sm outline-none focus:border-amber-500"
+                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#0d80fa]/50 focus:ring-1 focus:ring-[#0d80fa]/30 transition-colors text-sm"
                 />
                 <button
                   onClick={handleSetMaxLev}
                   disabled={!maxLevBPS}
-                  className="rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold px-4 py-2 text-sm transition-colors"
+                  className="rounded-xl bg-[#0d80fa] hover:bg-[#0d80fa]/90 text-white font-semibold px-6 py-3 transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.01]"
                 >
                   Set
                 </button>
@@ -251,15 +261,17 @@ export default function AdminPage() {
           </div>
         </div>
 
+        <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
         {/* Status */}
         {(txStatus || error) && (
-          <div className={`rounded-lg border px-4 py-3 text-sm ${error ? "border-red-800 bg-red-950/50 text-red-400" : "border-amber-800 bg-amber-950/50 text-amber-400"}`}>
+          <div className={`rounded-xl border px-4 py-3 text-sm ${error ? "border-red-500/20 bg-red-500/10 text-red-400" : "border-[#f59e0b]/20 bg-[#f59e0b]/10 text-[#f59e0b]"}`}>
             {error ?? txStatus}
           </div>
         )}
 
         {/* Keeper Info */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <div className="glass-card p-5">
           <h2 className="text-lg font-semibold text-white mb-4">Contract Addresses</h2>
           <div className="space-y-2">
             {[
@@ -272,7 +284,7 @@ export default function AdminPage() {
                   href={`https://hypurrscan.io/address/${addr}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-mono text-xs text-blue-400 hover:text-blue-300"
+                  className="font-mono text-xs text-[#0d80fa] hover:text-[#0d80fa]/80 transition-colors"
                 >
                   {shorten(addr)} →
                 </a>

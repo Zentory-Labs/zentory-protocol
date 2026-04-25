@@ -32,16 +32,20 @@ export default function SignalsPage() {
   }, [fetchSignals]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative" style={{ background: "#05070c" }}>
+      {/* Ambient glows */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+
       <main className="mx-auto max-w-7xl px-6 py-10 space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="glass-card p-6 flex items-center justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400 font-medium mb-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#0d80fa]/30 bg-[#0d80fa]/10 px-3 py-1 text-xs text-[#0d80fa] font-medium mb-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-[#0d80fa] animate-pulse" />
               LIVE
             </div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Signal Dashboard</h1>
+            <h1 className="text-3xl font-bold gradient-text tracking-tight">Signal Dashboard</h1>
             <p className="mt-1 text-sm text-white/40">
               Auto-refreshes every 30s · stored on-chain via StrategyExecutor
             </p>
@@ -55,7 +59,7 @@ export default function SignalsPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 glass-card px-4 py-3 text-sm text-red-400 backdrop-blur-sm">
             {error}
           </div>
         )}
@@ -67,15 +71,19 @@ export default function SignalsPage() {
               <div className="h-8 w-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
             </div>
           ) : (
-            <SignalTable signals={signals} />
+            <div className="glass-card overflow-hidden">
+              <SignalTable signals={signals} />
+            </div>
           )}
         </section>
 
         {/* Trade form — keeper only */}
         {isConnected ? (
-          <TradeLoggerForm />
+          <div className="glass-card p-6 border-[#0d80fa]/30">
+            <TradeLoggerForm />
+          </div>
         ) : (
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
+          <div className="glass-card p-8 text-center">
             <div className="mb-4 flex justify-center">
               <div className="h-12 w-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
                 <svg className="h-6 w-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
