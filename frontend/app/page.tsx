@@ -1,6 +1,6 @@
 "use client";
 
-import { useAccount, useBalance, useReadContract, useConnect } from "wagmi";
+import { useAccount, useBalance, useReadContract, useConnect, useDisconnect } from "wagmi";
 import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta } from "@/lib/contracts";
 
 const VAULTS = [addresses.zETH, addresses.zBTC, addresses.zXRP, addresses.zSOL] as const;
@@ -22,12 +22,22 @@ function shorten(addr: string): string {
 function WalletButton() {
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
 
   if (isConnected && address) {
     return (
-      <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2">
-        <div className="h-2 w-2 rounded-full bg-emerald-400" />
-        <span className="font-mono text-sm text-white">{shorten(address)}</span>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2">
+          <div className="h-2 w-2 rounded-full bg-emerald-400" />
+          <span className="font-mono text-sm text-white">{shorten(address)}</span>
+        </div>
+        <button
+          onClick={() => disconnect()}
+          title="Disconnect wallet"
+          className="rounded-full border border-white/20 bg-white/5 px-3 py-2 text-xs text-white/60 hover:text-white hover:border-white/40 transition-colors"
+        >
+          ✕
+        </button>
       </div>
     );
   }
@@ -37,7 +47,6 @@ function WalletButton() {
       alert("No wallet detected. Make sure Rabby or MetaMask is installed.");
       return;
     }
-    // Try each connector until one works (Rabby, MetaMask, WalletConnect...)
     for (const connector of connectors) {
       try {
         await connect({ connector });
@@ -300,8 +309,16 @@ export default function Home() {
     query: { enabled: isConnected },
   } as any);
 
+  // Also try direct balanceOf for the connected address
+  const zenBalanceDirect = useReadContract({
+    address: addresses.ZENT,
+    abi: ZENT_ABI,
+    functionName: "balanceOf" as any,
+    args: [address ?? "0x0000000000000000000000000000000000000001"],
+  } as any);
+
   const zenSupply = (zenTotalSupply.data as bigint) ?? 0n;
-  const zenSupplyFormatted = (Number(zenSupply) / 1e27).toFixed(0);
+  const zenSupplyFormatted = (zenSupply / 10n ** 18n / 1000_000_000n).toString(); // 1B = zenSupply / 1e27
 
   return (
     <div className="min-h-screen">

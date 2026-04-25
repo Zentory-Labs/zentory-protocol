@@ -8,10 +8,12 @@ import { HYPEREVM_TESTNET } from "@/lib/contracts";
 
 const queryClient = new QueryClient();
 
+const RPC_URL = process.env.NEXT_PUBLIC_HYPEREVM_RPC ?? "https://rpc.hyperliquid-testnet.xyz/evm";
+
 const wagmiConfig = createConfig({
   chains: [HYPEREVM_TESTNET],
   transports: {
-    [HYPEREVM_TESTNET.id]: http(),
+    [HYPEREVM_TESTNET.id]: http(RPC_URL),
   },
   connectors: [
     injected({
@@ -19,7 +21,6 @@ const wagmiConfig = createConfig({
     }),
     coinbaseWallet({
       appName: "Zentory Protocol",
-      appLogoUrl: "https://zentory.io/logo.png",
     }),
   ],
 });
