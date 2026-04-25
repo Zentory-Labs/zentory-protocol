@@ -142,10 +142,10 @@ contract DeployPipelineTest is Test {
         // Temp governor = DEPLOYER, replaced in Phase 6
         staking = new ZENTStaking(address(zent), DEPLOYER, MIN_STAKE);
         bonding = new ModelBonding(address(zent), DEPLOYER, DEPLOYER, TREASURY, UNBOND_COOLDOWN);
-        zethFees = new FeeDistributor(address(zeth), address(zent), DEPLOYER, KEEPER, TREASURY, TREASURY);
-        zbtcFees = new FeeDistributor(address(zbtc), address(zent), DEPLOYER, KEEPER, TREASURY, TREASURY);
-        zxrpFees = new FeeDistributor(address(zxrp), address(zent), DEPLOYER, KEEPER, TREASURY, TREASURY);
-        zsolFees = new FeeDistributor(address(zsol), address(zent), DEPLOYER, KEEPER, TREASURY, TREASURY);
+        zethFees = new FeeDistributor(address(mockAsset), address(zent), DEPLOYER, KEEPER, TREASURY, TREASURY);
+        zbtcFees = new FeeDistributor(address(mockAsset), address(zent), DEPLOYER, KEEPER, TREASURY, TREASURY);
+        zxrpFees = new FeeDistributor(address(mockAsset), address(zent), DEPLOYER, KEEPER, TREASURY, TREASURY);
+        zsolFees = new FeeDistributor(address(mockAsset), address(zent), DEPLOYER, KEEPER, TREASURY, TREASURY);
 
         // ─── PHASE 4: GOVERNANCE ─────────────────────────────────────────────
         // Pass PROPOSER and address(0) as proposers/executors; we will grant roles
@@ -182,13 +182,14 @@ contract DeployPipelineTest is Test {
         timelock.grantRole(keccak256("PROPOSER_ROLE"), address(governor));
 
         // ─── PHASE 5: KEEPER ─────────────────────────────────────────────────
-        adapter  = new HyperCoreAdapter();
+        adapter  = new HyperCoreAdapter(address(governor));
         executor = new StrategyExecutor(address(adapter), address(governor));
 
         // Governor grants KEEPER_ROLE and GUARDIAN_ROLE.
         vm.startPrank(address(governor));
         executor.grantRole(keccak256("KEEPER_ROLE"), KEEPER);
         executor.grantRole(keccak256("GUARDIAN_ROLE"), GUARDIAN);
+        executor.setAuthorizedSigner(address(0x9999)); // placeholder for tests that don't execute signals
         vm.stopPrank();
 
         // ─── PHASE 6: WIRING ─────────────────────────────────────────────────
@@ -224,6 +225,16 @@ contract DeployPipelineTest is Test {
         zbtc.grantRole(zbtc.DEFAULT_ADMIN_ROLE(), address(governor));
         zxrp.grantRole(zxrp.DEFAULT_ADMIN_ROLE(), address(governor));
         zsol.grantRole(zsol.DEFAULT_ADMIN_ROLE(), address(governor));
+
+        zeth.setFeeRecipient(address(zethFees));
+        zbtc.setFeeRecipient(address(zbtcFees));
+        zxrp.setFeeRecipient(address(zxrpFees));
+        zsol.setFeeRecipient(address(zsolFees));
+
+        zeth.setStaking(address(staking));
+        zbtc.setStaking(address(staking));
+        zxrp.setStaking(address(staking));
+        zsol.setStaking(address(staking));
         vm.stopPrank();
 
         // Governor sets risk limits on executor

@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+
 /// @title HyperCoreAdapter
 /// @notice Adapter for sending order actions to HyperCore from HyperEVM.
 ///         Uses the CoreWriter precompile at 0x3333...3333 to enqueue actions
 ///         that are executed on HyperCore in the next block.
 /// @dev    Actions are delayed by ~few seconds — not atomic with EVM execution.
 ///         Asset indices are chain-specific constants configured at deployment.
-contract HyperCoreAdapter {
+contract HyperCoreAdapter is AccessControl {
+
+    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     /// @notice CoreWriter precompile address (HyperEVM → HyperCore write bridge)
     address public constant CORE_WRITER = address(0x3333333333333333333333333333333333333333);
@@ -53,7 +57,11 @@ contract HyperCoreAdapter {
         uint128 cloid
     );
 
-    constructor() {
+    constructor(address governor_) {
+        require(governor_ != address(0), "HyperCoreAdapter: zero governor");
+        _grantRole(DEFAULT_ADMIN_ROLE, governor_);
+        _grantRole(GOVERNOR_ROLE, governor_);
+
         // Default: asset 0 = BTC perpetual (index 0 on mainnet, verified at deployment)
         assetConfigs[0] = AssetConfig({assetIndex: 0, szDecimals: 6, supported: true});
         // Asset 1 = ETH perpetual
@@ -68,7 +76,7 @@ contract HyperCoreAdapter {
     /// @param  localAsset    Local asset key (0-255)
     /// @param  assetIndex    HyperCore asset index
     /// @param  szDecimals_   Size decimals (sz = human * 10^szDecimals_)
-    function setAssetConfig(uint8 localAsset, uint32 assetIndex, uint8 szDecimals_) external {
+    function setAssetConfig(uint8 localAsset, uint32 assetIndex, uint8 szDecimals_) external onlyRole(GOVERNOR_ROLE) {
         require(localAsset <= 3, "HyperCoreAdapter: invalid local asset");
         assetConfigs[localAsset] = AssetConfig({
             assetIndex: assetIndex,

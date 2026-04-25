@@ -22,9 +22,10 @@ contract MockCoreWriter {
 contract HyperCoreAdapterTest is Test {
 
     HyperCoreAdapter adapter;
+    address governor = makeAddr("governor");
 
     function setUp() external {
-        adapter = new HyperCoreAdapter();
+        adapter = new HyperCoreAdapter(governor);
     }
 
     function test_defaultAssetConfigs() external view {
@@ -51,6 +52,7 @@ contract HyperCoreAdapterTest is Test {
     }
 
     function test_setAssetConfig() external {
+        vm.prank(governor);
         adapter.setAssetConfig(0, 10, 8);
 
         (uint32 idx, uint8 dec, bool sup) = _getAssetConfig(0);
@@ -173,10 +175,10 @@ contract StrategyExecutorTest is Test {
 
     // GP engine signer (off-chain private key matches SIGNER address)
     uint256 internal constant SIGNER_KEY = 0xA11CE;
-    address internal constant SIGNER = 0x000000000000000000000000000000000000dEaD;
+    address internal signer;
 
     function setUp() external {
-        adapter = new HyperCoreAdapter();
+        adapter = new HyperCoreAdapter(governor);
 
         // Fund governor
         vm.deal(governor, 1 ether);
@@ -188,6 +190,8 @@ contract StrategyExecutorTest is Test {
         vm.startPrank(governor);
         executor.grantRole(executor.KEEPER_ROLE(), keeper);
         executor.grantRole(executor.GUARDIAN_ROLE(), guardian);
+        signer = vm.addr(SIGNER_KEY);
+        executor.setAuthorizedSigner(signer);
         vm.stopPrank();
     }
 
@@ -420,7 +424,7 @@ contract StrategyExecutorTest is Test {
         uint256 nonce,
         uint256 expiry
     ) internal {
-        bytes32 digest = _makeDigest(vault, direction, size, nonce, expiry);
+        bytes32 digest = _makeDigest(vault, direction, size, price, nonce, expiry);
         bytes memory sig = _sign(digest, SIGNER_KEY);
 
         vm.prank(keeper);
@@ -439,17 +443,22 @@ contract StrategyExecutorTest is Test {
         address vault,
         uint8   direction,
         uint256 size,
+        uint64  price,
         uint256 nonce,
         uint256 expiry
     ) internal view returns (bytes32) {
-        return keccak256(abi.encodePacked(
-            executor.DOMAIN_SEPARATOR(),
-            vault,
-            direction,
-            size,
-            nonce,
-            expiry
-        ));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                executor.SIGNAL_TYPEHASH(),
+                vault,
+                direction,
+                size,
+                price,
+                nonce,
+                expiry
+            )
+        );
+        return keccak256(abi.encodePacked("\x19\x01", executor.DOMAIN_SEPARATOR(), structHash));
     }
 
     function _sign(bytes32 digest, uint256 key) internal pure returns (bytes memory) {

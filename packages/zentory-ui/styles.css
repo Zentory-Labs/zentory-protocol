@@ -1,0 +1,33 @@
+:root {
+  --zent-background: 225 50% 3%;
+  --zent-foreground: 210 40% 98%;
+  --zent-card: 225 50% 4%;
+  --zent-card-foreground: 210 40% 98%;
+  --zent-primary: 210 100% 60%;
+  --zent-primary-foreground: 222 47% 11%;
+  --zent-border: 215 25% 16%;
+  --zent-muted-foreground: 215 20% 65%;
+}
+
+.zent-glass {
+  background: rgba(6, 10, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px);
+}
+
+.zent-glass-card {
+  background:
+    radial-gradient(1200px 600px at 10% 0%, rgba(56, 189, 248, 0.10), transparent 40%),
+    radial-gradient(900px 500px at 90% 30%, rgba(59, 130, 246, 0.08), transparent 45%),
+    rgba(6, 10, 20, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(18px);
+}
+
+.zent-gradient-text {
+  background: linear-gradient(90deg, #ffffff 0%, rgba(255,255,255,0.75) 35%, rgba(56,189,248,0.95) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+

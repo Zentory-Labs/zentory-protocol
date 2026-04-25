@@ -131,6 +131,7 @@ contract DeployPipeline is Script {
         // Optional params
         address insurance    = _opt("INSURANCE_FUND", treasury);
         address gpEngine    = _opt("GP_ENGINE", keeper);
+        address signalSigner = _opt("SIGNAL_SIGNER", keeper);
         uint256 votingDelay  = vm.envOr("VOTING_DELAY", DEF_VOTING_DELAY);
         uint256 votingPeriod = vm.envOr("VOTING_PERIOD", DEF_VOTING_PERIOD);
         uint256 proposalThr  = vm.envOr("PROPOSAL_THRESHOLD", DEF_PROPOSAL_THRESHOLD);
@@ -210,16 +211,16 @@ contract DeployPipeline is Script {
         console2.log("ModelBonding:", address(bonding));
 
         FeeDistributor zethFees = new FeeDistributor(
-            address(zeth), address(zent), deployer, gpEngine, insurance, treasury
+            address(weth), address(zent), deployer, gpEngine, insurance, treasury
         );
         FeeDistributor zbtcFees = new FeeDistributor(
-            address(zbtc), address(zent), deployer, gpEngine, insurance, treasury
+            address(wbtc), address(zent), deployer, gpEngine, insurance, treasury
         );
         FeeDistributor zxrpFees = new FeeDistributor(
-            address(zxrp), address(zent), deployer, gpEngine, insurance, treasury
+            address(wxrp), address(zent), deployer, gpEngine, insurance, treasury
         );
         FeeDistributor zsolFees = new FeeDistributor(
-            address(zsol), address(zent), deployer, gpEngine, insurance, treasury
+            address(wsol), address(zent), deployer, gpEngine, insurance, treasury
         );
         console2.log("FeeDistributors:", address(zethFees));
         console2.log("                ", address(zbtcFees));
@@ -270,7 +271,7 @@ contract DeployPipeline is Script {
         // executor, we grant roles and limits here while deployer is msg.sender.
         // The governor contract will be wired as admin via Phase 6.
         // ================================================================
-        HyperCoreAdapter adapter = new HyperCoreAdapter();
+        HyperCoreAdapter adapter = new HyperCoreAdapter(address(govContract));
         console2.log("HyperCoreAdapter:", address(adapter));
 
         StrategyExecutor executor = new StrategyExecutor(address(adapter), address(govContract));
@@ -312,8 +313,26 @@ contract DeployPipeline is Script {
         zxrp.grantRole(zxrp.DEFAULT_ADMIN_ROLE(), address(govContract));
         zsol.grantRole(zsol.DEFAULT_ADMIN_ROLE(), address(govContract));
 
+        // Wire vault access gating + fee routing
+        zeth.setStaking(address(staking));
+        zbtc.setStaking(address(staking));
+        zxrp.setStaking(address(staking));
+        zsol.setStaking(address(staking));
+
+        zeth.setFeeRecipient(address(zethFees));
+        zbtc.setFeeRecipient(address(zbtcFees));
+        zxrp.setFeeRecipient(address(zxrpFees));
+        zsol.setFeeRecipient(address(zsolFees));
+
         // Grant GOVERNOR_ROLE on StrategyExecutor to the governor contract
         executor.grantRole(executor.GOVERNOR_ROLE(), address(govContract));
+
+        // Signal auth + vault registry
+        executor.setAuthorizedSigner(signalSigner);
+        executor.setVaultRegistry(address(zbtc), 0);
+        executor.setVaultRegistry(address(zeth), 1);
+        executor.setVaultRegistry(address(zsol), 2);
+        executor.setVaultRegistry(address(zxrp), 3);
 
         // Transfer DEFAULT_ADMIN_ROLE on StrategyExecutor from deployer to governor
         executor.transferAdmin(address(govContract));

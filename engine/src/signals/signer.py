@@ -22,7 +22,9 @@ class SignalSigner:
     where _AUTHORIZATION_TYPEHASH = keccak("Authorization(address vault,uint8 direction,uint256 size,uint256 nonce,uint256 expiry)")
     """
 
-    _TYPEHASH = keccak(b'Authorization(address vault,uint8 direction,uint256 size,uint256 nonce,uint256 expiry)')
+    _TYPEHASH = keccak(
+        b"TradeSignal(address vault,uint8 direction,uint256 size,uint64 price,uint256 nonce,uint256 expiry)"
+    )
 
     def __init__(self, private_key: str, rpc_url: str | None = None):
         self.account: Account = Account.from_key(private_key)
@@ -40,6 +42,7 @@ class SignalSigner:
         vault: str,
         direction: int,
         size: int,
+        price: int,
         nonce: int,
         expiry: int,
         chain_id: int,
@@ -64,12 +67,13 @@ class SignalSigner:
                 int(vault, 16).to_bytes(32, "big"),
                 direction.to_bytes(32, "big"),
                 size.to_bytes(32, "big"),
+                price.to_bytes(32, "big"),
                 nonce.to_bytes(32, "big"),
                 expiry.to_bytes(32, "big"),
             ])
         )
 
-        digest = keccak(domain_separator + struct_hash)
+        digest = keccak(b"\x19\x01" + domain_separator + struct_hash)
 
         signed = self.account.sign_hash(digest)
         return signed.signature
@@ -79,13 +83,14 @@ class SignalSigner:
         vault: str,
         direction: int,
         size: int,
+        price: int,
         nonce: int,
         expiry: int,
         chain_id: int,
         executor_address: str,
     ) -> str:
         """Same as sign() but returns a hex string with 0x prefix."""
-        return self.sign(vault, direction, size, nonce, expiry, chain_id, executor_address).hex()
+        return self.sign(vault, direction, size, price, nonce, expiry, chain_id, executor_address).hex()
 
     def get_nonce(self, executor_address: str, vault_address: str) -> int:
         """Fetch the current nonce for a vault from StrategyExecutor."""

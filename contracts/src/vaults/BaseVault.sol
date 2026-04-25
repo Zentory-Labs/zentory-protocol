@@ -8,6 +8,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IVault} from "./IVault.sol";
+import {IFeeDistributor} from "../interfaces/IFeeDistributor.sol";
+import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
 
 /// @title BaseVault
 /// @notice ERC-4626 benchmark-denominated vault. Depositors receive vault shares (e.g. zBTC)
@@ -32,7 +34,8 @@ contract BaseVault is ERC4626, AccessControl, IVault {
     uint256 public override lastNavPerShare;
     uint256 public immutable override performanceFee;
     /// @inheritdoc IVault
-    address public immutable override feeRecipient;
+    address public override feeRecipient;
+    IZENTStaking public staking;
     uint256 public performanceFeeAccrued;
     bool public override isCircuitBreakerActive;
     int8 public override currentDirection;
@@ -97,6 +100,10 @@ contract BaseVault is ERC4626, AccessControl, IVault {
         onlyWhenCircuitBreakerInactive
         returns (uint256)
     {
+        IZENTStaking staking_ = staking;
+        if (address(staking_) != address(0)) {
+            require(staking_.hasAccess(receiver), "BaseVault: stake required");
+        }
         uint256 balanceBefore = IERC20(asset()).balanceOf(address(this));
         uint256 shares = super.deposit(assets, receiver);
         // The vault intentionally rejects fee-on-transfer or rebasing assets.
@@ -106,6 +113,10 @@ contract BaseVault is ERC4626, AccessControl, IVault {
     }
 
     function mint(uint256 shares, address receiver) public override onlyWhenCircuitBreakerInactive returns (uint256) {
+        IZENTStaking staking_ = staking;
+        if (address(staking_) != address(0)) {
+            require(staking_.hasAccess(receiver), "BaseVault: stake required");
+        }
         uint256 balanceBefore = IERC20(asset()).balanceOf(address(this));
         uint256 assets = previewMint(shares);
         uint256 mintedShares = super.mint(shares, receiver);
@@ -162,7 +173,25 @@ contract BaseVault is ERC4626, AccessControl, IVault {
         claimed = performanceFeeAccrued;
         require(claimed > 0, "No fees to claim");
         performanceFeeAccrued = 0;
-        IERC20(asset()).safeTransfer(feeRecipient, claimed);
+
+        address recipient = feeRecipient;
+        if (recipient.code.length > 0) {
+            IERC20(asset()).forceApprove(recipient, claimed);
+            IFeeDistributor(recipient).accumulate(address(this), claimed);
+        } else {
+            IERC20(asset()).safeTransfer(recipient, claimed);
+        }
+    }
+
+    function setFeeRecipient(address newRecipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newRecipient != address(0), "BaseVault: zero fee recipient");
+        feeRecipient = newRecipient;
+    }
+
+    function setStaking(address staking_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(staking_ != address(0), "BaseVault: zero staking");
+        require(address(staking) == address(0), "BaseVault: staking already set");
+        staking = IZENTStaking(staking_);
     }
 
     // ─── Keeper: Trade Execution ───────────────────────────────────────────

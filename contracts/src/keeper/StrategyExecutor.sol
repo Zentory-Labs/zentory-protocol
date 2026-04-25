@@ -28,6 +28,12 @@ contract StrategyExecutor is AccessControl {
     // ─── Signature domain ─────────────────────────────────────────────────
 
     bytes32 public immutable DOMAIN_SEPARATOR;
+    bytes32 public constant SIGNAL_TYPEHASH =
+        keccak256("TradeSignal(address vault,uint8 direction,uint256 size,uint64 price,uint256 nonce,uint256 expiry)");
+
+    /// @notice Authorized strategy signer (GP engine / operator signer).
+    ///         Must be set by governance before any signed execution is allowed.
+    address public authorizedSigner;
 
     // ─── Per-vault risk limits (immutable — can only change via governance) ─
 
@@ -44,6 +50,9 @@ contract StrategyExecutor is AccessControl {
     // ─── Nonce tracking ───────────────────────────────────────────────────
 
     mapping(address => uint256) public nonces;
+
+    /// @notice Explicit vault → local asset registry used by HyperCoreAdapter.
+    mapping(address => uint8) public vaultRegistry;
 
     // ─── Events ──────────────────────────────────────────────────────────
 
@@ -118,6 +127,7 @@ contract StrategyExecutor is AccessControl {
         // - GOVERNOR_ROLE: the governor contract. Can adjust risk parameters
         //   and manage KEEPER_ROLE / GUARDIAN_ROLE via governance proposals.
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, governor_);
         _grantRole(GOVERNOR_ROLE, governor_);
     }
 
@@ -166,16 +176,18 @@ contract StrategyExecutor is AccessControl {
             revert NonceAlreadyUsed(vault, nonce);
         }
 
-        // Verify ECDSA signature: keccak256(domainSeparator, vault, direction, size, nonce, expiry)
-        bytes32 digest = keccak256(abi.encodePacked(
-            DOMAIN_SEPARATOR,
-            vault,
-            direction,
-            size,
-            nonce,
-            expiry
-        ));
-
+        bytes32 structHash = keccak256(
+            abi.encode(
+                SIGNAL_TYPEHASH,
+                vault,
+                direction,
+                size,
+                price,
+                nonce,
+                expiry
+            )
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
         _verifySignature(digest, signature);
 
         // ─── Risk checks ────────────────────────────────────────────────
@@ -186,25 +198,11 @@ contract StrategyExecutor is AccessControl {
             revert PositionSizeExceedsLimit(size, maxSize);
         }
 
-        // Close orders bypass leverage check
-        if (direction != 2) {
-            uint256 maxLev = maxLeverageBPS[vault];
-            if (maxLev > 0) {
-                // Leverage check: derive leverage from size vs vault NAV (simplified check)
-                // In production: consult HyperCoreAdapter for current margin requirements
-                // For now, enforce a maximum raw leverage BPS
-                if (10000 > maxLev) {
-                    emit SignalRejected(vault, "leverage exceeds limit");
-                    revert LeverageExceedsLimit(10000, maxLev);
-                }
-            }
-        }
+        // NOTE: leverage checks require reliable margin/NAV inputs.
 
         // ─── Submit to HyperCore ───────────────────────────────────────
 
-        // Map vault to local asset (0=BTC, 1=ETH, 2=SOL, 3=XRP)
-        // In production: use an explicit vault→asset registry
-        uint8 localAsset = _assetForVault(vault);
+        uint8 localAsset = vaultRegistry[vault];
 
         // direction: 1=long(buy), 0=short(sell), 2=close(reduce-only)
         bool isBuy = direction == 1;
@@ -279,6 +277,16 @@ contract StrategyExecutor is AccessControl {
         emit PausedSet(paused_);
     }
 
+    function setAuthorizedSigner(address signer) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(signer != address(0), "StrategyExecutor: zero signer");
+        authorizedSigner = signer;
+    }
+
+    function setVaultRegistry(address vault, uint8 localAsset) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(vault != address(0), "StrategyExecutor: zero vault");
+        vaultRegistry[vault] = localAsset;
+    }
+
     /// @notice Update max position size for a vault.
     function setMaxPositionSize(address vault, uint256 maxSize) external onlyRole(DEFAULT_ADMIN_ROLE) {
         maxPositionSize[vault] = maxSize;
@@ -313,7 +321,7 @@ contract StrategyExecutor is AccessControl {
     // ─── Internal ────────────────────────────────────────────────────────
 
     /// @dev Verify ECDSA signature using ecrecover.
-    function _verifySignature(bytes32 digest, bytes calldata signature) internal pure {
+    function _verifySignature(bytes32 digest, bytes calldata signature) internal view {
         if (signature.length != 65) revert InvalidSignature();
 
         bytes32 r;
@@ -333,6 +341,7 @@ contract StrategyExecutor is AccessControl {
 
         address signer = ecrecover(digest, v, r, s);
         if (signer == address(0)) revert InvalidSignature();
+        if (signer != authorizedSigner) revert InvalidSignature();
     }
 
     /// @dev Map vault address → local asset index (0=BTC, 1=ETH, 2=SOL, 3=XRP).

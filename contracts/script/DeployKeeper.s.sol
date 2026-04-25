@@ -14,6 +14,7 @@ import {StrategyExecutor} from "../src/keeper/StrategyExecutor.sol";
 ///      GOVERNOR       — DAO governor (receives DEFAULT_ADMIN_ROLE on StrategyExecutor)
 ///      KEEPER         — GP engine / automated keeper address (receives KEEPER_ROLE)
 ///      GUARDIAN       — emergency pause address (receives GUARDIAN_ROLE)
+///      SIGNAL_SIGNER  — authorized EIP-712 signer for TradeSignals
 ///      GP_ENGINE      — address authorised to trigger ZENT buyback
 ///      zETH, zBTC, zXRP, zSOL — vault addresses
 ///
@@ -34,6 +35,7 @@ contract DeployKeeper is Script {
         address governor  = _must("GOVERNOR");
         address keeper    = _must("KEEPER");
         address guardian  = _must("GUARDIAN");
+        address signalSigner = _must("SIGNAL_SIGNER");
 
         address zeth = _must("zETH");
         address zbtc = _must("zBTC");
@@ -45,7 +47,7 @@ contract DeployKeeper is Script {
 
         vm.startBroadcast(key);
 
-        HyperCoreAdapter adapter = new HyperCoreAdapter();
+        HyperCoreAdapter adapter = new HyperCoreAdapter(governor);
         console2.log("HyperCoreAdapter:", address(adapter));
 
         StrategyExecutor executor = new StrategyExecutor(address(adapter), governor);
@@ -55,6 +57,13 @@ contract DeployKeeper is Script {
         executor.grantRole(keccak256("KEEPER_ROLE"), keeper);
         executor.grantRole(keccak256("GUARDIAN_ROLE"), guardian);
         console2.log("Roles granted - Keeper:", keeper, "Guardian:", guardian);
+
+        // Signal auth + vault registry
+        executor.setAuthorizedSigner(signalSigner);
+        executor.setVaultRegistry(zbtc, 0);
+        executor.setVaultRegistry(zeth, 1);
+        executor.setVaultRegistry(zsol, 2);
+        executor.setVaultRegistry(zxrp, 3);
 
         // Per-vault risk limits
         _setLimits(executor, zeth, "zETH");

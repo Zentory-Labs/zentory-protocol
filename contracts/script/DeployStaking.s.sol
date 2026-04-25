@@ -5,6 +5,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ZENTStaking} from "../src/staking/ZENTStaking.sol";
 import {ModelBonding} from "../src/staking/ModelBonding.sol";
 import {FeeDistributor} from "../src/fees/FeeDistributor.sol";
+import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /// @notice Deploys ZENTStaking, ModelBonding, and one FeeDistributor per vault.
 /// @dev Run standalone:
@@ -61,24 +62,24 @@ contract DeployStaking is Script {
         ModelBonding bonding = new ModelBonding(zent, governor, riskCouncil, insurance, unbondCooldown);
         console2.log("ModelBonding deployed:", address(bonding));
 
-        // 3. One FeeDistributor per vault (each vault's asset is the fee asset)
+        // 3. One FeeDistributor per vault (asset = vault.asset())
         FeeDistributor zethFees = new FeeDistributor(
-            zeth, zent, governor, gpEngine, insurance, treasury
+            IERC4626(zeth).asset(), zent, governor, gpEngine, insurance, treasury
         );
         console2.log("zETH FeeDistributor deployed:", address(zethFees));
 
         FeeDistributor zbtcFees = new FeeDistributor(
-            zbtc, zent, governor, gpEngine, insurance, treasury
+            IERC4626(zbtc).asset(), zent, governor, gpEngine, insurance, treasury
         );
         console2.log("zBTC FeeDistributor deployed:", address(zbtcFees));
 
         FeeDistributor zxrpFees = new FeeDistributor(
-            zxrp, zent, governor, gpEngine, insurance, treasury
+            IERC4626(zxrp).asset(), zent, governor, gpEngine, insurance, treasury
         );
         console2.log("zXRP FeeDistributor deployed:", address(zxrpFees));
 
         FeeDistributor zsolFees = new FeeDistributor(
-            zsol, zent, governor, gpEngine, insurance, treasury
+            IERC4626(zsol).asset(), zent, governor, gpEngine, insurance, treasury
         );
         console2.log("zSOL FeeDistributor deployed:", address(zsolFees));
 

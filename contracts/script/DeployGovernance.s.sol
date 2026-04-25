@@ -57,7 +57,7 @@ contract DeployGovernance is Script {
             timelockDelay,
             _singleton(proposer),
             _singleton(executor),
-            address(this)  // admin = this deployer; must transfer afterwards
+            vm.addr(key)  // admin = deployer EOA; must transfer/renounce afterwards
         );
         console2.log("Timelock deployed:", address(timelock));
 

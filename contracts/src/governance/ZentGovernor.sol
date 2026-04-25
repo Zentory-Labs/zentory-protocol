@@ -3,10 +3,12 @@ pragma solidity ^0.8.28;
 
 import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {GovernorCountingSimple} from "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
+import {GovernorTimelockControl} from "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
 import {Zentroller} from "./Zentroller.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 /// @title ZentGovernor
 /// @notice ZENT holder governance over risk parameters, treasury, and upgrades.
@@ -14,7 +16,7 @@ import {Zentroller} from "./Zentroller.sol";
 ///         Proposals execute through TimelockController after a 48-hour delay.
 /// @dev    Does NOT inherit GovernorVotes — voting weight comes from ZENTStaking.veBalance,
 ///         not from ZENT ERC20Votes checkpoints.
-contract ZentGovernor is Governor, GovernorCountingSimple {
+contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockControl {
 
     /// @notice ZENT token address (used for quorum totalSupply reference).
     address public immutable zentToken;
@@ -47,6 +49,7 @@ contract ZentGovernor is Governor, GovernorCountingSimple {
         uint256 quorumBps_
     )
         Governor("ZentGovernor")
+        GovernorTimelockControl(TimelockController(payable(timelock_)))
     {
         require(zentToken_ != address(0), "ZentGovernor: zero zent");
         require(staking_ != address(0), "ZentGovernor: zero staking");
@@ -109,5 +112,83 @@ contract ZentGovernor is Governor, GovernorCountingSimple {
     /// @notice Duration of the voting period.
     function votingPeriod() public view override(Governor) returns (uint256) {
         return _votingPeriod;
+    }
+
+    // ─── Timelock integration ────────────────────────────────────────────
+
+    function state(uint256 proposalId)
+        public
+        view
+        override(Governor, GovernorTimelockControl)
+        returns (ProposalState)
+    {
+        return super.state(proposalId);
+    }
+
+    function proposalNeedsQueuing(uint256 proposalId)
+        public
+        view
+        override(Governor, GovernorTimelockControl)
+        returns (bool)
+    {
+        return super.proposalNeedsQueuing(proposalId);
+    }
+
+    function _queueOperations(
+        uint256 proposalId,
+        address[] memory targets,
+        uint256[] memory values,
+        bytes[] memory calldatas,
+        bytes32 descriptionHash
+    )
+        internal
+        override(Governor, GovernorTimelockControl)
+        returns (uint48)
+    {
+        return super._queueOperations(proposalId, targets, values, calldatas, descriptionHash);
+    }
+
+    function _executeOperations(
+        uint256 proposalId,
+        address[] memory targets,
+        uint256[] memory values,
+        bytes[] memory calldatas,
+        bytes32 descriptionHash
+    )
+        internal
+        override(Governor, GovernorTimelockControl)
+    {
+        super._executeOperations(proposalId, targets, values, calldatas, descriptionHash);
+    }
+
+    function _cancel(
+        address[] memory targets,
+        uint256[] memory values,
+        bytes[] memory calldatas,
+        bytes32 descriptionHash
+    )
+        internal
+        override(Governor, GovernorTimelockControl)
+        returns (uint256)
+    {
+        return super._cancel(targets, values, calldatas, descriptionHash);
+    }
+
+    function _executor()
+        internal
+        view
+        override(Governor, GovernorTimelockControl)
+        returns (address)
+    {
+        return super._executor();
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        override(Governor, GovernorTimelockControl)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
     }
 }
