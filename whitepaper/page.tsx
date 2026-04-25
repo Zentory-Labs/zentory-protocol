@@ -60,19 +60,26 @@ function SectionHeading({
     icon: Icon,
     number,
     title,
+    variant = 'blue',
 }: {
     id: string
     icon: React.ElementType
     number: string
     title: string
+    variant?: 'blue' | 'amber'
 }) {
+    const isAmber = variant === 'amber'
+    const bgClass = isAmber ? 'bg-amber-500/10' : 'bg-[#0d80fa]/10'
+    const textClass = isAmber ? 'text-amber-500' : 'text-[#0d80fa]'
+    const labelClass = isAmber ? 'text-amber-500' : 'text-[#0d80fa]'
+
     return (
         <div id={id} className="scroll-mt-32 flex items-center gap-4 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-[#0d80fa]/10 flex items-center justify-center flex-shrink-0">
-                <Icon className="w-6 h-6 text-[#0d80fa]" />
+            <div className={`w-12 h-12 rounded-xl ${bgClass} flex items-center justify-center flex-shrink-0`}>
+                <Icon className={`w-6 h-6 ${textClass}`} />
             </div>
             <div>
-                <span className="text-xs text-[#0d80fa] font-semibold uppercase tracking-widest">
+                <span className={`text-xs ${labelClass} font-semibold uppercase tracking-widest`}>
                     Section {number}
                 </span>
                 <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">{title}</h2>
@@ -83,7 +90,7 @@ function SectionHeading({
 
 function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8">
+        <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-8">
             <h4 className="text-lg font-semibold text-white mb-4">{title}</h4>
             <div className="text-white/70 text-sm leading-relaxed space-y-3">{children}</div>
         </div>
@@ -93,12 +100,18 @@ function InfoCard({ title, children }: { title: string; children: React.ReactNod
 /* ── Page ───────────────────────────────────────── */
 export default function WhitepaperPage() {
     return (
-        <div className="min-h-screen bg-[#0a0a0a] text-white">
+        <div className="min-h-screen bg-[#05070c] text-[#e6e2de]">
+            {/* Ambient glow effects */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl" />
+                <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
+            </div>
+
             {/* Hero */}
             <section className="relative py-20 md:py-28 overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-b from-[#0d80fa]/10 via-transparent to-transparent" />
                 <div className="max-w-4xl mx-auto px-6 relative z-10 text-center">
-                    <span className="inline-block px-4 py-2 bg-[#0d80fa]/20 text-[#0d80fa] rounded-full text-xs font-semibold uppercase tracking-widest mb-6">
+                    <span className="inline-block px-4 py-2 bg-amber-500/20 text-amber-500 rounded-full text-xs font-semibold uppercase tracking-widest mb-6">
                         Whitepaper v1.0 — March 2026
                     </span>
                     <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
@@ -111,17 +124,17 @@ export default function WhitepaperPage() {
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Link
                             href="/models/pitch-deck"
-                            className="inline-flex items-center justify-center px-6 py-3 bg-[#0d80fa] text-white font-semibold rounded-lg hover:bg-[#0d80fa]/90 transition-colors"
+                            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#0d80fa] to-[#3b82f6] text-white font-semibold shadow-lg shadow-blue-500/25 transition-all duration-300 hover:scale-[1.02] hover:shadow-blue-500/40"
                         >
                             View Pitch Deck
-                            <ArrowRight className="w-4 h-4 ml-2" />
+                            <ArrowRight className="w-4 h-4" />
                         </Link>
                         <Link
                             href="/tokenomics"
-                            className="inline-flex items-center justify-center px-6 py-3 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors border border-white/20"
+                            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border border-white/20 text-white/80 hover:text-white hover:border-white/40 font-medium transition-all duration-300"
                         >
                             Tokenomics
-                            <ExternalLink className="w-4 h-4 ml-2" />
+                            <ExternalLink className="w-4 h-4" />
                         </Link>
                     </div>
                 </div>
@@ -129,9 +142,9 @@ export default function WhitepaperPage() {
 
             {/* Layout: TOC sidebar + content */}
             <div className="max-w-7xl mx-auto px-6 pb-20 flex gap-12">
-                {/* Sticky TOC — desktop */}
+                {/* Sticky TOC — desktop with glass effect */}
                 <aside className="hidden xl:block w-64 flex-shrink-0">
-                    <nav className="sticky top-32 space-y-1">
+                    <nav className="sticky top-20 w-64 p-6 glass border-r border-white/[0.08] rounded-2xl space-y-1">
                         <p className="text-xs text-white/40 uppercase tracking-widest font-semibold mb-4 px-3">
                             Contents
                         </p>
@@ -154,10 +167,10 @@ export default function WhitepaperPage() {
                 {/* Mobile TOC */}
                 <div className="xl:hidden fixed bottom-6 right-6 z-40">
                     <details className="group">
-                        <summary className="cursor-pointer w-12 h-12 rounded-full bg-[#0d80fa] flex items-center justify-center shadow-lg hover:bg-[#0d80fa]/90 transition-colors list-none">
+                        <summary className="cursor-pointer w-12 h-12 rounded-full bg-gradient-to-r from-[#0d80fa] to-[#3b82f6] flex items-center justify-center shadow-lg shadow-blue-500/25 hover:scale-105 transition-transform list-none">
                             <BookOpen className="w-5 h-5 text-white" />
                         </summary>
-                        <div className="absolute bottom-14 right-0 w-56 bg-[#1a1a1a] border border-white/10 rounded-xl p-3 shadow-2xl max-h-[60vh] overflow-y-auto">
+                        <div className="absolute bottom-14 right-0 w-56 glass border border-white/[0.1] rounded-xl p-3 shadow-2xl max-h-[60vh] overflow-y-auto">
                             <p className="text-xs text-white/40 uppercase tracking-widest font-semibold mb-2 px-2">
                                 Contents
                             </p>
@@ -179,7 +192,7 @@ export default function WhitepaperPage() {
                     {/* ─── 1  Abstract ──────────────────────────── */}
                     <section>
                         <SectionHeading id="abstract" icon={BookOpen} number="01" title="Abstract" />
-                        <div className="bg-gradient-to-r from-[#0d80fa]/10 to-transparent border border-[#0d80fa]/20 rounded-2xl p-6 md:p-8">
+                        <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6 md:p-8">
                             <p className="text-white/80 leading-relaxed text-lg font-light">
                                 Zentory is a non-custodial, tokenized strategy network for liquid cryptocurrency markets. The protocol
                                 combines genetic programming research, on-chain vaults adhering to the ERC-4626 standard, and
@@ -226,7 +239,7 @@ export default function WhitepaperPage() {
                                     Zentory addresses these gaps by combining three innovations into a single protocol:
                                 </p>
                                 <div className="grid md:grid-cols-3 gap-6">
-                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+                                    <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6 text-center">
                                         <div className="w-14 h-14 rounded-full bg-[#0d80fa]/10 flex items-center justify-center mx-auto mb-4">
                                             <Dna className="w-7 h-7 text-[#0d80fa]" />
                                         </div>
@@ -236,9 +249,9 @@ export default function WhitepaperPage() {
                                             bias and adapting to market regime changes.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
-                                        <div className="w-14 h-14 rounded-full bg-[#0d80fa]/10 flex items-center justify-center mx-auto mb-4">
-                                            <Vault className="w-7 h-7 text-[#0d80fa]" />
+                                    <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6 text-center">
+                                        <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+                                            <Vault className="w-7 h-7 text-amber-500" />
                                         </div>
                                         <h4 className="text-white font-semibold mb-2">Benchmark-Denominated Vaults</h4>
                                         <p className="text-sm text-white/60">
@@ -246,7 +259,7 @@ export default function WhitepaperPage() {
                                             above holding&rdquo; — not vague USD profit claims.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+                                    <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6 text-center">
                                         <div className="w-14 h-14 rounded-full bg-[#0d80fa]/10 flex items-center justify-center mx-auto mb-4">
                                             <ShieldCheck className="w-7 h-7 text-[#0d80fa]" />
                                         </div>
@@ -271,9 +284,9 @@ export default function WhitepaperPage() {
                             </p>
 
                             {/* Layer 1: Alpha Vaults */}
-                            <div className="bg-[#0d80fa]/10 border border-[#0d80fa]/30 rounded-2xl p-6">
+                            <div className="rounded-2xl border border-[#0d80fa]/30 bg-[#0d80fa]/5 backdrop-blur-xl p-6">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <span className="px-2 py-1 bg-[#0d80fa] text-white text-xs font-bold rounded">LAYER 1</span>
+                                    <span className="px-2 py-1 bg-gradient-to-r from-[#0d80fa] to-[#3b82f6] text-white text-xs font-bold rounded">LAYER 1</span>
                                     <h4 className="text-white font-semibold text-lg">Alpha Vaults</h4>
                                 </div>
                                 <p className="text-sm text-white/60 mb-4">
@@ -303,7 +316,7 @@ export default function WhitepaperPage() {
 
                                 {/* Alpha Vault Details Grid */}
                                 <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Benchmark-Denominated Returns</h5>
                                         <p className="text-xs text-white/60">
                                             Each vault tracks two curves: V<sub>model</sub>(t) vs V<sub>HODL</sub>(t). Performance fees
@@ -311,7 +324,7 @@ export default function WhitepaperPage() {
                                             mark. This aligns fees with genuine alpha delivery.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Vault Isolation</h5>
                                         <p className="text-xs text-white/60">
                                             Each vault operates as an independent smart contract with its own NAV, risk profile, and
@@ -319,7 +332,7 @@ export default function WhitepaperPage() {
                                             design choice learned from historical DeFi failures.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Execution Infrastructure</h5>
                                         <p className="text-xs text-white/60">
                                             Strategy signals are generated off-chain by the GP engine. Execution is anchored on
@@ -329,7 +342,7 @@ export default function WhitepaperPage() {
                                             supports additional venues as the protocol expands cross-chain.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Deposits & Redemptions</h5>
                                         <p className="text-xs text-white/60">
                                             Users deposit the benchmark asset directly and receive vault shares. Redemption includes
@@ -341,9 +354,9 @@ export default function WhitepaperPage() {
                             </div>
 
                             {/* Layer 2: Evolutionary Engine */}
-                            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                            <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <span className="px-2 py-1 bg-white/20 text-white text-xs font-bold rounded">LAYER 2</span>
+                                    <span className="px-2 py-1 bg-amber-500/20 text-amber-500 text-xs font-bold rounded">LAYER 2</span>
                                     <h4 className="text-white font-semibold text-lg">Evolutionary Alpha Engine</h4>
                                 </div>
                                 <p className="text-sm text-white/60 mb-4">
@@ -357,7 +370,7 @@ export default function WhitepaperPage() {
                                     hard-coded risk rails that are immutable at the contract level.
                                 </p>
                                 <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Multi-Objective Fitness</h5>
                                         <p className="text-xs text-white/60">
                                             Strategy fitness penalises excessive drawdown, high turnover, slippage, leverage abuse,
@@ -365,7 +378,7 @@ export default function WhitepaperPage() {
                                             alpha, not raw returns.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Asset-Specific Evolution</h5>
                                         <p className="text-xs text-white/60">
                                             Each vault runs its own evolutionary process. BTC&apos;s macro-driven behaviour differs
@@ -374,7 +387,7 @@ export default function WhitepaperPage() {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="mt-4 bg-[#0d80fa]/5 border border-[#0d80fa]/20 rounded-xl p-4 text-sm">
+                                <div className="mt-4 rounded-xl border border-[#0d80fa]/20 bg-[#0d80fa]/5 backdrop-blur-sm p-4 text-sm">
                                     <p className="text-white/60">
                                         <strong className="text-[#0d80fa]">IP Note:</strong> Specific fitness functions, parameter ranges,
                                         ensemble methods, and crossover operators are proprietary and not disclosed.
@@ -383,20 +396,20 @@ export default function WhitepaperPage() {
                             </div>
 
                             {/* Layer 3: ZENT Token */}
-                            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                            <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <span className="px-2 py-1 bg-white/20 text-white text-xs font-bold rounded">LAYER 3</span>
+                                    <span className="px-2 py-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-xs font-bold rounded">LAYER 3</span>
                                     <h4 className="text-white font-semibold text-lg">ZENT Meta-Token</h4>
                                 </div>
                                 <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Access & Staking</h5>
                                         <p className="text-xs text-white/60">
                                             ZENT staking required to access alpha vaults. More TVL requires more ZENT locked,
                                             creating organic demand tied to protocol growth.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Performance Fees</h5>
                                         <p className="text-xs text-white/60">
                                             20% performance fee charged only on positive alpha above HODL baseline. Fee serves as
@@ -409,7 +422,7 @@ export default function WhitepaperPage() {
                     </section>
 
                     {/* ─── 4  The Team ───────────────────────────── */}
-                    <section className="bg-white/[0.02] -mx-6 px-6 py-16 md:-mx-8 md:px-8 rounded-3xl">
+                    <section className="rounded-3xl border border-white/[0.1] bg-black/40 backdrop-blur-xl -mx-6 px-6 py-16 md:-mx-8 md:px-8">
                         <SectionHeading id="team" icon={Users} number="04" title="The Team" />
                         <div className="space-y-6 text-white/70 leading-relaxed">
                             <p className="text-center max-w-2xl mx-auto">
@@ -418,12 +431,12 @@ export default function WhitepaperPage() {
 
                             <div className="grid md:grid-cols-3 gap-6">
                                 {/* Edge */}
-                                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+                                <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6 text-center">
                                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#0d80fa] to-[#0d80fa]/50 mx-auto mb-4 flex items-center justify-center">
                                         <span className="text-2xl font-bold text-white">E</span>
                                     </div>
                                     <h4 className="text-white font-semibold text-lg mb-1">Edge</h4>
-                                    <p className="text-[#0d80fa] text-sm font-medium mb-4">Founder — Head of Strategy</p>
+                                    <p className="text-amber-500 text-sm font-medium mb-4">Founder — Head of Strategy</p>
                                     <p className="text-sm text-white/60 leading-relaxed">
                                         Quantitative analyst and multi-asset trader. Has designed and managed algorithmic trading systems across
                                         multiple asset classes, with a proven track record of managing millions in assets under management through
@@ -432,12 +445,12 @@ export default function WhitepaperPage() {
                                 </div>
 
                                 {/* Shaman */}
-                                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+                                <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6 text-center">
                                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#0d80fa] to-[#0d80fa]/50 mx-auto mb-4 flex items-center justify-center">
                                         <span className="text-2xl font-bold text-white">S</span>
                                     </div>
                                     <h4 className="text-white font-semibold text-lg mb-1">Shaman</h4>
-                                    <p className="text-[#0d80fa] text-sm font-medium mb-4">Founder — Head of Operations</p>
+                                    <p className="text-amber-500 text-sm font-medium mb-4">Founder — Head of Operations</p>
                                     <p className="text-sm text-white/60 leading-relaxed">
                                         Serial entrepreneur with over five years of hands-on experience in the cryptocurrency space. Brings
                                         deep knowledge of crypto-native operations, community building, and protocol-level economics.
@@ -445,12 +458,12 @@ export default function WhitepaperPage() {
                                 </div>
 
                                 {/* n0de */}
-                                <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
+                                <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6 text-center">
                                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#0d80fa] to-[#0d80fa]/50 mx-auto mb-4 flex items-center justify-center">
                                         <span className="text-2xl font-bold text-white">N</span>
                                     </div>
                                     <h4 className="text-white font-semibold text-lg mb-1">n0de</h4>
-                                    <p className="text-[#0d80fa] text-sm font-medium mb-4">Founder — Head of Engineering</p>
+                                    <p className="text-amber-500 text-sm font-medium mb-4">Founder — Head of Engineering</p>
                                     <p className="text-sm text-white/60 leading-relaxed">
                                         Smart contract and token engineer responsible for the protocol's on-chain infrastructure. Specialises
                                         in building secure, gas-efficient DeFi primitives and has contributed to multiple audited protocols.
@@ -472,7 +485,7 @@ export default function WhitepaperPage() {
                             </p>
 
                             {/* On-Chain Risk Controls */}
-                            <div className="bg-[#0d80fa]/5 border border-[#0d80fa]/20 rounded-2xl p-6">
+                            <div className="rounded-2xl border border-[#0d80fa]/20 bg-[#0d80fa]/5 backdrop-blur-xl p-6">
                                 <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
                                     <ShieldCheck className="w-5 h-5 text-[#0d80fa]" />
                                     On-Chain Risk Controls
@@ -486,7 +499,7 @@ export default function WhitepaperPage() {
                                         { title: 'Venue Allowlists', desc: 'Strategy contracts can only interact with approved, audited execution venues — never arbitrary addresses.' },
                                         { title: 'Emergency Pause', desc: 'Multi-signature pause mechanism that halts new deposits and rebalancing while keeping redemptions available.' },
                                     ].map((item, i) => (
-                                        <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                                        <div key={i} className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                             <h4 className="text-white font-semibold text-sm mb-2">{item.title}</h4>
                                             <p className="text-xs text-white/60 leading-relaxed">{item.desc}</p>
                                         </div>
@@ -495,7 +508,7 @@ export default function WhitepaperPage() {
                             </div>
 
                             {/* Transparency & Verification */}
-                            <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+                            <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-6">
                                 <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
                                     <Eye className="w-5 h-5 text-[#0d80fa]" />
                                     Transparency & Verification
@@ -505,7 +518,7 @@ export default function WhitepaperPage() {
                                     Every claim the protocol makes is backed by queryable, on-chain data.
                                 </p>
                                 <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h4 className="text-white/90 font-semibold text-sm mb-3">On-Chain Data</h4>
                                         <ul className="space-y-2 text-xs text-white/60">
                                             <li className="flex items-start gap-2">
@@ -530,27 +543,27 @@ export default function WhitepaperPage() {
                                             </li>
                                         </ul>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h4 className="text-white/90 font-semibold text-sm mb-3">Additional Safety Measures</h4>
                                         <ul className="space-y-2 text-xs text-white/60">
                                             <li className="flex items-start gap-2">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-[#0d80fa] mt-1.5 flex-shrink-0" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
                                                 Timelocked upgrades — governance cannot instantly change risk parameters
                                             </li>
                                             <li className="flex items-start gap-2">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-[#0d80fa] mt-1.5 flex-shrink-0" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
                                                 Isolated vaults — no shared collateral pool between asset models
                                             </li>
                                             <li className="flex items-start gap-2">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-[#0d80fa] mt-1.5 flex-shrink-0" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
                                                 Insurance reserve funded by a percentage of performance fees
                                             </li>
                                             <li className="flex items-start gap-2">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-[#0d80fa] mt-1.5 flex-shrink-0" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
                                                 Multiple independent smart contract audits prior to mainnet deployment
                                             </li>
                                             <li className="flex items-start gap-2">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-[#0d80fa] mt-1.5 flex-shrink-0" />
+                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 flex-shrink-0" />
                                                 Active bug bounty program
                                             </li>
                                         </ul>
@@ -559,7 +572,7 @@ export default function WhitepaperPage() {
                             </div>
 
                             {/* Roadmap to zkML */}
-                            <div className="bg-[#0d80fa]/5 border border-[#0d80fa]/20 rounded-2xl p-6">
+                            <div className="rounded-2xl border border-[#0d80fa]/20 bg-[#0d80fa]/5 backdrop-blur-xl p-6">
                                 <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
                                     <Eye className="w-5 h-5 text-[#0d80fa]" />
                                     Roadmap to zkML
@@ -578,14 +591,14 @@ export default function WhitepaperPage() {
                     </section>
 
                     {/* ─── 6  Tokenomics Overview ───────────────── */}
-                    <section className="bg-white/[0.02] -mx-6 px-6 py-16 md:-mx-8 md:px-8 rounded-3xl">
-                        <SectionHeading id="tokenomics" icon={Coins} number="06" title="Tokenomics Overview" />
+                    <section className="rounded-3xl border border-white/[0.1] bg-black/40 backdrop-blur-xl -mx-6 px-6 py-16 md:-mx-8 md:px-8">
+                        <SectionHeading id="tokenomics" icon={Coins} number="06" title="Tokenomics Overview" variant="amber" />
                         <div className="space-y-6 text-white/70 leading-relaxed">
 
                             {/* Why This Section Was Updated */}
-                            <div className="bg-[#0d80fa]/5 border border-[#0d80fa]/20 rounded-2xl p-5">
+                            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-xl p-5">
                                 <p className="text-sm text-white/80">
-                                    <strong className="text-[#0d80fa]">Design principle:</strong> This tokenomics section was revised using empirical data from 2024–2026 token launches.
+                                    <strong className="text-amber-500">Design principle:</strong> This tokenomics section was revised using empirical data from 2024–2026 token launches.
                                     Tokens with multi-utility design, balanced circulating supply (40–60% at TGE), and mechanical value return mechanisms (buyback + burn)
                                     showed 2.1x better price retention than governance-only or dividend-distributing tokens. ZENT is designed accordingly.
                                 </p>
@@ -595,16 +608,16 @@ export default function WhitepaperPage() {
                             <div>
                                 <h3 className="text-white font-semibold text-lg mb-3">Two Instruments, Two Roles</h3>
                                 <div className="grid md:grid-cols-2 gap-5">
-                                    <div className="bg-white/5 border border-white/10 rounded-xl p-5">
-                                        <h4 className="text-[#0d80fa] font-semibold mb-2">Vault Shares (zBTC, zETH, zSOL, zXRP)</h4>
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-5">
+                                        <h4 className="text-amber-500 font-semibold mb-2">Vault Shares (zBTC, zETH, zSOL, zXRP)</h4>
                                         <p className="text-sm text-white/60 leading-relaxed">
                                             These are what you hold to outperform HODL. Vault shares are ERC-4626 tokens representing your proportional ownership
                                             of the vault&apos;s strategy. When the GP engine generates alpha above the benchmark, vault share price rises.
                                             When strategies rotate to cash/USDT during bear regimes, vault shares hold their value versus the underlying asset.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 border border-white/10 rounded-xl p-5">
-                                        <h4 className="text-[#0d80fa] font-semibold mb-2">ZENT Token (Layer 3 Meta-Token)</h4>
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-5">
+                                        <h4 className="text-amber-500 font-semibold mb-2">ZENT Token (Layer 3 Meta-Token)</h4>
                                         <p className="text-sm text-white/60 leading-relaxed">
                                             ZENT is not a security and does not pay dividends. ZENT is a utility and governance token: staking ZENT grants vault access,
                                             ZENT holders govern the protocol, and ZENT&apos;s value appreciates through deflationary pressure — not distributions.
@@ -635,7 +648,7 @@ export default function WhitepaperPage() {
                                             desc: 'Model providers must stake ZENT behind their strategies. Underperforming strategies face ZENT slashing — ensuring only quality strategies receive depositor capital.',
                                         },
                                     ].map((item, i) => (
-                                        <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-5">
+                                        <div key={i} className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-5">
                                             <h4 className="text-white font-semibold mb-2">{item.title}</h4>
                                             <p className="text-sm text-white/60 leading-relaxed">{item.desc}</p>
                                         </div>
@@ -647,7 +660,7 @@ export default function WhitepaperPage() {
                             <div>
                                 <h3 className="text-white font-semibold text-lg mb-3">ZENT Supply & Allocation</h3>
                                 <p className="text-sm text-white/60 mb-4">
-                                    Fixed total supply of <strong className="text-white">1,000,000,000 ZENT</strong>. No admin mint key — supply is permanent
+                                    Fixed total supply of <strong className="text-amber-500">1,000,000,000 ZENT</strong>. No admin mint key — supply is permanent
                                     and immutably capped. All allocation is in smart contracts, programmatically released on schedule.
                                 </p>
                                 <div className="overflow-x-auto">
@@ -663,31 +676,31 @@ export default function WhitepaperPage() {
                                         <tbody className="text-white/70">
                                             <tr className="border-b border-white/5">
                                                 <td className="py-2 pr-3 font-medium text-white/90">Community & Ecosystem</td>
-                                                <td className="py-2 px-3 text-[#0d80fa] font-medium">45%</td>
+                                                <td className="py-2 px-3 text-amber-500 font-medium">45%</td>
                                                 <td className="py-2 px-3">450M</td>
                                                 <td className="py-2 pl-3">50% at TGE; 50% linearly over 24 months</td>
                                             </tr>
                                             <tr className="border-b border-white/5">
                                                 <td className="py-2 pr-3 font-medium text-white/90">Strategy Incentives</td>
-                                                <td className="py-2 px-3 text-[#0d80fa] font-medium">10%</td>
+                                                <td className="py-2 px-3 text-amber-500 font-medium">10%</td>
                                                 <td className="py-2 px-3">100M</td>
                                                 <td className="py-2 pl-3">KPI-gated releases for top-performing vault strategies</td>
                                             </tr>
                                             <tr className="border-b border-white/5">
                                                 <td className="py-2 pr-3 font-medium text-white/90">Core Team</td>
-                                                <td className="py-2 px-3 text-[#0d80fa] font-medium">18%</td>
+                                                <td className="py-2 px-3 text-amber-500 font-medium">18%</td>
                                                 <td className="py-2 px-3">180M</td>
                                                 <td className="py-2 pl-3">12-month cliff; 36-month linear vest</td>
                                             </tr>
                                             <tr className="border-b border-white/5">
                                                 <td className="py-2 pr-3 font-medium text-white/90">Early Backers</td>
-                                                <td className="py-2 px-3 text-[#0d80fa] font-medium">15%</td>
+                                                <td className="py-2 px-3 text-amber-500 font-medium">15%</td>
                                                 <td className="py-2 px-3">150M</td>
                                                 <td className="py-2 pl-3">6-month cliff; 24-month linear vest</td>
                                             </tr>
                                             <tr className="border-b border-white/5">
                                                 <td className="py-2 pr-3 font-medium text-white/90">Protocol Treasury</td>
-                                                <td className="py-2 px-3 text-[#0d80fa] font-medium">12%</td>
+                                                <td className="py-2 px-3 text-amber-500 font-medium">12%</td>
                                                 <td className="py-2 px-3">120M</td>
                                                 <td className="py-2 pl-3">DAO-governed; released per approved proposals</td>
                                             </tr>
@@ -701,9 +714,9 @@ export default function WhitepaperPage() {
                             </div>
 
                             {/* Performance Fee Architecture */}
-                            <div className="bg-[#0d80fa]/5 border border-[#0d80fa]/20 rounded-2xl p-6">
+                            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-xl p-6">
                                 <h3 className="text-white font-semibold text-lg mb-4 flex items-center gap-2">
-                                    <Coins className="w-5 h-5 text-[#0d80fa]" />
+                                    <Coins className="w-5 h-5 text-amber-500" />
                                     How ZENT Outperforms HODL: The Fee Architecture
                                 </h3>
                                 <p className="text-sm text-white/70 mb-5">
@@ -711,7 +724,7 @@ export default function WhitepaperPage() {
                                     ensuring fees are never charged on unrealised or below-benchmark performance. The 20% fee is split as follows:
                                 </p>
                                 <div className="grid md:grid-cols-2 gap-4 mb-5">
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">
                                             50% — ZENT Buyback &amp; Burn
                                         </h5>
@@ -721,7 +734,7 @@ export default function WhitepaperPage() {
                                             No dividends are paid to ZENT holders — growth is captured through scarcity.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">
                                             25% — GP Engine / Strategy Creators
                                         </h5>
@@ -730,7 +743,7 @@ export default function WhitepaperPage() {
                                             primary competitive moat. Better strategies attract more TVL, creating a self-reinforcing loop.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">
                                             15% — Insurance Reserve
                                         </h5>
@@ -739,7 +752,7 @@ export default function WhitepaperPage() {
                                             market events. Governed by DAO; accessible only via approved proposals.
                                         </p>
                                     </div>
-                                    <div className="bg-white/5 rounded-xl p-4">
+                                    <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">
                                             10% — Protocol Treasury
                                         </h5>
@@ -797,7 +810,7 @@ export default function WhitepaperPage() {
                                         { title: 'DAO-Governed Treasury', desc: 'Protocol treasury is controlled by ZENT governance. Funds are only accessible via approved on-chain proposals.' },
                                         { title: 'Renounced Ownership', desc: 'Ownable contract functions are renounced at launch. No single admin key can pause, upgrade, or modify vault logic.' },
                                     ].map((item, i) => (
-                                        <div key={i} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                                        <div key={i} className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                             <h4 className="text-white/90 font-semibold text-sm mb-1">{item.title}</h4>
                                             <p className="text-xs text-white/60">{item.desc}</p>
                                         </div>
@@ -817,11 +830,11 @@ export default function WhitepaperPage() {
                                             </tr>
                                         </thead>
                                         <tbody className="text-white/70">
-                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Performance fee (on alpha above HODL benchmark)</td><td className="py-2 px-3 text-[#0d80fa] font-medium">20%</td><td className="py-2 pl-3">Charged only on new gains above prior high-water mark. No fee on unrealised or below-benchmark performance.</td></tr>
-                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Management fee</td><td className="py-2 px-3 text-[#0d80fa] font-medium">0%</td><td className="py-2 pl-3">No annual or monthly management fee.</td></tr>
-                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Deposit / mint</td><td className="py-2 px-3 text-[#0d80fa] font-medium">0%</td><td className="py-2 pl-3">No fee to deposit into vaults or mint vault shares.</td></tr>
-                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Redemption / withdrawal</td><td className="py-2 px-3 text-[#0d80fa] font-medium">0%</td><td className="py-2 pl-3">No fee to redeem vault shares or withdraw assets.</td></tr>
-                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Of the 20% performance fee</td><td className="py-2 px-3 text-[#0d80fa] font-medium">—</td><td className="py-2 pl-3">50% to ZENT buyback &amp; burn; 25% to GP engine / strategy creators; 15% to insurance reserve; 10% to protocol treasury.</td></tr>
+                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Performance fee (on alpha above HODL benchmark)</td><td className="py-2 px-3 text-amber-500 font-medium">20%</td><td className="py-2 pl-3">Charged only on new gains above prior high-water mark. No fee on unrealised or below-benchmark performance.</td></tr>
+                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Management fee</td><td className="py-2 px-3 text-amber-500 font-medium">0%</td><td className="py-2 pl-3">No annual or monthly management fee.</td></tr>
+                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Deposit / mint</td><td className="py-2 px-3 text-amber-500 font-medium">0%</td><td className="py-2 pl-3">No fee to deposit into vaults or mint vault shares.</td></tr>
+                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Redemption / withdrawal</td><td className="py-2 px-3 text-amber-500 font-medium">0%</td><td className="py-2 pl-3">No fee to redeem vault shares or withdraw assets.</td></tr>
+                                            <tr className="border-b border-white/5"><td className="py-2 pr-3">Of the 20% performance fee</td><td className="py-2 px-3 text-amber-500 font-medium">—</td><td className="py-2 pl-3">50% to ZENT buyback &amp; burn; 25% to GP engine / strategy creators; 15% to insurance reserve; 10% to protocol treasury.</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -831,37 +844,39 @@ export default function WhitepaperPage() {
                     </section>
 
                     {/* ─── 7  Roadmap ──────────────────────────── */}
-                    <section className="bg-white/[0.02] -mx-6 px-6 py-16 md:-mx-8 md:px-8 rounded-3xl">
-                        <SectionHeading id="roadmap" icon={Map} number="07" title="Roadmap" />
+                    <section className="rounded-3xl border border-white/[0.1] bg-black/40 backdrop-blur-xl -mx-6 px-6 py-16 md:-mx-8 md:px-8">
+                        <SectionHeading id="roadmap" icon={Map} number="07" title="Roadmap" variant="amber" />
                         <div className="space-y-6 text-white/70 leading-relaxed">
                             <div className="flex flex-col gap-4">
                                 {[
-                                    { phase: 'Genesis', time: 'Months 1–3', items: ['BTC model only — invite-only beta', '$1M TVL cap for risk containment', 'Conservative strategy parameters', 'Publish on-chain performance from day one'] },
-                                    { phase: 'Validation', time: 'Months 4–6', items: ['Add ETH model', 'Public beta launch', 'Establish 6-month verified track record', 'Community governance bootstrap'] },
-                                    { phase: 'Token Launch', time: 'Months 7–9', items: ['ZENT token launch with staking mechanics', 'Fee mechanism and buyback/burn activation', 'Governance participation for ZENT holders', 'Exchange listings and liquidity provision'] },
-                                    { phase: 'Expansion', time: 'Months 10–18', items: ['SOL and XRP models', 'Cross-chain vault deployment', 'Institutional partnerships', 'Target: $50M TVL'] },
-                                    { phase: 'Institutional', time: 'Months 18–36', items: ['Regulated wrapper for institutional capital', 'zkML verification implementation', 'Strategic institutional partnerships', 'Target: $500M TVL'] },
+                                    { phase: 'Genesis', time: 'Months 1–3', items: ['BTC model only — invite-only beta', '$1M TVL cap for risk containment', 'Conservative strategy parameters', 'Publish on-chain performance from day one'], isLatest: false },
+                                    { phase: 'Validation', time: 'Months 4–6', items: ['Add ETH model', 'Public beta launch', 'Establish 6-month verified track record', 'Community governance bootstrap'], isLatest: false },
+                                    { phase: 'Token Launch', time: 'Months 7–9', items: ['ZENT token launch with staking mechanics', 'Fee mechanism and buyback/burn activation', 'Governance participation for ZENT holders', 'Exchange listings and liquidity provision'], isLatest: true },
+                                    { phase: 'Expansion', time: 'Months 10–18', items: ['SOL and XRP models', 'Cross-chain vault deployment', 'Institutional partnerships', 'Target: $50M TVL'], isLatest: false },
+                                    { phase: 'Institutional', time: 'Months 18–36', items: ['Regulated wrapper for institutional capital', 'zkML verification implementation', 'Strategic institutional partnerships', 'Target: $500M TVL'], isLatest: false },
                                 ].map((phase, i) => (
-                                    <div key={i} className="flex gap-5 items-start">
-                                        <div className="flex flex-col items-center">
-                                            <div className="w-10 h-10 rounded-full bg-[#0d80fa]/20 border-2 border-[#0d80fa] flex items-center justify-center flex-shrink-0">
-                                                <span className="text-xs font-bold text-[#0d80fa]">{i + 1}</span>
+                                    <div key={i} className="relative pl-8 pb-12 before:absolute before:left-[15px] before:top-0 before:h-full before:w-px before:bg-gradient-to-b before:from-[#0d80fa]/50 before:to-transparent">
+                                        <div className="flex gap-5 items-start">
+                                            <div className="flex flex-col items-center">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${phase.isLatest ? 'bg-gradient-to-r from-amber-500 to-amber-600 border-2 border-amber-500 shadow-lg shadow-amber-500/30' : 'bg-[#0d80fa]/20 border-2 border-[#0d80fa]'}`}>
+                                                    <span className={`text-xs font-bold ${phase.isLatest ? 'text-white' : 'text-[#0d80fa]'}`}>{i + 1}</span>
+                                                </div>
+                                                {i < 4 && <div className="w-px flex-1 bg-[#0d80fa]/20 mt-2" />}
                                             </div>
-                                            {i < 4 && <div className="w-px flex-1 bg-[#0d80fa]/20 mt-2" />}
-                                        </div>
-                                        <div className="pb-8">
-                                            <div className="flex items-baseline gap-3 mb-2">
-                                                <h4 className="text-white font-semibold text-lg">{phase.phase}</h4>
-                                                <span className="text-xs text-[#0d80fa] font-medium">{phase.time}</span>
+                                            <div className="pb-8">
+                                                <div className="flex items-baseline gap-3 mb-2">
+                                                    <h4 className={`text-lg font-semibold ${phase.isLatest ? 'text-amber-500' : 'text-white'}`}>{phase.phase}</h4>
+                                                    <span className={`text-xs font-medium ${phase.isLatest ? 'text-amber-500' : 'text-[#0d80fa]'}`}>{phase.time}</span>
+                                                </div>
+                                                <ul className="space-y-2">
+                                                    {phase.items.map((item, j) => (
+                                                        <li key={j} className="text-sm text-white/60 flex items-start gap-2">
+                                                            <ChevronRight className={`w-3 h-3 mt-1 flex-shrink-0 ${phase.isLatest ? 'text-amber-500' : 'text-[#0d80fa]'}`} />
+                                                            {item}
+                                                        </li>
+                                                    ))}
+                                                </ul>
                                             </div>
-                                            <ul className="space-y-2">
-                                                {phase.items.map((item, j) => (
-                                                    <li key={j} className="text-sm text-white/60 flex items-start gap-2">
-                                                        <ChevronRight className="w-3 h-3 text-[#0d80fa] mt-1 flex-shrink-0" />
-                                                        {item}
-                                                    </li>
-                                                ))}
-                                            </ul>
                                         </div>
                                     </div>
                                 ))}
@@ -910,12 +925,12 @@ export default function WhitepaperPage() {
                     </section>
 
                     {/* ─── 9  Disclaimer ───────────────────────── */}
-                    <section className="bg-white/[0.02] -mx-6 px-6 py-16 md:-mx-8 md:px-8 rounded-3xl">
+                    <section className="rounded-3xl border border-white/[0.1] bg-black/40 backdrop-blur-xl -mx-6 px-6 py-16 md:-mx-8 md:px-8">
                         <SectionHeading id="disclaimer" icon={FileWarning} number="09" title="Important Disclosures" />
                         <div className="space-y-6 text-white/70 leading-relaxed text-sm">
-                            <div className="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-5">
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 backdrop-blur-sm p-5">
                                 <p className="mb-3">
-                                    <strong className="text-yellow-400">Risk Warning:</strong> Cryptocurrency trading and investment carry
+                                    <strong className="text-amber-500">Risk Warning:</strong> Cryptocurrency trading and investment carry
                                     substantial risk. Past performance, including backtested results, does not guarantee future returns.
                                 </p>
                                 <ul className="list-disc list-inside space-y-1 text-white/60">
@@ -937,7 +952,7 @@ export default function WhitepaperPage() {
 
                     {/* Bottom CTA */}
                     <section className="text-center py-8">
-                        <div className="inline-block bg-gradient-to-r from-[#0d80fa]/20 to-[#0d80fa]/5 border border-[#0d80fa]/20 rounded-2xl p-8 md:p-12">
+                        <div className="inline-block rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-8 md:p-12">
                             <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">Ready to learn more?</h2>
                             <p className="text-white/70 mb-8 max-w-lg mx-auto">
                                 Explore our pitch deck for the investment thesis, or review full tokenomics details.
@@ -945,20 +960,20 @@ export default function WhitepaperPage() {
                             <div className="flex flex-col sm:flex-row gap-4 justify-center">
                                 <Link
                                     href="/models/pitch-deck"
-                                    className="inline-flex items-center justify-center px-6 py-3 bg-white text-black font-semibold rounded-lg hover:bg-white/90 transition-colors"
+                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-[#0d80fa] to-[#3b82f6] text-white font-semibold shadow-lg shadow-blue-500/25 transition-all duration-300 hover:scale-[1.02] hover:shadow-blue-500/40"
                                 >
                                     View Pitch Deck
-                                    <ArrowRight className="w-4 h-4 ml-2" />
+                                    <ArrowRight className="w-4 h-4" />
                                 </Link>
                                 <Link
                                     href="/tokenomics"
-                                    className="inline-flex items-center justify-center px-6 py-3 bg-[#0d80fa] text-white font-semibold rounded-lg hover:bg-[#0d80fa]/90 transition-colors"
+                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold shadow-lg shadow-amber-500/25 transition-all duration-300 hover:scale-[1.02] hover:shadow-amber-500/40"
                                 >
                                     Tokenomics
                                 </Link>
                                 <Link
                                     href="/community"
-                                    className="inline-flex items-center justify-center px-6 py-3 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors border border-white/20"
+                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-white/20 text-white/80 hover:text-white hover:border-white/40 font-medium transition-all duration-300"
                                 >
                                     Join Community
                                 </Link>

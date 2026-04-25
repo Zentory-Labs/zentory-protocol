@@ -33,18 +33,11 @@ function MetricBadge({
   sub?: string;
   accent?: "amber" | "blue" | "emerald" | "violet";
 }) {
-  const colors: Record<string, string> = {
-    amber: "from-amber-500/10 to-amber-600/5 border-amber-500/20 text-amber-400",
-    blue: "from-blue-500/10 to-blue-600/5 border-blue-500/20 text-blue-400",
-    emerald: "from-emerald-500/10 to-emerald-600/5 border-emerald-500/20 text-emerald-400",
-    violet: "from-violet-500/10 to-violet-600/5 border-violet-500/20 text-violet-400",
-  };
-  const c = colors[accent];
   return (
-    <div className={`rounded-2xl border bg-gradient-to-br ${c} p-5 flex-1 min-w-0`}>
-      <div className="text-xs font-medium uppercase tracking-wider opacity-70 mb-1">{label}</div>
-      <div className="text-2xl font-bold text-white truncate">{value}</div>
-      {sub && <div className="text-xs text-white/40 mt-1">{sub}</div>}
+    <div className="px-4 py-2 rounded-xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] border border-white/10 backdrop-blur-sm text-sm font-medium">
+      <span className="text-xs text-white/40 font-medium uppercase tracking-wider mr-2">{label}</span>
+      <span className="text-white font-semibold">{value}</span>
+      {sub && <span className="text-xs text-white/30 ml-1.5">{sub}</span>}
     </div>
   );
 }
@@ -61,17 +54,10 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
   const tvl = (totalAssets.data as bigint) ?? 0n;
 
   return (
-    <div className="group relative rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-white/20 transition-all duration-300 hover:-translate-y-0.5">
+    <div className="glass-card p-6 glass-hover group">
       {/* Asset badge */}
       <div className="flex items-center gap-3 mb-4">
-        <div
-          className="h-11 w-11 rounded-xl flex items-center justify-center text-sm font-bold shadow-lg"
-          style={{
-            background: `linear-gradient(135deg, ${meta.color}33, ${meta.color}11)`,
-            color: meta.color,
-            border: `1px solid ${meta.color}44`,
-          }}
-        >
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-white/[0.1] to-white/[0.05] border border-white/10 backdrop-blur-sm flex items-center justify-center text-lg font-bold text-white">
           {meta.asset}
         </div>
         <div>
@@ -93,14 +79,18 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
         ))}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-white/10">
+      {/* APY badge */}
+      <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
+        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-[#0d80fa] to-[#3b82f6] text-white shadow-lg shadow-blue-500/25">
+          APY 12.4%
+        </span>
         <a
           href={`https://hypurrscan.io/address/${vault}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
         >
-          View on Explorer
+          View
           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
         </a>
       </div>
@@ -129,8 +119,8 @@ function StakingPanel() {
   } as any);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="glass-card p-8 glass-hover">
+      <div className="flex items-center gap-2 mb-6">
         <div className="h-2 w-2 rounded-full bg-amber-400" />
         <h2 className="text-sm font-semibold text-white uppercase tracking-wider">ZENT Staking</h2>
       </div>
@@ -148,7 +138,7 @@ function StakingPanel() {
       </div>
 
       {isConnected && (
-        <div className="border-t border-white/10 pt-3 mt-3 space-y-2">
+        <div className="border-t border-white/10 pt-4 mt-4 space-y-2">
           {[
             { label: "Your Staked", value: userStaked.isLoading ? "—" : fmt((userStaked.data as bigint) ?? 0n) },
             { label: "veZENT Balance", value: userVe.isLoading ? "—" : fmt((userVe.data as bigint) ?? 0n), accent: "text-amber-400" },
@@ -167,7 +157,7 @@ function StakingPanel() {
         </div>
       )}
 
-      <div className="mt-4 pt-4 border-t border-white/10">
+      <div className="mt-6 pt-4 border-t border-white/10">
         <a href={`https://hypurrscan.io/address/${addresses.ZENTStaking}`} target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors">
           View on Explorer
@@ -186,8 +176,8 @@ function GovernancePanel() {
   ];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="glass-card p-8 glass-hover">
+      <div className="flex items-center gap-2 mb-6">
         <div className="h-2 w-2 rounded-full bg-blue-400" />
         <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Governance</h2>
       </div>
@@ -204,7 +194,7 @@ function GovernancePanel() {
         ))}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-white/10">
+      <div className="mt-6 pt-4 border-t border-white/10">
         <a href={`https://hypurrscan.io/address/${addresses.ZentGovernor}`} target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors">
           View Governor
@@ -219,24 +209,24 @@ function GovernancePanel() {
 
 function KeeperPanel() {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="glass-card p-8 glass-hover">
+      <div className="flex items-center gap-2 mb-6">
         <div className="h-2 w-2 rounded-full bg-emerald-400" />
         <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Keeper Layer</h2>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div>
-          <div className="text-xs text-white/40 mb-1.5">HyperCoreAdapter</div>
+          <div className="text-xs text-white/40 mb-1.5 uppercase tracking-wider">HyperCoreAdapter</div>
           <div className="font-mono text-xs text-white/70 break-all leading-relaxed">{addresses.HyperCoreAdapter}</div>
         </div>
         <div>
-          <div className="text-xs text-white/40 mb-1.5">StrategyExecutor</div>
+          <div className="text-xs text-white/40 mb-1.5 uppercase tracking-wider">StrategyExecutor</div>
           <div className="font-mono text-xs text-white/70 break-all leading-relaxed">{addresses.StrategyExecutor}</div>
         </div>
       </div>
 
-      <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-6">
+      <div className="mt-6 pt-4 border-t border-white/10 flex items-center gap-6">
         <a href="https://hypurrscan.io" target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs text-blue-400/70 hover:text-blue-400 transition-colors font-medium">
           HypurrScan
@@ -263,13 +253,13 @@ function Checklist() {
     "Verify vault KEEPER_ROLE assignments on StrategyExecutor",
   ];
   return (
-    <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent p-5">
-      <h2 className="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-3">Post-Deploy Checklist</h2>
-      <ul className="space-y-2">
+    <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent p-8">
+      <h2 className="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-4">Post-Deploy Checklist</h2>
+      <ul className="space-y-3">
         {items.map((item, i) => (
-          <li key={i} className="flex items-start gap-2.5 text-sm text-white/60">
-            <span className="mt-0.5 h-4 w-4 rounded border border-amber-500/40 flex-shrink-0 flex items-center justify-center">
-              <span className="text-amber-400 text-xs">{i + 1}</span>
+          <li key={i} className="flex items-start gap-3 text-sm text-white/60">
+            <span className="mt-0.5 h-5 w-5 rounded border border-amber-500/40 flex-shrink-0 flex items-center justify-center">
+              <span className="text-amber-400 text-xs font-semibold">{i + 1}</span>
             </span>
             {item}
           </li>
@@ -279,7 +269,7 @@ function Checklist() {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function Home() {
   const { address, isConnected } = useAccount();
@@ -296,49 +286,88 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <main className="mx-auto max-w-7xl px-6 py-10 space-y-8">
 
-        {/* ── Protocol Hero ── */}
-        <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent p-8 sm:p-10">
-          {/* Ambient glow */}
-          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-amber-500/5 blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-12 -left-12 h-48 w-48 rounded-full bg-blue-500/5 blur-3xl pointer-events-none" />
+      {/* ── Protocol Hero ── */}
+      <section className="min-h-[85vh] flex items-center justify-center relative overflow-hidden" style={{ background: "#05070c" }}>
+        {/* Ambient glow blobs */}
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/10 rounded-full blur-3xl animate-pulse-glow" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl animate-pulse-glow" style={{ animationDelay: "1s" }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#f59e0b]/5 rounded-full blur-3xl" />
 
-          <div className="relative">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-400 font-medium mb-4">
-                  <div className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-                  HyperEVM Testnet · Chain 998
-                </div>
-                <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">Zentory Protocol</h1>
-                <p className="text-white/50 mt-2 text-base">
-                  Alpha generation through systematic, AI-driven strategies.
-                  <br />ERC-4626 vaults · ZENT governance · HyperCore execution.
-                </p>
+        {/* Hero card */}
+        <div className="relative z-10 w-full max-w-3xl mx-auto px-6 glass-card p-10 md:p-14 text-center">
 
-                {isConnected && hypeBalance && (
-                  <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                    <div className="h-2 w-2 rounded-full bg-emerald-400" />
-                    <span className="font-mono text-sm text-white">{shorten(address!)}</span>
-                    <span className="text-white/40">·</span>
-                    <span className="font-mono text-sm text-emerald-400">{Number(hypeBalance.value / 10n ** 18n).toFixed(4)} HYPE</span>
-                  </div>
-                )}
-              </div>
+          {/* Tagline */}
+          <p className="uppercase tracking-[0.2em] text-xs text-[#0d80fa] font-medium mb-6 animate-fade-in" style={{ animationDelay: "0ms" }}>
+            HyperEVM · Chain 998 · ERC-4626
+          </p>
 
-              {/* ZENT Token metric */}
-              <div className="flex-shrink-0">
-                <div className="text-xs text-white/40 uppercase tracking-wider mb-1">ZENT Total Supply</div>
-                <div className="text-4xl font-bold text-white">{zenTotalSupply.isLoading ? "—" : `${zenSupplyFormatted}B`}</div>
-                <div className="text-xs text-white/40 mt-1">1,000,000,000 ZENT</div>
-                {isConnected && zenBalance.data !== undefined && (
-                  <div className="mt-2 text-xs text-white/50">Your balance: <span className="text-amber-400 font-mono">{Number((zenBalance.data as bigint) / 10n ** 18n).toLocaleString()} ZENT</span></div>
-                )}
-              </div>
+          {/* Main title */}
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold mb-4 animate-slide-up" style={{ animationDelay: "100ms" }}>
+            <span className="gradient-text">Zentory Token</span>
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-white/70 text-lg md:text-xl font-light mb-8 animate-slide-up" style={{ animationDelay: "200ms" }}>
+            Alpha generation through systematic, AI-driven strategies.
+            <br className="hidden sm:block" />
+            ZENT governance · HyperCore execution.
+          </p>
+
+          {/* ZENT Supply metric */}
+          <div className="mb-10 animate-slide-up" style={{ animationDelay: "250ms" }}>
+            <div className="inline-flex flex-col items-center glass-card px-8 py-4">
+              <div className="text-xs text-white/40 uppercase tracking-wider mb-1">Total Supply</div>
+              <div className="text-3xl font-bold text-white">{zenTotalSupply.isLoading ? "—" : `${zenSupplyFormatted}B`}</div>
+              <div className="text-xs text-white/30 mt-1">ZENT</div>
             </div>
           </div>
-        </section>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up" style={{ animationDelay: "300ms" }}>
+            <a
+              href="/stake"
+              className="bg-[#0d80fa] hover:bg-[#0d80fa]/90 text-white px-8 py-3 rounded-lg font-semibold shadow-lg shadow-blue-500/25 transition-all duration-300 hover:scale-[1.02]"
+            >
+              Stake ZENT
+            </a>
+            <a
+              href="https://docs.zentorytoken.xyz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="border border-white/20 text-white/80 hover:text-white hover:border-white/40 px-8 py-3 rounded-lg font-medium transition-all duration-300 backdrop-blur-sm"
+            >
+              Read Docs
+            </a>
+          </div>
+
+          {/* Connected wallet info */}
+          {isConnected && hypeBalance && (
+            <div className="mt-8 animate-fade-in" style={{ animationDelay: "400ms" }}>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                <span className="font-mono text-sm text-white">{shorten(address!)}</span>
+                <span className="text-white/40">·</span>
+                <span className="font-mono text-sm text-emerald-400">{Number(hypeBalance.value / 10n ** 18n).toFixed(4)} HYPE</span>
+              </div>
+            </div>
+          )}
+
+          {/* User ZENT balance */}
+          {isConnected && zenBalance.data !== undefined && (
+            <div className="mt-4 animate-fade-in" style={{ animationDelay: "450ms" }}>
+              <span className="text-xs text-white/40">Your balance: </span>
+              <span className="text-amber-400 font-mono text-sm">
+                {Number((zenBalance.data as bigint) / 10n ** 18n).toLocaleString()} ZENT
+              </span>
+            </div>
+          )}
+
+        </div>
+      </section>
+
+      {/* ── Main Content ── */}
+      <main className="mx-auto max-w-7xl px-6 py-10 space-y-8">
 
         {/* ── Vaults ── */}
         <section>
