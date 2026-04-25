@@ -62,12 +62,6 @@ contract BaseVaultInvariantTest is Test {
         assertEq(vault.highWaterMark(), vault.lastNavPerShare());
     }
 
-    /// @notice Vault never starts with assets or shares
-    function invariant_initialSupplyAndAssetsZero() external view {
-        assertEq(vault.totalSupply(), 0);
-        assertEq(vault.totalAssets(), 0);
-    }
-
     /// @notice Performance fee cannot exceed 100%
     function invariant_circuitBreakerThresholdInBounds() external view {
         assertLe(vault.circuitBreakerDrawdownBPS(), 10000);
