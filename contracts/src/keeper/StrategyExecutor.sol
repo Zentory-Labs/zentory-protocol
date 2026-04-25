@@ -17,6 +17,9 @@ contract StrategyExecutor is AccessControl {
 
     bytes32 public constant KEEPER_ROLE  = keccak256("KEEPER_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE"); // emergency pause
+    /// @notice Can adjust risk parameters (setMaxLeverageBPS, setMaxPositionSize).
+    ///         Distinct from DEFAULT_ADMIN_ROLE which controls who can grant/revoke roles.
+    bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     // ─── Dependencies ─────────────────────────────────────────────────────
 
@@ -108,9 +111,22 @@ contract StrategyExecutor is AccessControl {
             address(this)
         ));
 
-        // Grant admin role to governor_ (DAO). This ensures the governor contract,
-        // not the EOA deployer, is the admin of the executor.
-        _grantRole(DEFAULT_ADMIN_ROLE, governor_);
+        // Grant roles:
+        // - DEFAULT_ADMIN_ROLE: the deployer (msg.sender in constructor during
+        //   Forge script broadcast). Used for initial setup. Transfer to governor
+        //   via transferAdmin() after Phase 5.
+        // - GOVERNOR_ROLE: the governor contract. Can adjust risk parameters
+        //   and manage KEEPER_ROLE / GUARDIAN_ROLE via governance proposals.
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(GOVERNOR_ROLE, governor_);
+    }
+
+    /// @notice Transfer DEFAULT_ADMIN_ROLE to a new admin.
+    /// @dev    Only the current DEFAULT_ADMIN_ROLE holder (deployer) can call this
+    ///         after initial setup is complete.
+    function transferAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+        renounceRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     // ─── Signal submission ────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import type { Signal } from "@/lib/signals";
 
-const EXPLORER_BASE = "https://evm.l2scan.co/tx";
+const EXPLORER_BASE = "https://hypurrscan.io/tx";
 
 function formatTimestamp(ts: number): string {
   return new Date(ts).toLocaleString("en-US", {

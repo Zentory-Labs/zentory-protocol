@@ -17,6 +17,52 @@ import {Timelock} from "../src/governance/Timelock.sol";
 import {Zentroller} from "../src/governance/Zentroller.sol";
 import {ZentGovernor} from "../src/governance/ZentGovernor.sol";
 
+/// @notice Minimal ERC20 mock for testnet vault assets.
+/// On mainnet these would be real Wrapped assets (WETH, WBTC, etc.).
+contract MockERC20 {
+    string public name;
+    string public symbol;
+    uint8 public decimals;
+    uint256 public totalSupply;
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    constructor(string memory name_, string memory symbol_, uint8 decimals_) {
+        name = name_;
+        symbol = symbol_;
+        decimals = decimals_;
+    }
+
+    function mint(address to, uint256 amount) external {
+        totalSupply += amount;
+        balanceOf[to] += amount;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        uint256 fromBal = balanceOf[msg.sender];
+        require(fromBal >= amount, "insufficient balance");
+        balanceOf[msg.sender] = fromBal - amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        uint256 allowed = allowance[from][msg.sender];
+        if (allowed != type(uint256).max) require(allowed >= amount, "insufficient allowance");
+        uint256 fromBal = balanceOf[from];
+        require(fromBal >= amount, "insufficient balance");
+        balanceOf[from] = fromBal - amount;
+        balanceOf[to] += amount;
+        if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
+        return true;
+    }
+}
+
 /// @notice Full protocol deployment orchestrator.
 /// @dev Run with:
 ///      forge script script/DeployPipeline.s.sol --rpc-url $RPC --private-key $PRIVATE_KEY --broadcast
@@ -68,7 +114,9 @@ contract DeployPipeline is Script {
 
     function run() external {
         uint256 key       = vm.envUint("PRIVATE_KEY");
+        uint256 governorKey = vm.envUint("GOVERNOR_KEY");
         address deployer  = vm.addr(key);
+        address governorAddr = vm.addr(governorKey);
         address treasury  = _must("TREASURY");
         address proposer  = _must("PROPOSER");
         address keeper   = _must("KEEPER");
@@ -117,20 +165,32 @@ contract DeployPipeline is Script {
 
         // ================================================================
         // PHASE 2 -- VAULTS
+        // Deploy mock ERC20 assets for testnet. On mainnet, use real
+        // wrapped assets (WETH, WBTC, etc.) and remove the mint calls.
         // ================================================================
         console2.log("");
         console2.log("-- PHASE 2: VAULTS ----------------------------------------");
 
-        zETHVault zeth = new zETHVault(address(zent), treasury, address(this));
+        MockERC20 weth = new MockERC20("Wrapped Ether", "WETH", 18);
+        MockERC20 wbtc = new MockERC20("Wrapped BTC", "WBTC", 8);
+        MockERC20 wxrp = new MockERC20("Wrapped XRP", "WXRP", 6);
+        MockERC20 wsol = new MockERC20("Wrapped SOL", "WSOL", 9);
+        console2.log("WETH:", address(weth));
+        console2.log("WBTC:", address(wbtc));
+        console2.log("WXRP:", address(wxrp));
+        console2.log("WSOL:", address(wsol));
+
+        // Use deployer as initial admin; Phase 6 transfers to governor
+        zETHVault zeth = new zETHVault(address(weth), treasury, deployer);
         console2.log("zETH:", address(zeth));
 
-        zBTCVault zbtc = new zBTCVault(address(zent), treasury, address(this));
+        zBTCVault zbtc = new zBTCVault(address(wbtc), treasury, deployer);
         console2.log("zBTC:", address(zbtc));
 
-        zXRPVault zxrp = new zXRPVault(address(zent), treasury, address(this));
+        zXRPVault zxrp = new zXRPVault(address(wxrp), treasury, deployer);
         console2.log("zXRP:", address(zxrp));
 
-        zSOLVault zsol = new zSOLVault(address(zent), treasury, address(this));
+        zSOLVault zsol = new zSOLVault(address(wsol), treasury, deployer);
         console2.log("zSOL:", address(zsol));
 
         // ================================================================
@@ -139,27 +199,27 @@ contract DeployPipeline is Script {
         console2.log("");
         console2.log("-- PHASE 3: STAKING ---------------------------------------");
 
-        // Use address(this) as temporary governor to avoid circular dependency.
+        // Use deployer as temporary governor to avoid circular dependency.
         // Phase 6 wires the real governor after it is deployed.
-        ZENTStaking staking = new ZENTStaking(address(zent), address(this), minStake);
+        ZENTStaking staking = new ZENTStaking(address(zent), deployer, minStake);
         console2.log("ZENTStaking:", address(staking));
 
         ModelBonding bonding = new ModelBonding(
-            address(zent), address(this), address(this), insurance, unbondCool
+            address(zent), deployer, deployer, insurance, unbondCool
         );
         console2.log("ModelBonding:", address(bonding));
 
         FeeDistributor zethFees = new FeeDistributor(
-            address(zeth), address(zent), address(this), gpEngine, insurance, treasury
+            address(zeth), address(zent), deployer, gpEngine, insurance, treasury
         );
         FeeDistributor zbtcFees = new FeeDistributor(
-            address(zbtc), address(zent), address(this), gpEngine, insurance, treasury
+            address(zbtc), address(zent), deployer, gpEngine, insurance, treasury
         );
         FeeDistributor zxrpFees = new FeeDistributor(
-            address(zxrp), address(zent), address(this), gpEngine, insurance, treasury
+            address(zxrp), address(zent), deployer, gpEngine, insurance, treasury
         );
         FeeDistributor zsolFees = new FeeDistributor(
-            address(zsol), address(zent), address(this), gpEngine, insurance, treasury
+            address(zsol), address(zent), deployer, gpEngine, insurance, treasury
         );
         console2.log("FeeDistributors:", address(zethFees));
         console2.log("                ", address(zbtcFees));
@@ -176,14 +236,14 @@ contract DeployPipeline is Script {
             timelockDelay,
             _singleton(proposer),
             _singleton(address(0)), // anyone can execute
-            address(this)           // admin = deployer; must transfer after
+            deployer               // admin = deployer; must transfer after
         );
         console2.log("Timelock:", address(timelock));
 
         Zentroller zentroller = new Zentroller(address(staking), address(0));
         console2.log("Zentroller:", address(zentroller));
 
-        ZentGovernor governor = new ZentGovernor(
+        ZentGovernor govContract = new ZentGovernor(
             address(zent),
             address(staking),
             address(timelock),
@@ -193,59 +253,70 @@ contract DeployPipeline is Script {
             proposalThr,
             quorumBps
         );
-        console2.log("ZentGovernor:", address(governor));
+        console2.log("ZentGovernor:", address(govContract));
 
         // Grant governor PROPOSER_ROLE on Timelock
         Timelock(payable(address(timelock))).grantRole(
             keccak256("PROPOSER_ROLE"),
-            address(governor)
+            address(govContract)
         );
 
         // ================================================================
         // PHASE 5 -- KEEPER
+        // Deployer deploys HyperCoreAdapter and StrategyExecutor.
+        // StrategyExecutor's constructor grants DEFAULT_ADMIN_ROLE to the
+        // governor contract (not to the deployer EOA). Since only the EOA
+        // signing this broadcast (deployer) can call admin functions on the
+        // executor, we grant roles and limits here while deployer is msg.sender.
+        // The governor contract will be wired as admin via Phase 6.
         // ================================================================
-        console2.log("");
-        console2.log("-- PHASE 5: KEEPER ----------------------------------------");
-
         HyperCoreAdapter adapter = new HyperCoreAdapter();
         console2.log("HyperCoreAdapter:", address(adapter));
 
-        StrategyExecutor executor = new StrategyExecutor(address(adapter), address(governor));
+        StrategyExecutor executor = new StrategyExecutor(address(adapter), address(govContract));
         console2.log("StrategyExecutor:", address(executor));
 
+        // Grant keeper and guardian roles (deployer is msg.sender and holds admin)
         executor.grantRole(keccak256("KEEPER_ROLE"), keeper);
         executor.grantRole(keccak256("GUARDIAN_ROLE"), guardian);
-        console2.log("Keeper roles assigned.");
+        console2.log("Keeper and guardian roles assigned.");
+
+        // Set initial risk limits (deployer has DEFAULT_ADMIN_ROLE before transfer)
+        executor.setMaxLeverageBPS(address(zeth), 30000);
+        executor.setMaxLeverageBPS(address(zbtc), 30000);
+        executor.setMaxLeverageBPS(address(zxrp), 30000);
+        executor.setMaxLeverageBPS(address(zsol), 30000);
+        console2.log("Risk limits configured.");
 
         // ================================================================
-        // PHASE 6 -- WIRING
+        // PHASE 6 -- WIRING (deployer broadcast)
         // ================================================================
         console2.log("");
         console2.log("-- PHASE 6: WIRING ----------------------------------------");
 
         // Wire real governor into staking/bonding/fee contracts
-        staking.grantRole(staking.GOVERNOR_ROLE(), address(governor));
-        bonding.grantRole(bonding.GOVERNOR_ROLE(), address(governor));
+        staking.grantRole(staking.GOVERNOR_ROLE(), address(govContract));
+        bonding.grantRole(bonding.GOVERNOR_ROLE(), address(govContract));
 
-        zethFees.grantRole(zethFees.GOVERNOR_ROLE(), address(governor));
-        zbtcFees.grantRole(zbtcFees.GOVERNOR_ROLE(), address(governor));
-        zxrpFees.grantRole(zxrpFees.GOVERNOR_ROLE(), address(governor));
-        zsolFees.grantRole(zsolFees.GOVERNOR_ROLE(), address(governor));
+        zethFees.grantRole(zethFees.GOVERNOR_ROLE(), address(govContract));
+        zbtcFees.grantRole(zbtcFees.GOVERNOR_ROLE(), address(govContract));
+        zxrpFees.grantRole(zxrpFees.GOVERNOR_ROLE(), address(govContract));
+        zsolFees.grantRole(zsolFees.GOVERNOR_ROLE(), address(govContract));
 
         // Risk council can slash bonds
         bonding.grantRole(bonding.RISK_COUNCIL_ROLE(), guardian);
 
         // Transfer vault admin to governor (DAO-controlled)
-        zeth.grantRole(zeth.DEFAULT_ADMIN_ROLE(), address(governor));
-        zbtc.grantRole(zbtc.DEFAULT_ADMIN_ROLE(), address(governor));
-        zxrp.grantRole(zxrp.DEFAULT_ADMIN_ROLE(), address(governor));
-        zsol.grantRole(zsol.DEFAULT_ADMIN_ROLE(), address(governor));
+        zeth.grantRole(zeth.DEFAULT_ADMIN_ROLE(), address(govContract));
+        zbtc.grantRole(zbtc.DEFAULT_ADMIN_ROLE(), address(govContract));
+        zxrp.grantRole(zxrp.DEFAULT_ADMIN_ROLE(), address(govContract));
+        zsol.grantRole(zsol.DEFAULT_ADMIN_ROLE(), address(govContract));
 
-        // Per-vault risk limits (defaults: no max position, 3x leverage)
-        _setRisk(executor, address(zeth), "zETH");
-        _setRisk(executor, address(zbtc), "zBTC");
-        _setRisk(executor, address(zxrp), "zXRP");
-        _setRisk(executor, address(zsol), "zSOL");
+        // Grant GOVERNOR_ROLE on StrategyExecutor to the governor contract
+        executor.grantRole(executor.GOVERNOR_ROLE(), address(govContract));
+
+        // Transfer DEFAULT_ADMIN_ROLE on StrategyExecutor from deployer to governor
+        executor.transferAdmin(address(govContract));
 
         vm.stopBroadcast();
 
@@ -276,7 +347,7 @@ contract DeployPipeline is Script {
         console2.log("GOVERNANCE:");
         console2.log("  Timelock       ", address(timelock));
         console2.log("  Zentroller     ", address(zentroller));
-        console2.log("  ZentGovernor   ", address(governor));
+        console2.log("  ZentGovernor   ", address(govContract));
         console2.log("");
         console2.log("KEEPER:");
         console2.log("  HyperCoreAdapter ", address(adapter));
@@ -287,7 +358,8 @@ contract DeployPipeline is Script {
         console2.log("  2. Renounce deployer DEFAULT_ADMIN_ROLE on all contracts");
         console2.log("  3. Configure HyperCoreAdapter asset indices for each vault");
         console2.log("  4. Fund keeper wallet with native token for gas");
-        console2.log("  5. Set ZENTStaking.minStake via governance proposal");
+        console2.log("  5. Override risk limits via StrategyExecutor.setMaxPositionSize() if needed");
+        console2.log("  6. Set ZENTStaking.minStake via governance proposal");
     }
 
     // --------------------------------------------------------------------
