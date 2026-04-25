@@ -51,9 +51,9 @@ export default function SignalsPage() {
             </p>
           </div>
           {isConnected && address && (
-            <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+            <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl px-4 py-2">
               <span className="font-mono text-xs text-white/60">Keeper: </span>
-              <span className="font-mono text-xs text-amber-400">{address.slice(0, 6)}…{address.slice(-4)}</span>
+              <span className="font-mono text-xs text-[#0d80fa]">{address.slice(0, 6)}…{address.slice(-4)}</span>
             </div>
           )}
         </div>
@@ -83,10 +83,10 @@ export default function SignalsPage() {
             <TradeLoggerForm />
           </div>
         ) : (
-          <div className="glass-card p-8 text-center">
+          <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-8 text-center">
             <div className="mb-4 flex justify-center">
-              <div className="h-12 w-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
-                <svg className="h-6 w-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="h-12 w-12 rounded-full bg-[#0d80fa]/10 border border-[#0d80fa]/20 flex items-center justify-center">
+                <svg className="h-6 w-6 text-[#0d80fa]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>

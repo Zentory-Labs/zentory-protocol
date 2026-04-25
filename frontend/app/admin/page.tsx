@@ -111,7 +111,7 @@ export default function AdminPage() {
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
-      <header className="border-b border-white/10 bg-[#0d0d14]/80 backdrop-blur-xl sticky top-0 z-10">
+      <header className="bg-[#05070c]/40 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold gradient-text tracking-tight">Admin Panel</h1>
@@ -126,19 +126,19 @@ export default function AdminPage() {
       <main className="mx-auto max-w-4xl px-6 py-10 space-y-8">
         {/* Executor Status */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="glass-card p-5">
+          <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
             <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">Executor Status</div>
             <div className={`text-2xl font-bold ${(isPaused.data as boolean) ? "text-[#f59e0b]" : "text-[#0d80fa]"}`}>
-              {(isPaused.data as boolean) ? "PAUSED" : "Operational"}
+              {(isPaused.data as boolean) ? "PAUSED" : "Active"}
             </div>
           </div>
-          <div className="glass-card p-5">
+          <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
             <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">Keeper Role Hash</div>
             <div className="font-mono text-xs text-white break-all leading-tight">
               {keeperRole.data ? (keeperRole.data as string).slice(0, 16) + "…" : "—"}
             </div>
           </div>
-          <div className="glass-card p-5">
+          <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
             <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">Guardian Role Hash</div>
             <div className="font-mono text-xs text-white break-all leading-tight">
               {guardianRole.data ? (guardianRole.data as string).slice(0, 16) + "…" : "—"}
@@ -187,7 +187,7 @@ export default function AdminPage() {
                     onClick={() => setSelectedVault(v)}
                     className={`rounded-xl border py-2 px-3 text-sm font-medium transition-all duration-300 ${
                       selectedVault === v
-                        ? "border-[#f59e0b]/50 bg-[#f59e0b]/10 text-[#f59e0b]"
+                        ? "border-[#0d80fa] bg-[#0d80fa]/10 text-[#0d80fa]"
                         : "border-white/10 bg-white/5 text-white/60 hover:border-white/30 hover:bg-white/10"
                     }`}
                   >

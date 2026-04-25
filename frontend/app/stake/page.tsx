@@ -1,7 +1,8 @@
 "use client";
 
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { STAKING_ABI, addresses } from "@/lib/contracts";
+import { useAccount, useReadContract, useWriteContract, usePublicClient } from "wagmi";
+import { waitForTransactionReceipt } from "viem";
+import { STAKING_ABI, ZENT_ABI, addresses } from "@/lib/contracts";
 import { useState, useEffect, useMemo } from "react";
 
 const MAX_LOCK_SECONDS = 730 * 24 * 60 * 60;
@@ -79,6 +80,7 @@ export default function StakePage() {
   const [error, setError] = useState<string | null>(null);
 
   const { writeContract } = useWriteContract();
+  const publicClient = usePublicClient();
 
   // veZENT preview calculator
   const previewVe = useMemo(() => {
@@ -95,15 +97,42 @@ export default function StakePage() {
     e.preventDefault();
     setError(null);
     setIsPending(true);
+    setTxHash(null);
     try {
-      writeContract({
+      const amountWei = BigInt(Math.floor(parseFloat(stakeAmount) * 1e18));
+
+      const hash = writeContract({
+        address: addresses.ZENT,
+        abi: ZENT_ABI,
+        functionName: "approve",
+        args: [addresses.ZENTStaking, amountWei],
+      } as any);
+
+      const approvalReceipt = await waitForTransactionReceipt(publicClient, { hash });
+      if (approvalReceipt.status !== "success") {
+        setError("Approval transaction failed");
+        setIsPending(false);
+        return;
+      }
+
+      const stakeHash = writeContract({
         address: addresses.ZENTStaking,
         abi: STAKING_ABI,
         functionName: "stake",
-        args: [BigInt(Math.floor(parseFloat(stakeAmount) * 1e18)), BigInt(lockDurationSeconds)],
+        args: [amountWei, BigInt(lockDurationSeconds)],
       } as any);
+      setTxHash(stakeHash);
+
+      const stakeReceipt = await waitForTransactionReceipt(publicClient, { hash: stakeHash });
+      if (stakeReceipt.status !== "success") {
+        setError("Stake transaction failed");
+        setIsPending(false);
+        return;
+      }
+
+      setIsPending(false);
     } catch (err: any) {
-      setError(err.message ?? "Transaction failed");
+      setError(err.shortMessage ?? err.message ?? "Transaction failed");
       setIsPending(false);
     }
   }
@@ -126,7 +155,7 @@ export default function StakePage() {
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
-      <header className="border-b border-white/10 bg-[#0d0d14]/80 backdrop-blur-sm sticky top-0 z-10">
+      <header className="bg-[#05070c]/40 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-2xl font-bold text-white">ZENT Staking</h1>
           <p className="text-xs text-white/40 mt-0.5">Lock ZENT to earn veZENT and access Alpha Vaults</p>
@@ -141,7 +170,7 @@ export default function StakePage() {
             { label: "Min. Stake Required", value: minStake.data !== undefined ? fmtZENT(minStake.data as bigint) : "—" },
             { label: "Your veZENT Balance", value: userVeBalance.data !== undefined ? fmtVeZENT(userVeBalance.data as bigint) : "—", accent: true },
           ].map(({ label, value, accent }) => (
-            <div key={label} className="glass-card p-6 glass-hover">
+            <div key={label} className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
               <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">{label}</div>
               <div className={`text-2xl font-bold font-mono ${accent ? "gradient-text-amber" : "text-white"}`}>{value}</div>
             </div>
@@ -149,7 +178,7 @@ export default function StakePage() {
         </div>
 
         {/* Your Position */}
-        <div className="glass-card p-6 glass-hover">
+        <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
           <h2 className="text-sm font-semibold text-[#f59e0b] uppercase tracking-wider mb-4">Your Position</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>

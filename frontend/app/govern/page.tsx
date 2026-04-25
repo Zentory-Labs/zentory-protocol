@@ -59,7 +59,7 @@ function ProposalCard({ proposal, onVote }: {
   const againstPct = total > 0n ? Math.round(Number(proposal.againstVotes * 10000n / total)) / 100 : 0;
 
   return (
-    <div className="glass-card p-6 glass-hover">
+    <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <div className="text-xs text-white/40 mb-1">Proposal #{proposal.id}</div>
@@ -89,14 +89,14 @@ function ProposalCard({ proposal, onVote }: {
             <button
               disabled={isPending}
               onClick={() => onVote(proposal.id, 1)}
-              className="rounded-lg bg-[#0d80fa] hover:bg-[#0d80fa]/90 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-[#0d80fa]/10 hover:bg-[#0d80fa]/20 text-[#0d80fa] border border-[#0d80fa]/20 px-3 py-1.5 text-xs font-semibold disabled:opacity-50 transition-colors"
             >
               {isPending ? "…" : "Vote For"}
             </button>
             <button
               disabled={isPending}
               onClick={() => onVote(proposal.id, 0)}
-              className="rounded-lg border border-white/20 hover:border-white/40 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-colors"
+              className="rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-3 py-1.5 text-xs font-semibold disabled:opacity-50 transition-colors"
             >
               {isPending ? "…" : "Vote Against"}
             </button>
@@ -159,7 +159,7 @@ export default function GovernPage() {
     <div className="min-h-screen relative" style={{ background: "#05070c" }}>
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
-      <header className="border-b border-white/10 bg-[#0d0d14]/80 backdrop-blur-sm sticky top-0 z-10">
+      <header className="bg-[#05070c]/40 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-3xl font-bold gradient-text tracking-tight">Governance</h1>
           <p className="text-xs text-white/40 mt-0.5">Vote on protocol upgrades, risk parameters, and treasury allocations</p>
@@ -174,7 +174,7 @@ export default function GovernPage() {
             { label: "Quorum Required", value: quorum.data !== undefined ? `${(Number(quorum.data as bigint) / 1e18 / 1e6).toFixed(0)}M ZENT` : "—" },
             { label: "Min. veZENT to Propose", value: "Anyone (threshold = 0)" },
           ].map(({ label, value }) => (
-            <div key={label} className="glass-card p-5 flex flex-col gap-2">
+            <div key={label} className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
               <div className="text-xs text-white/40 uppercase tracking-wider">{label}</div>
               <div className="font-mono font-semibold text-white">{value}</div>
             </div>
@@ -192,7 +192,7 @@ export default function GovernPage() {
               ))}
             </div>
           ) : proposals.length === 0 ? (
-            <div className="glass-card p-12 text-center">
+            <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-12 text-center">
               <p className="text-white/40 text-sm">No proposals yet. Be the first to propose a protocol upgrade.</p>
             </div>
           ) : (
