@@ -178,6 +178,7 @@ contract ZENTStakingTest is Test {
 
     function test_veBalanceDecaysLinearlyToZero() external {
         uint256 amount = 10_000 ether;
+        uint256 stakeTime = block.timestamp;
 
         vm.startPrank(alice);
         zent.approve(address(staking), amount);
@@ -186,11 +187,13 @@ contract ZENTStakingTest is Test {
 
         uint256 initial = staking.veBalance(alice);
 
-        vm.warp(block.timestamp + 365 days);
+        // Halfway point: 365 days elapsed
+        vm.warp(stakeTime + 365 days);
         uint256 midway = staking.veBalance(alice);
         assertApproxEqAbs(midway, initial / 2, initial / 1000); // 0.1% tolerance
 
-        vm.warp(block.timestamp + 365 days);
+        // Full expiry: 730 days elapsed
+        vm.warp(stakeTime + 730 days);
         assertEq(staking.veBalance(alice), 0);
     }
 

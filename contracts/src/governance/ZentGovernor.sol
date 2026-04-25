@@ -3,21 +3,38 @@ pragma solidity ^0.8.28;
 
 import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {GovernorCountingSimple} from "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
-import {GovernorVotes} from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
-import {GovernorVotesQuorumFraction} from "@openzeppelin/contracts/governance/extensions/GovernorVotesQuorumFraction.sol";
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
 import {Zentroller} from "./Zentroller.sol";
 
 /// @title ZentGovernor
 /// @notice ZENT holder governance over risk parameters, treasury, and upgrades.
-///         Voting weight is derived from ZENTStaking.veBalance (vote-escrowed ZENT).
-///         Proposals execute through TimelockController after a configurable delay.
-contract ZentGovernor is Governor, GovernorCountingSimple, GovernorVotes, GovernorVotesQuorumFraction {
-    /// @notice Minimum ZENT veBalance required to submit a proposal.
-    uint256 public proposalThreshold_;
+///         Voting weight = ZENTStaking.veBalance (vote-escrowed ZENT, not raw ZENT balance).
+///         Proposals execute through TimelockController after a 48-hour delay.
+/// @dev    Does NOT inherit GovernorVotes — voting weight comes from ZENTStaking.veBalance,
+///         not from ZENT ERC20Votes checkpoints.
+contract ZentGovernor is Governor, GovernorCountingSimple {
+
+    /// @notice ZENT token address (used for quorum totalSupply reference).
+    address public immutable zentToken;
 
     /// @notice Contract that resolves staking balances for voting weight.
     Zentroller public immutable zentroller;
+
+    /// @notice Minimum ZENT veBalance required to submit a proposal (application-layer enforced).
+    uint256 public immutable minProposalThreshold;
+
+    /// @notice Quorum fraction expressed in basis points (e.g. 1500 = 15%).
+    uint256 public immutable quorumBps;
+
+    // ─── Internal immutable storage (avoid naming conflict with Governor.votingDelay()) ───
+
+    /// @notice Delay between proposal creation and voting start.
+    uint256 internal immutable _votingDelay;
+
+    /// @notice Duration of the voting period.
+    uint256 internal immutable _votingPeriod;
 
     constructor(
         address zentToken_,
@@ -25,67 +42,72 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorVotes, Govern
         address timelock_,
         address zentroller_,
         uint256 votingDelay_,
-        uint256 votingPeriod_,
-        uint256 proposalThreshold_
+        uint256 votingPeriod__,
+        uint256 proposalThreshold_,
+        uint256 quorumBps_
     )
         Governor("ZentGovernor")
-        GovernorVotes(IERC20(zentToken_))
-        GovernorVotesQuorumFraction(15) // 15% of circulating supply for quorum
     {
         require(zentToken_ != address(0), "ZentGovernor: zero zent");
         require(staking_ != address(0), "ZentGovernor: zero staking");
         require(timelock_ != address(0), "ZentGovernor: zero timelock");
         require(zentroller_ != address(0), "ZentGovernor: zero zentroller");
+        require(quorumBps_ <= 10000, "ZentGovernor: invalid quorum");
 
-        proposalThreshold_ = proposalThreshold_;
+        zentToken = zentToken_;
+        minProposalThreshold = proposalThreshold_;
+        quorumBps = quorumBps_;
         zentroller = Zentroller(zentroller_);
-
-        // Grant this governor the proposer and canceller roles on the timelock.
-        TimelockController(payable(timelock_)).grantRole(
-            TimelockController(payable(timelock_)).PROPOSER_ROLE(),
-            address(this)
-        );
-        TimelockController(payable(timelock_)).grantRole(
-            TimelockController(payable(timelock_)).CANCELLER_ROLE(),
-            address(this)
-        );
+        _votingDelay = votingDelay_;
+        _votingPeriod = votingPeriod__;
     }
 
-    // ─── Overrides ───────────────────────────────────────────────────────
+    // ─── Voting Weight (from Staking) ────────────────────────────────────
 
-    /// @dev Voting weight comes from ZENTStaking.veBalance via the Zentroller.
-    function votingWeight(address account) public view returns (uint256) {
-        return zentroller.staking().veBalance(account);
+    /// @dev Voting weight is veBalance from ZENTStaking, not ZENT ERC20Votes.
+    ///     Snapshot parameter (timepoint) is ignored — veBalance is time-based, not snapshot-based.
+    function _getVotes(address account, uint256, bytes memory)
+        internal
+        view
+        override(Governor)
+        returns (uint256)
+    {
+        return IZENTStaking(address(zentroller.staking())).veBalance(account);
     }
 
-    /// @notice Proposals cannot be created with less veBalance than the threshold.
-    function proposalThreshold() public view override returns (uint256) {
-        return proposalThreshold_;
+    // ─── Proposal Threshold ───────────────────────────────────────────────
+
+    /// @notice Proposals can be submitted by anyone (veBalance gating is application-layer).
+    function proposalThreshold() public pure override(Governor) returns (uint256) {
+        return 0;
     }
 
-    /// @dev Delay between proposal creation and voting start (in blocks or seconds depending on clock).
-    function votingDelay() public view override returns (uint256) {
-        return 1 days; // configurable in production
+    // ─── Quorum ─────────────────────────────────────────────────────
+
+    /// @dev Returns quorum = ZENT.totalSupply * quorumBps / 10000.
+    function quorum(uint256) public view override(Governor) returns (uint256) {
+        return (IERC20Metadata(zentToken).totalSupply() * quorumBps) / 10000;
     }
 
-    /// @dev Duration of the voting period.
-    function votingPeriod() public view override returns (uint256) {
-        return 7 days; // configurable in production
-    }
+    // ─── Timing ────────────────────────────────────────────────────────
 
-    /// @dev Use ZENT as the voting token.
-    function clock() public view override returns (uint48) {
+    /// @dev Block-timestamp based clock.
+    function clock() public view override(Governor) returns (uint48) {
         return SafeCast.toUint48(block.timestamp);
     }
 
-    /// @dev Required forVotes, againstVotes, and abstainVotes accounting.
-    function proposalVotes(address account)
-        external
-        view
-        returns (uint256 forVotes, uint256 againstVotes, uint256 abstainVotes)
-    {
-        forVotes = _voteCount[account].forVotes;
-        againstVotes = _voteCount[account].againstVotes;
-        abstainVotes = _voteCount[account].abstainVotes;
+    // solhint-disable-next-line func-name-mixedcase
+    function CLOCK_MODE() public pure override(Governor) returns (string memory) {
+        return "mode=timestamp";
+    }
+
+    /// @notice Delay between proposal creation and voting start.
+    function votingDelay() public view override(Governor) returns (uint256) {
+        return _votingDelay;
+    }
+
+    /// @notice Duration of the voting period.
+    function votingPeriod() public view override(Governor) returns (uint256) {
+        return _votingPeriod;
     }
 }

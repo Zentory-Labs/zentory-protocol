@@ -1,3 +1,24 @@
 [
-  "tests/test_import.py::test_engine_package_imports"
+  "tests/test_genetic_programming.py::TestChromosome::test_copy_is_independent",
+  "tests/test_genetic_programming.py::TestChromosome::test_crossover_preserves_length",
+  "tests/test_genetic_programming.py::TestChromosome::test_gene_named",
+  "tests/test_genetic_programming.py::TestChromosome::test_mutate_keeps_genes_in_bounds",
+  "tests/test_genetic_programming.py::TestChromosome::test_random_produces_valid_genes",
+  "tests/test_genetic_programming.py::TestFitness::test_bullish_trend_produces_positive_alpha",
+  "tests/test_genetic_programming.py::TestFitness::test_config_defaults",
+  "tests/test_genetic_programming.py::TestFitness::test_insufficient_data_returns_negative",
+  "tests/test_genetic_programming.py::TestPopulation::test_best_returns_highest_fitness",
+  "tests/test_genetic_programming.py::TestPopulation::test_diversity_decreases_with_identical_members",
+  "tests/test_genetic_programming.py::TestPopulation::test_seed_creates_correct_size",
+  "tests/test_genetic_programming.py::TestPopulation::test_tournament_select_returns_from_members",
+  "tests/test_import.py::test_engine_package_imports",
+  "tests/test_strategy.py::TestRegimeDetector::test_bear_on_downtrend",
+  "tests/test_strategy.py::TestRegimeDetector::test_bull_on_uptrend",
+  "tests/test_strategy.py::TestRegimeDetector::test_sideways_on_short_data",
+  "tests/test_strategy.py::TestSignalGenerator::test_build_signal_returns_trade_signal",
+  "tests/test_strategy.py::TestSignalGenerator::test_signal_expiry_in_future",
+  "tests/test_strategy.py::TestSignalGenerator::test_trade_signal_fields",
+  "tests/test_strategy.py::TestTrendFollower::test_close_on_insufficient_data",
+  "tests/test_strategy.py::TestTrendFollower::test_long_signal_on_bullish_cross",
+  "tests/test_strategy.py::TestTrendFollower::test_signal_is_trend_signal"
 ]
