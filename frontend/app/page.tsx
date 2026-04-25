@@ -1,110 +1,73 @@
 "use client";
 
-import { useAccount, useBalance, useReadContract, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useBalance, useReadContract } from "wagmi";
 import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta } from "@/lib/contracts";
 
 const VAULTS = [addresses.zETH, addresses.zBTC, addresses.zXRP, addresses.zSOL] as const;
 
-function formatUnits(value: bigint, decimals: number): string {
-  if (value === 0n) return "0";
-  const divisor = 10n ** BigInt(decimals);
-  const integer = value / divisor;
-  const fractional = value % divisor;
-  const fractionalStr = fractional.toString().padStart(decimals, "0").slice(0, 4);
-  return `${integer}.${fractionalStr}`;
-}
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function shorten(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-// ─── Wallet Connect Button ────────────────────────────────────────────────────
-function WalletButton() {
-  const { address, isConnected } = useAccount();
-  const { connect, connectors } = useConnect();
-  const { disconnect } = useDisconnect();
+function fmt(value: bigint, decimals = 18, digits = 2): string {
+  if (value === 0n) return "0";
+  const div = 10n ** BigInt(decimals);
+  return (Number(value / div)).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+}
 
-  if (isConnected && address) {
-    return (
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2">
-          <div className="h-2 w-2 rounded-full bg-emerald-400" />
-          <span className="font-mono text-sm text-white">{shorten(address)}</span>
-        </div>
-        <button
-          onClick={() => disconnect()}
-          title="Disconnect wallet"
-          className="rounded-full border border-white/20 bg-white/5 px-3 py-2 text-xs text-white/60 hover:text-white hover:border-white/40 transition-colors"
-        >
-          ✕
-        </button>
-      </div>
-    );
-  }
+// ─── Metric Badge ─────────────────────────────────────────────────────────────
 
-  async function handleConnect() {
-    if (connectors.length === 0) {
-      alert("No wallet detected. Make sure Rabby or MetaMask is installed.");
-      return;
-    }
-    for (const connector of connectors) {
-      try {
-        await connect({ connector });
-        return;
-      } catch {
-        // Try next connector
-      }
-    }
-  }
-
+function MetricBadge({
+  label,
+  value,
+  sub,
+  accent = "amber",
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: "amber" | "blue" | "emerald" | "violet";
+}) {
+  const colors: Record<string, string> = {
+    amber: "from-amber-500/10 to-amber-600/5 border-amber-500/20 text-amber-400",
+    blue: "from-blue-500/10 to-blue-600/5 border-blue-500/20 text-blue-400",
+    emerald: "from-emerald-500/10 to-emerald-600/5 border-emerald-500/20 text-emerald-400",
+    violet: "from-violet-500/10 to-violet-600/5 border-violet-500/20 text-violet-400",
+  };
+  const c = colors[accent];
   return (
-    <button
-      onClick={handleConnect}
-      className="rounded-full bg-amber-500 hover:bg-amber-400 text-black font-semibold px-5 py-2 text-sm transition-colors"
-    >
-      Connect Wallet
-    </button>
+    <div className={`rounded-2xl border bg-gradient-to-br ${c} p-5 flex-1 min-w-0`}>
+      <div className="text-xs font-medium uppercase tracking-wider opacity-70 mb-1">{label}</div>
+      <div className="text-2xl font-bold text-white truncate">{value}</div>
+      {sub && <div className="text-xs text-white/40 mt-1">{sub}</div>}
+    </div>
   );
 }
 
 // ─── Vault Card ───────────────────────────────────────────────────────────────
-function VaultCard({ vault }: { vault: typeof VAULTS[number] }) {
+
+function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
   const meta = vaultMeta[vault];
 
-  const totalAssets = useReadContract({
-    address: vault,
-    abi: VAULT_ABI,
-    functionName: "totalAssets" as any,
-  } as any);
-
-  const totalSupply = useReadContract({
-    address: vault,
-    abi: VAULT_ABI,
-    functionName: "totalSupply" as any,
-  } as any);
-
-  const navPerShare = useReadContract({
-    address: vault,
-    abi: VAULT_ABI,
-    functionName: "getNavPerShare" as any,
-  } as any);
-
-  const accrued = useReadContract({
-    address: vault,
-    abi: VAULT_ABI,
-    functionName: "performanceFeeAccrued" as any,
-  } as any);
+  const totalAssets = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "totalAssets" } as any);
+  const navPerShare = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "getNavPerShare" } as any);
+  const accrued = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "performanceFeeAccrued" } as any);
 
   const tvl = (totalAssets.data as bigint) ?? 0n;
-  const tvlFormatted = Number(tvl / 10n ** 18n).toLocaleString(undefined, { maximumFractionDigits: 4 });
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-white/20 transition-colors">
+    <div className="group relative rounded-2xl border border-white/10 bg-white/5 p-5 hover:border-white/20 transition-all duration-300 hover:-translate-y-0.5">
+      {/* Asset badge */}
       <div className="flex items-center gap-3 mb-4">
         <div
-          className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold"
+          className="h-11 w-11 rounded-xl flex items-center justify-center text-sm font-bold shadow-lg"
           style={{
-            background: meta.color + "22",
+            background: `linear-gradient(135deg, ${meta.color}33, ${meta.color}11)`,
             color: meta.color,
             border: `1px solid ${meta.color}44`,
           }}
@@ -112,30 +75,22 @@ function VaultCard({ vault }: { vault: typeof VAULTS[number] }) {
           {meta.asset}
         </div>
         <div>
-          <div className="font-semibold text-white">{meta.name}</div>
+          <div className="font-semibold text-white text-sm">{meta.name}</div>
           <div className="text-xs text-white/40">{meta.symbol}</div>
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-white/50">TVL</span>
-          <span className="font-mono font-medium text-white">
-            {totalAssets.isLoading ? "—" : `${tvlFormatted} ${meta.asset}`}
-          </span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-white/50">NAV / Share</span>
-          <span className="font-mono font-medium text-white">
-            {navPerShare.isLoading ? "—" : Number((navPerShare.data as bigint) ?? 0n / 10n ** 18n).toFixed(6)}
-          </span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-white/50">Accrued Fees</span>
-          <span className="font-mono font-medium text-amber-400">
-            {accrued.isLoading ? "—" : Number((accrued.data as bigint ?? 0n) / 10n ** 18n).toFixed(6)}
-          </span>
-        </div>
+      <div className="space-y-2.5">
+        {[
+          { label: "TVL", value: totalAssets.isLoading ? "—" : `${fmt(tvl)} ${meta.asset}` },
+          { label: "NAV / Share", value: navPerShare.isLoading ? "—" : fmt((navPerShare.data as bigint) ?? 0n) },
+          { label: "Accrued Fees", value: accrued.isLoading ? "—" : fmt((accrued.data as bigint) ?? 0n), accent: "text-amber-400" },
+        ].map(({ label, value, accent }) => (
+          <div key={label} className="flex justify-between items-center">
+            <span className="text-xs text-white/50">{label}</span>
+            <span className={`text-sm font-mono font-medium ${accent ?? "text-white"}`}>{value}</span>
+          </div>
+        ))}
       </div>
 
       <div className="mt-4 pt-4 border-t border-white/10">
@@ -143,133 +98,106 @@ function VaultCard({ vault }: { vault: typeof VAULTS[number] }) {
           href={`https://hypurrscan.io/address/${vault}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+          className="inline-flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors"
         >
-          View on Explorer →
+          View on Explorer
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
         </a>
       </div>
     </div>
   );
 }
 
-// ─── Staking Panel ────────────────────────────────────────────────────────────
+// ─── Staking & Governance ─────────────────────────────────────────────────────
+
 function StakingPanel() {
   const { address, isConnected } = useAccount();
 
-  const totalStaked = useReadContract({
-    address: addresses.ZENTStaking,
-    abi: STAKING_ABI,
-    functionName: "totalStaked" as any,
-  } as any);
-
-  const minStake = useReadContract({
-    address: addresses.ZENTStaking,
-    abi: STAKING_ABI,
-    functionName: "minStake" as any,
-  } as any);
-
+  const totalStaked = useReadContract({ address: addresses.ZENTStaking, abi: STAKING_ABI, functionName: "totalStaked" } as any);
+  const minStake = useReadContract({ address: addresses.ZENTStaking, abi: STAKING_ABI, functionName: "minStake" } as any);
   const userStaked = useReadContract({
-    address: addresses.ZENTStaking,
-    abi: STAKING_ABI,
-    functionName: "stakedBalance" as any,
-    args: address ? [address] : undefined,
-    query: { enabled: isConnected },
+    address: addresses.ZENTStaking, abi: STAKING_ABI, functionName: "stakedBalance",
+    args: address ? [address] : undefined, query: { enabled: !!isConnected },
   } as any);
-
-  const userVeBalance = useReadContract({
-    address: addresses.ZENTStaking,
-    abi: STAKING_ABI,
-    functionName: "veBalance" as any,
-    args: address ? [address] : undefined,
-    query: { enabled: isConnected },
+  const userVe = useReadContract({
+    address: addresses.ZENTStaking, abi: STAKING_ABI, functionName: "veBalance",
+    args: address ? [address] : undefined, query: { enabled: !!isConnected },
   } as any);
-
   const hasAccess = useReadContract({
-    address: addresses.ZENTStaking,
-    abi: STAKING_ABI,
-    functionName: "hasAccess" as any,
-    args: address ? [address] : undefined,
-    query: { enabled: isConnected },
+    address: addresses.ZENTStaking, abi: STAKING_ABI, functionName: "hasAccess",
+    args: address ? [address] : undefined, query: { enabled: !!isConnected },
   } as any);
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <h2 className="text-lg font-semibold text-white mb-4">ZENT Staking</h2>
-
-      <div className="space-y-3">
-        <div className="flex justify-between text-sm">
-          <span className="text-white/50">Total ZENT Staked</span>
-          <span className="font-mono font-medium text-white">
-            {totalStaked.isLoading ? "—" : Number((totalStaked.data as bigint ?? 0n) / 10n ** 18n).toLocaleString()}
-          </span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-white/50">Min. Stake Required</span>
-          <span className="font-mono font-medium text-white">
-            {minStake.isLoading ? "—" : Number((minStake.data as bigint ?? 0n) / 10n ** 18n).toLocaleString()}
-          </span>
-        </div>
-
-        {isConnected ? (
-          <div className="border-t border-white/10 pt-3 mt-3 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-white/50">Your Staked ZENT</span>
-              <span className="font-mono font-medium text-white">
-                {userStaked.isLoading ? "—" : Number((userStaked.data as bigint ?? 0n) / 10n ** 18n).toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-white/50">Your veZENT</span>
-              <span className="font-mono font-medium text-amber-400">
-                {userVeBalance.isLoading ? "—" : Number((userVeBalance.data as bigint ?? 0n) / 10n ** 18n).toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-white/50">Vault Access</span>
-              <span className={`font-medium ${(hasAccess.data as boolean) ? "text-emerald-400" : "text-red-400"}`}>
-                {hasAccess.isLoading ? "—" : (hasAccess.data as boolean) ? "Granted" : "Denied"}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-white/40 mt-2">Connect wallet to view your position</p>
-        )}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-2 w-2 rounded-full bg-amber-400" />
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wider">ZENT Staking</h2>
       </div>
 
+      <div className="space-y-3">
+        {[
+          { label: "Total ZENT Staked", value: totalStaked.isLoading ? "—" : fmt((totalStaked.data as bigint) ?? 0n) },
+          { label: "Min. Stake Required", value: minStake.isLoading ? "—" : fmt((minStake.data as bigint) ?? 0n) },
+        ].map(({ label, value }) => (
+          <div key={label} className="flex justify-between text-sm">
+            <span className="text-white/50">{label}</span>
+            <span className="font-mono font-medium text-white">{value}</span>
+          </div>
+        ))}
+      </div>
+
+      {isConnected && (
+        <div className="border-t border-white/10 pt-3 mt-3 space-y-2">
+          {[
+            { label: "Your Staked", value: userStaked.isLoading ? "—" : fmt((userStaked.data as bigint) ?? 0n) },
+            { label: "veZENT Balance", value: userVe.isLoading ? "—" : fmt((userVe.data as bigint) ?? 0n), accent: "text-amber-400" },
+          ].map(({ label, value, accent }) => (
+            <div key={label} className="flex justify-between text-sm">
+              <span className="text-white/50">{label}</span>
+              <span className={`font-mono font-medium ${accent ?? "text-white"}`}>{value}</span>
+            </div>
+          ))}
+          <div className="flex justify-between text-sm">
+            <span className="text-white/50">Vault Access</span>
+            <span className={`font-medium ${(hasAccess.data as boolean) ? "text-emerald-400" : "text-red-400"}`}>
+              {hasAccess.isLoading ? "—" : (hasAccess.data as boolean) ? "Granted" : "Denied"}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 pt-4 border-t border-white/10">
-        <a
-          href={`https://hypurrscan.io/address/${addresses.ZENTStaking}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
-        >
-          View on Explorer →
+        <a href={`https://hypurrscan.io/address/${addresses.ZENTStaking}`} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors">
+          View on Explorer
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
         </a>
       </div>
     </div>
   );
 }
 
-// ─── Governance Panel ──────────────────────────────────────────────────────────
 function GovernancePanel() {
+  const items = [
+    { label: "Timelock", addr: addresses.Timelock },
+    { label: "Zentroller", addr: addresses.Zentroller },
+    { label: "ZentGovernor", addr: addresses.ZentGovernor },
+  ];
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <h2 className="text-lg font-semibold text-white mb-4">Governance</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-2 w-2 rounded-full bg-blue-400" />
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Governance</h2>
+      </div>
 
       <div className="space-y-3">
-        {[
-          { label: "Timelock", addr: addresses.Timelock },
-          { label: "Zentroller", addr: addresses.Zentroller },
-          { label: "ZentGovernor", addr: addresses.ZentGovernor },
-        ].map(({ label, addr }) => (
-          <div key={label} className="flex justify-between text-sm">
-            <span className="text-white/50">{label}</span>
-            <a
-              href={`https://hypurrscan.io/address/${addr}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-xs text-blue-400 hover:text-blue-300"
-            >
+        {items.map(({ label, addr }) => (
+          <div key={label} className="flex justify-between items-center">
+            <span className="text-xs text-white/50">{label}</span>
+            <a href={`https://hypurrscan.io/address/${addr}`} target="_blank" rel="noopener noreferrer"
+              className="font-mono text-xs text-blue-400/70 hover:text-blue-400 transition-colors">
               {shorten(addr)}
             </a>
           </div>
@@ -277,176 +205,167 @@ function GovernancePanel() {
       </div>
 
       <div className="mt-4 pt-4 border-t border-white/10">
-        <a
-          href={`https://hypurrscan.io/address/${addresses.ZentGovernor}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
-        >
-          View Governor on Explorer →
+        <a href={`https://hypurrscan.io/address/${addresses.ZentGovernor}`} target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-blue-400/70 hover:text-blue-400 transition-colors">
+          View Governor
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
         </a>
       </div>
     </div>
   );
 }
 
+// ─── Keeper Panel ─────────────────────────────────────────────────────────────
+
+function KeeperPanel() {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="h-2 w-2 rounded-full bg-emerald-400" />
+        <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Keeper Layer</h2>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <div className="text-xs text-white/40 mb-1.5">HyperCoreAdapter</div>
+          <div className="font-mono text-xs text-white/70 break-all leading-relaxed">{addresses.HyperCoreAdapter}</div>
+        </div>
+        <div>
+          <div className="text-xs text-white/40 mb-1.5">StrategyExecutor</div>
+          <div className="font-mono text-xs text-white/70 break-all leading-relaxed">{addresses.StrategyExecutor}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-6">
+        <a href="https://hypurrscan.io" target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-blue-400/70 hover:text-blue-400 transition-colors font-medium">
+          HypurrScan
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+        </a>
+        <a href="/signals"
+          className="inline-flex items-center gap-1.5 text-xs text-amber-400/70 hover:text-amber-400 transition-colors font-medium">
+          Signal Dashboard
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ─── Checklist ────────────────────────────────────────────────────────────────
+
+function Checklist() {
+  const items = [
+    "Fund keeper wallet with HYPE for gas",
+    "Configure HyperCoreAdapter asset indices per vault",
+    "Transfer Timelock admin to multisig",
+    "Set ZENTStaking.minStake via governance proposal",
+    "Verify vault KEEPER_ROLE assignments on StrategyExecutor",
+  ];
+  return (
+    <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent p-5">
+      <h2 className="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-3">Post-Deploy Checklist</h2>
+      <ul className="space-y-2">
+        {items.map((item, i) => (
+          <li key={i} className="flex items-start gap-2.5 text-sm text-white/60">
+            <span className="mt-0.5 h-4 w-4 rounded border border-amber-500/40 flex-shrink-0 flex items-center justify-center">
+              <span className="text-amber-400 text-xs">{i + 1}</span>
+            </span>
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
+
 export default function Home() {
   const { address, isConnected } = useAccount();
   const { data: hypeBalance } = useBalance({ address });
 
-  const zenTotalSupply = useReadContract({
-    address: addresses.ZENT,
-    abi: ZENT_ABI,
-    functionName: "totalSupply" as any,
-  } as any);
-
+  const zenTotalSupply = useReadContract({ address: addresses.ZENT, abi: ZENT_ABI, functionName: "totalSupply" } as any);
   const zenBalance = useReadContract({
-    address: addresses.ZENT,
-    abi: ZENT_ABI,
-    functionName: "balanceOf" as any,
-    args: address ? [address] : undefined,
-    query: { enabled: isConnected },
-  } as any);
-
-  // Also try direct balanceOf for the connected address
-  const zenBalanceDirect = useReadContract({
-    address: addresses.ZENT,
-    abi: ZENT_ABI,
-    functionName: "balanceOf" as any,
-    args: [address ?? "0x0000000000000000000000000000000000000001"],
+    address: addresses.ZENT, abi: ZENT_ABI, functionName: "balanceOf",
+    args: address ? [address] : undefined, query: { enabled: !!isConnected },
   } as any);
 
   const zenSupply = (zenTotalSupply.data as bigint) ?? 0n;
-  const zenSupplyFormatted = (zenSupply / 10n ** 18n / 1000_000_000n).toString(); // 1B = zenSupply / 1e27
+  const zenSupplyFormatted = (zenSupply / 10n ** 27n).toString();
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="border-b border-white/10 bg-[#0d0d14]/80 backdrop-blur-sm sticky top-0 z-20">
-        <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">Zentory Protocol</h1>
-            <p className="text-xs text-white/40 mt-0.5">HyperEVM Testnet · Chain 998</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <WalletButton />
-            {isConnected && hypeBalance && (
-              <div className="hidden sm:flex flex-col items-end">
-                <span className="text-xs font-mono text-white">{shorten(address!)}</span>
-                <span className="text-xs text-emerald-400">
-                  {Number(hypeBalance.value / 10n ** 18n).toFixed(4)} HYPE
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      <main className="mx-auto max-w-7xl px-6 py-10 space-y-8">
 
-      <main className="mx-auto max-w-7xl px-6 py-10 space-y-10">
-        {/* Protocol Overview */}
-        <section>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-amber-600/5 p-5">
-              <div className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-1">ZENT Token</div>
-              <div className="text-2xl font-bold text-white">{zenTotalSupply.isLoading ? "—" : `${zenSupplyFormatted}B`}</div>
-              <div className="text-xs text-white/40 mt-1">total supply</div>
-              {isConnected && zenBalance.data !== undefined && (
-                <div className="mt-3 pt-3 border-t border-white/10">
-                  <div className="text-xs text-white/40">Your Balance</div>
-                  <div className="text-sm font-mono text-white">
-                    {Number((zenBalance.data as bigint) / 10n ** 18n).toLocaleString()} ZENT
-                  </div>
+        {/* ── Protocol Hero ── */}
+        <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-transparent p-8 sm:p-10">
+          {/* Ambient glow */}
+          <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-amber-500/5 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -left-12 h-48 w-48 rounded-full bg-blue-500/5 blur-3xl pointer-events-none" />
+
+          <div className="relative">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-400 font-medium mb-4">
+                  <div className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  HyperEVM Testnet · Chain 998
                 </div>
-              )}
-            </div>
+                <h1 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">Zentory Protocol</h1>
+                <p className="text-white/50 mt-2 text-base">
+                  Alpha generation through systematic, AI-driven strategies.
+                  <br />ERC-4626 vaults · ZENT governance · HyperCore execution.
+                </p>
 
-            <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 to-blue-600/5 p-5">
-              <div className="text-blue-400 text-xs font-medium uppercase tracking-wider mb-1">Network</div>
-              <div className="text-2xl font-bold text-white">HyperEVM</div>
-              <div className="text-xs text-white/40 mt-1">Chain ID 998 · Testnet</div>
-            </div>
-
-            <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 p-5">
-              <div className="text-emerald-400 text-xs font-medium uppercase tracking-wider mb-1">Strategy Executor</div>
-              <div className="font-mono text-sm text-white break-all leading-relaxed">
-                {shorten(addresses.StrategyExecutor)}
+                {isConnected && hypeBalance && (
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                    <div className="h-2 w-2 rounded-full bg-emerald-400" />
+                    <span className="font-mono text-sm text-white">{shorten(address!)}</span>
+                    <span className="text-white/40">·</span>
+                    <span className="font-mono text-sm text-emerald-400">{Number(hypeBalance.value / 10n ** 18n).toFixed(4)} HYPE</span>
+                  </div>
+                )}
               </div>
-              <div className="text-xs text-white/40 mt-1">keeper · risk control</div>
+
+              {/* ZENT Token metric */}
+              <div className="flex-shrink-0">
+                <div className="text-xs text-white/40 uppercase tracking-wider mb-1">ZENT Total Supply</div>
+                <div className="text-4xl font-bold text-white">{zenTotalSupply.isLoading ? "—" : `${zenSupplyFormatted}B`}</div>
+                <div className="text-xs text-white/40 mt-1">1,000,000,000 ZENT</div>
+                {isConnected && zenBalance.data !== undefined && (
+                  <div className="mt-2 text-xs text-white/50">Your balance: <span className="text-amber-400 font-mono">{Number((zenBalance.data as bigint) / 10n ** 18n).toLocaleString()} ZENT</span></div>
+                )}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Alpha Vaults */}
+        {/* ── Vaults ── */}
         <section>
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-xl font-semibold text-white">Alpha Vaults</h2>
-            <span className="text-xs text-white/40 bg-white/5 border border-white/10 rounded-full px-3 py-1">
-              ERC-4626 · Testnet
-            </span>
+          <div className="flex items-center gap-3 mb-5">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+            <div className="flex items-center gap-2 text-sm font-medium text-white/40">
+              <span className="text-amber-400">⬡</span> Alpha Vaults
+            </div>
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {VAULTS.map((v) => (
-              <VaultCard key={v} vault={v} />
-            ))}
+            {VAULTS.map((v) => <VaultCard key={v} vault={v} />)}
           </div>
         </section>
 
-        {/* Staking + Governance */}
+        {/* ── Staking + Governance ── */}
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <StakingPanel />
           <GovernancePanel />
         </section>
 
-        {/* Keeper Layer */}
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <h2 className="text-lg font-semibold text-white mb-4">Keeper Layer</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-white/40 mb-1">HyperCoreAdapter</div>
-              <div className="font-mono text-xs text-white break-all">{addresses.HyperCoreAdapter}</div>
-            </div>
-            <div>
-              <div className="text-xs text-white/40 mb-1">StrategyExecutor</div>
-              <div className="font-mono text-xs text-white break-all">{addresses.StrategyExecutor}</div>
-            </div>
-          </div>
-          <div className="mt-4 pt-4 border-t border-white/10 flex gap-6">
-            <a
-              href="https://hypurrscan.io"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
-            >
-              HypurrScan Explorer →
-            </a>
-            <a
-              href="/signals"
-              className="text-xs text-amber-400 hover:text-amber-300 hover:underline"
-            >
-              Signal Dashboard →
-            </a>
-          </div>
-        </section>
+        {/* ── Keeper Layer ── */}
+        <KeeperPanel />
 
-        {/* Post-Deploy Checklist */}
-        <section className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
-          <h2 className="text-lg font-semibold text-amber-400 mb-3">Post-Deploy Checklist</h2>
-          <ul className="space-y-2 text-sm text-white/70">
-            {[
-              "Fund keeper wallet with HYPE for gas",
-              "Configure HyperCoreAdapter asset indices per vault",
-              "Transfer Timelock admin to multisig",
-              "Set ZENTStaking.minStake via governance proposal",
-              "Verify vault KEEPER_ROLE assignments on StrategyExecutor",
-            ].map((item, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="text-amber-400">{i + 1}.</span>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </section>
+        {/* ── Checklist ── */}
+        <Checklist />
+
       </main>
     </div>
   );
