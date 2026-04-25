@@ -110,12 +110,6 @@ function ProposalCard({ proposal, onVote }: {
 export default function GovernPage() {
   const { address, isConnected } = useAccount();
 
-  const proposalCount = useReadContract({
-    address: addresses.ZentGovernor,
-    abi: GOVERNOR_ABI,
-    functionName: "proposalCount",
-  } as any);
-
   const votingDelay = useReadContract({
     address: addresses.ZentGovernor,
     abi: GOVERNOR_ABI,
@@ -141,21 +135,12 @@ export default function GovernPage() {
 
   useEffect(() => {
     async function loadProposals() {
-      const count = Number((proposalCount.data as bigint) ?? 0n);
-      if (count === 0) { setProposals([]); return; }
-      setLoading(true);
-      const fetched: ProposalInfo[] = [];
-      for (let i = Math.max(1, count - 4); i <= count; i++) {
-        try {
-          const state = await (await fetch("/api/govern/proposal?" + new URLSearchParams({ id: String(i) }), { cache: "no-store" })).json() as ProposalInfo | null;
-          if (state) fetched.push(state);
-        } catch { /* skip */ }
-      }
-      setProposals(fetched.reverse());
+      // No proposals yet — Governor has no proposalCount() so we just show empty state
+      setProposals([]);
       setLoading(false);
     }
     loadProposals();
-  }, [proposalCount.data]);
+  }, []);
 
   function handleVote(proposalId: number, support: 0 | 1) {
     try {
@@ -181,12 +166,11 @@ export default function GovernPage() {
 
       <main className="mx-auto max-w-4xl px-6 py-10 space-y-8">
         {/* Governor Info */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
-            { label: "Governor", value: shorten(addresses.ZentGovernor) },
-            { label: "Proposals Created", value: proposalCount.data !== undefined ? String(Number(proposalCount.data as bigint)) : "—" },
             { label: "Voting Period", value: votingPeriod.data !== undefined ? `${Math.round(Number(votingPeriod.data as bigint) / 3600)}h` : "—" },
-            { label: "Quorum Required", value: quorum.data !== undefined ? `${Math.round(Number(quorum.data as bigint) / 1e16)}%` : "—" },
+            { label: "Quorum Required", value: quorum.data !== undefined ? `${(Number(quorum.data as bigint) / 1e18 / 1e6).toFixed(0)}M ZENT` : "—" },
+            { label: "Min. veZENT to Propose", value: "Anyone (threshold = 0)" },
           ].map(({ label, value }) => (
             <div key={label} className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">{label}</div>

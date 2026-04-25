@@ -8,6 +8,14 @@ import { addresses } from "@/lib/contracts";
 const RPC_URL = process.env.NEXT_PUBLIC_HYPEREVM_RPC ?? "https://rpc.hyperliquid-testnet.xyz/evm";
 const KEEPER_PRIVATE_KEY = process.env.KEEPER_PRIVATE_KEY ?? "";
 
+// Asset symbol → vault address (HyperEVM testnet)
+const VAULT_MAP: Record<string, string> = {
+  BTC: addresses.zBTC,
+  ETH: addresses.zETH,
+  XRP: addresses.zXRP,
+  SOL: addresses.zSOL,
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -23,26 +31,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
+    // Gate: keeper private key must be configured server-side
     if (!KEEPER_PRIVATE_KEY) {
+      console.error("[POST /api/signals/execute] KEEPER_PRIVATE_KEY not configured");
       return NextResponse.json({ error: "Keeper private key not configured" }, { status: 500 });
     }
 
-    const account = privateKeyToAccount(KEEPER_PRIVATE_KEY as `0x${string}`);
-
-  const publicClient = createPublicClient({ transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
-  const walletClient = createWalletClient({ account, transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
-
+    // Resolve asset symbol → vault address
+    const vaultAddress = VAULT_MAP[asset.toUpperCase()] ?? asset;
     const isBuy = direction === "LONG";
+
+    const account = privateKeyToAccount(KEEPER_PRIVATE_KEY as `0x${string}`);
+    const publicClient = createPublicClient({ transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
+    const walletClient = createWalletClient({ account, transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
+
     const hash = await walletClient.writeContract({
       address: addresses.StrategyExecutor,
       abi: strategyExecutorABI,
       functionName: "recordTradeManual",
-      args: [asset as `0x${string}`, isBuy, BigInt(size), BigInt(price * 1000000)],
+      args: [vaultAddress as `0x${string}`, isBuy, BigInt(size), BigInt(Math.round(price * 1_000_000))],
     });
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-    // Update signal status in Supabase
     const supabase = await createClient();
     await supabase
       .from("signals")
@@ -54,11 +65,10 @@ export async function POST(req: NextRequest) {
       })
       .eq("id", signalId);
 
-    // Log keeper audit
     await supabase.from("keeper_audit").insert({
       signal_id: signalId,
       tx_hash: hash,
-      gas_used: receipt.gasUsed,
+      gas_used: Number(receipt.gasUsed),
       executor_address: addresses.StrategyExecutor,
       block_number: Number(receipt.blockNumber),
     });

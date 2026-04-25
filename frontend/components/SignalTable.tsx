@@ -118,7 +118,7 @@ export default function SignalTable({ signals }: SignalTableProps) {
               className="hover:bg-slate-900/60 transition-colors"
             >
               <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-400">
-                {formatTimestamp(sig.timestamp)}
+                {sig.timestamp ? formatTimestamp(sig.timestamp) : "—"}
               </td>
               <td className="px-4 py-3">
                 <ProviderBadge provider={sig.provider} />
