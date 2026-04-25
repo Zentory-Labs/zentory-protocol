@@ -186,9 +186,9 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(Governor, GovernorTimelockControl)
+        override(Governor)
         returns (bool)
     {
-        return super.supportsInterface(interfaceId);
+        return Governor.supportsInterface(interfaceId);
     }
 }

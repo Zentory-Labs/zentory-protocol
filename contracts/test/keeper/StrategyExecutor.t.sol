@@ -334,7 +334,7 @@ contract StrategyExecutorTest is Test {
         executor.setMaxPositionSize(address(1), 1e6); // max 1 unit
 
         // Signature from GP engine (SIGNER)
-        bytes32 digest = _makeDigest(address(1), 1, 10e6, 1, block.timestamp + 3600);
+        bytes32 digest = _makeDigest(address(1), 1, 10e6, 65_000_00000, 1, block.timestamp + 3600);
         bytes memory sig = _sign(digest, SIGNER_KEY);
 
         vm.prank(keeper);
