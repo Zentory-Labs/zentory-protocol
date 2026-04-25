@@ -155,3 +155,6 @@ export const vaultMeta: Record<string, { name: string; symbol: string; color: st
   [addresses.zXRP]: { name: "zXRP Vault", symbol: "zXRP", color: "#23292F", asset: "XRP" },
   [addresses.zSOL]: { name: "zSOL Vault", symbol: "zSOL", color: "#9945FF", asset: "SOL" },
 };
+
+// Alias for backward compatibility
+export const strategyExecutorABI = EXECUTOR_ABI;

@@ -1,111 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createWalletClient, http, encodeFunctionData, hexToBytes, erc20Abi } from "viem";
+import { createClient } from "@/utils/supabase/server";
 import { privateKeyToAccount } from "viem/accounts";
-import { addresses, EXECUTOR_ABI } from "@/lib/contracts";
+import { createPublicClient, createWalletClient, http } from "viem";
+import { strategyExecutorABI, HYPEREVM_TESTNET } from "@/lib/contracts";
+import { addresses } from "@/lib/contracts";
 
-const EXPLORER_BASE = "https://hypurrscan.io/tx";
-
-interface SignalPayload {
-  id: string;
-  asset: "BTC" | "ETH" | "XRP" | "SOL";
-  direction: "LONG" | "SHORT" | "CLOSE";
-  size: number;
-  price: number;
-  status: "pending" | "executed" | "failed";
-}
-
-// Map direction string → executor uint8
-// 1=long(buy), 0=short(sell), 2=close(reduce-only)
-function directionToUint8(d: string): number {
-  if (d === "LONG") return 1;
-  if (d === "SHORT") return 0;
-  return 2; // CLOSE
-}
-
-// Asset → vault address
-function assetToVault(asset: string): string {
-  const map: Record<string, string> = {
-    ETH: addresses.zETH,
-    BTC: addresses.zBTC,
-    XRP: addresses.zXRP,
-    SOL: addresses.zSOL,
-  };
-  const vault = map[asset];
-  if (!vault) throw new Error(`Unknown asset: ${asset}`);
-  return vault;
-}
-
-// Size in human units → on-chain uint64
-// size is a decimal like 0.1 ETH. We treat it as raw asset units with 8 decimals
-// e.g. size=0.1 BTC → 10_000_000 (for 8-decimal asset)
-function encodeSize(size: number, asset: string): bigint {
-  const decimals = 8; // all mock assets use 8 decimals on this testnet
-  return BigInt(Math.round(size * 10 ** decimals));
-}
-
-// Price in dollars → on-chain uint64 (10^8 format)
-// e.g. $65,000 → 6_500_000_000
-function encodePrice(price: number): bigint {
-  return BigInt(Math.round(price * 1e8));
-}
+const RPC_URL = process.env.NEXT_PUBLIC_HYPEREVM_RPC ?? "https://rpc.hyperliquid-testnet.xyz/evm";
+const KEEPER_PRIVATE_KEY = process.env.KEEPER_PRIVATE_KEY ?? "";
 
 export async function POST(req: NextRequest) {
-  const rpcUrl = process.env.NEXT_PUBLIC_HYPEREVM_RPC;
-  const keeperPk = process.env.KEEPER_PRIVATE_KEY;
-
-  if (!rpcUrl || !keeperPk) {
-    return NextResponse.json(
-      { error: "Missing environment variables: NEXT_PUBLIC_HYPEREVM_RPC or KEEPER_PRIVATE_KEY" },
-      { status: 500 }
-    );
-  }
-
   try {
-    const body = (await req.json()) as SignalPayload;
-    const { asset, direction, size, price } = body;
+    const body = await req.json();
+    const { signalId, asset, direction, size, price } = body as {
+      signalId: string;
+      asset: string;
+      direction: string;
+      size: number;
+      price: number;
+    };
 
-    const vault = assetToVault(asset);
-    const directionUint8 = directionToUint8(direction);
-    const sizeRaw = encodeSize(size, asset);
-    const priceRaw = encodePrice(price);
+    if (!signalId || !asset || !direction || typeof size !== "number" || typeof price !== "number") {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
 
-    const account = privateKeyToAccount(keeperPk as `0x${string}`);
+    if (!KEEPER_PRIVATE_KEY) {
+      return NextResponse.json({ error: "Keeper private key not configured" }, { status: 500 });
+    }
 
-    const walletClient = createWalletClient({
-      account,
-      transport: http(rpcUrl),
-      chain: {
-        id: 998,
-        name: "HyperEVM Testnet",
-        nativeCurrency: { name: "Hyperliquid", symbol: "HYPE", decimals: 18 },
-        rpcUrls: { default: { http: [rpcUrl] } },
-      },
-    });
+    const account = privateKeyToAccount(KEEPER_PRIVATE_KEY as `0x${string}`);
 
-    // Encode the recordTradeManual call:
-    // recordTradeManual(address vault, bool isBuy, uint64 sizeHuman, uint64 priceHuman)
+  const publicClient = createPublicClient({ transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
+  const walletClient = createWalletClient({ account, transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
+
     const isBuy = direction === "LONG";
-    const calldata = encodeFunctionData({
-      abi: EXECUTOR_ABI,
+    const hash = await walletClient.writeContract({
+      address: addresses.StrategyExecutor,
+      abi: strategyExecutorABI,
       functionName: "recordTradeManual",
-      args: [vault as `0x${string}`, isBuy, sizeRaw, priceRaw],
+      args: [asset as `0x${string}`, isBuy, BigInt(size), BigInt(price * 1000000)],
     });
 
-    const hash = await walletClient.sendTransaction({
-      to: addresses.StrategyExecutor,
-      data: calldata,
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+    // Update signal status in Supabase
+    const supabase = await createClient();
+    await supabase
+      .from("signals")
+      .update({
+        status: "executed",
+        tx_hash: hash,
+        executed_by: account.address,
+        executor_address: addresses.StrategyExecutor,
+      })
+      .eq("id", signalId);
+
+    // Log keeper audit
+    await supabase.from("keeper_audit").insert({
+      signal_id: signalId,
+      tx_hash: hash,
+      gas_used: receipt.gasUsed,
+      executor_address: addresses.StrategyExecutor,
+      block_number: Number(receipt.blockNumber),
     });
 
-    return NextResponse.json({
-      txHash: hash,
-      explorerUrl: `${EXPLORER_BASE}/${hash}`,
-      vault,
-      direction: directionUint8,
-      size: sizeRaw.toString(),
-      price: priceRaw.toString(),
-    });
+    return NextResponse.json({ success: true, txHash: hash, blockNumber: receipt.blockNumber });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Execution failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[POST /api/signals/execute]", err);
+    return NextResponse.json({ error: "Execution failed" }, { status: 500 });
   }
 }
