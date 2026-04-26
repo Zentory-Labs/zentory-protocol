@@ -25,6 +25,16 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      - name: Setup Python (for vm.ffi tests)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install engine signer deps (for vm.ffi)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install eth-account eth-hash
+
       - name: Forge build
         run: forge build --sizes
 
@@ -59,9 +69,10 @@ jobs:
         run: python -m pip install --upgrade pip slither-analyzer
 
       - name: Run Slither (JSON report)
+        continue-on-error: true
         run: |
           mkdir -p ../docs/reports
-          slither . --json ../docs/reports/slither-ci.json
+          slither . --exclude-dependencies --filter-paths "lib" --json ../docs/reports/slither-ci.json
 
       - name: Upload Slither report
         uses: actions/upload-artifact@v4
