@@ -372,13 +372,4 @@ contract StrategyExecutor is AccessControl {
         if (signer != authorizedSigner) revert InvalidSignature();
     }
 
-    /// @dev Map vault address → local asset index (0=BTC, 1=ETH, 2=SOL, 3=XRP).
-    ///      In production this would be a state mapping; here we derive from the
-    ///      vault's asset config stored off-chain or in the vault contract itself.
-    function _assetForVault(address vault) internal pure returns (uint8) {
-        // Derive asset from vault address bytes (last byte as a simple heuristic).
-        // Production should use an explicit vault→asset registry.
-        uint8 b = uint8(uint160(vault));
-        return b % 4; // distributes across 0-3
-    }
 }

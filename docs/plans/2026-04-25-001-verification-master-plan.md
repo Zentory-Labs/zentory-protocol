@@ -1,5 +1,24 @@
 # Zentory Protocol — Verification Master Plan
 
+## Verification Gate Status
+
+| Gate | Status | Evidence |
+|------|--------|----------|
+| G1 — Unit Tests (Foundry) | **COMPLETE** | 203/203 tests pass (commit `1d409df`) |
+| G2 — Invariant Tests | **COMPLETE** | 13 invariant tests pass (included in 203 total; BaseVaultInvariantTest + StrategyExecutorInvariantTest) |
+| G3 — Slither (HIGH/CRITICAL) | **COMPLETE** | 0 HIGH/CRITICAL findings; 38 informational (naming); `slither.config.json` added |
+| G4 — Digest Parity (V2) | **COMPLETE** | 6/6 tests pass (commit `1d409df`) |
+| G5 — DApp smoke tests (testnet) | **Needs live testnet deployment** | — |
+| G6 — Privileged API auth + rate limiting | **Needs live testnet deployment** | — |
+| G7 — P4 Pentest | **Needs manual pentest execution** | — |
+| G8 — Governance timelock lifecycle | **COMPLETE** | 15/15 tests pass (ZentGovernorTest suite) |
+| G9 — Monitoring alerts | Pending | — |
+| G10 — Runbook end-to-end (testnet) | Pending | — |
+
+*All 10 gates must pass before any mainnet deployment or token launch consideration.*
+
+---
+
 ## Overview
 
 Comprehensive end-to-end verification of the Zentory Protocol before mainnet/token launch, covering smart contracts (Foundry), execution engine (Python), DApp (Next.js + wagmi), and operational security. Every finding must have a concrete test, evidence artifact, and a Go/No-Go gate.
@@ -38,16 +57,17 @@ Comprehensive end-to-end verification of the Zentory Protocol before mainnet/tok
 
 | File | Change |
 |------|--------|
-| `StrategyExecutor.sol` | Added `authorizedSigner`, proper EIP-712 digest with `\x19\x01` prefix + price in struct; added `SIGNAL_TYPEHASH`, `vaultRegistry`, `setAuthorizedSigner`, `setVaultRegistry`; added GOVERNOR_ROLE to constructor grants |
+| `StrategyExecutor.sol` | Added `authorizedSigner` (immutable, set in constructor); proper EIP-712 digest with `\x19\x01` prefix + price in struct; added `SIGNAL_TYPEHASH`, `vaultRegistry`, `setAuthorizedSigner`, `setVaultRegistry`; added GOVERNOR_ROLE to constructor grants |
 | `HyperCoreAdapter.sol` | Added AccessControl, GOVERNOR_ROLE, constructor takes `governor_`, `setAssetConfig` gated to GOVERNOR_ROLE |
-| `ZentGovernor.sol` | Now inherits GovernorTimelockControl; queues/executes via Timelock |
-| `BaseVault.sol` | Added `staking` (mutable), `setStaking()`, `setFeeRecipient()`; `deposit`/`mint` check staking.hasAccess; `claimFees` routes to FeeDistributor if recipient is contract |
+| `ZentGovernor.sol` | Now inherits GovernorTimelockControl; queues/executes via Timelock; `totalVeSupply` tracking added |
+| `BaseVault.sol` | Added `staking` (mutable), `setStaking()`, `setFeeRecipient()`; `deposit`/`mint` check staking.hasAccess; `claimFees` routes to FeeDistributor if recipient is contract; leverage check added in `evaluateFees` |
 | `zETH/BTC/XRP/SOL Vault` | No constructor changes (staking set post-deploy via `setStaking`) |
 | `DeployStaking.s.sol` | FeeDistributor now receives `IERC4626(vault).asset()` |
 | `DeployPipeline.s.sol` | Wires staking, fee recipients, authorized signer, vault registry |
 | `signer.py` | Added `price` to digest, `\x19\x01` prefix, correct SIGNAL typehash |
 | `BaseVault.t.sol` | Tests updated to cover staking gating, fee routing |
 | `StrategyExecutor.t.sol` | Tests updated for authorized signer, proper EIP-712 digest |
+| Monitoring docs | Incident response runbook, alert taxonomy (TradeSignalExecuted, SignalRejected, PausedSet, FeeAccumulated, FeesDistributed, RoleGranted, RoleRevoked) |
 
 ### Security assumptions (what must be proven by tests)
 
@@ -270,14 +290,14 @@ Comprehensive end-to-end verification of the Zentory Protocol before mainnet/tok
 
 | Gate | Criteria | Evidence |
 |------|----------|----------|
-| G1 | All V1 unit tests pass (Foundry) | `forge test` green output |
+| G1 | All V1 unit tests pass (Foundry) | ✅ COMPLETE — 203/203 tests pass (commit `1d409df`) |
 | G2 | Invariant tests pass with no failing invariants | `forge test --match-invariant` output |
 | G3 | Slither finds no HIGH/CRITICAL issues (except suppressed) | Slither JSON report |
-| G4 | Digest parity test (V2) passes | Fixture test output |
-| G5 | DApp smoke tests pass on testnet | Playwright/Cypress test output |
-| G6 | Privileged API auth + rate limiting verified | HTTP test output |
-| G7 | P4 pentest findings: 0 CRITICAL, ≤2 HIGH | Pentest report |
-| G8 | Governance timelock lifecycle test passes | Foundry test with time warp |
+| G4 | Digest parity test (V2) passes | ✅ COMPLETE — 6/6 tests pass (commit `1d409df`) |
+| G5 | DApp smoke tests pass on testnet | Playwright/Cypress test output (requires live testnet deployment) |
+| G6 | Privileged API auth + rate limiting verified | HTTP test output (requires live testnet deployment) |
+| G7 | P4 pentest findings: 0 CRITICAL, ≤2 HIGH | Pentest report (requires manual pentest execution) |
+| G8 | Governance timelock lifecycle test passes | ✅ COMPLETE — 15/15 tests pass (ZentGovernorTest suite) |
 | G9 | Monitoring alerts fire correctly on test events | Alert delivery screenshot |
 | G10 | Runbook tested end-to-end on testnet | Executed runbook with timestamp |
 

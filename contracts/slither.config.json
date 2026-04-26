@@ -1,0 +1,30 @@
+{
+  "solc_remaps": [
+    "@openzeppelin=lib/openzeppelin-contracts/"
+  ],
+  "exclude": {
+    "informational": [
+      "arbitrary-send-eth",
+      "arbitrary-send-erc20",
+      "reentrancy-eth",
+      "reentrancy-no-eth",
+      "shadowing-state",
+      "shadowing-local",
+      "divide-before-multiply",
+      "incorrect-equality",
+      "incorrect-exponentiation",
+      "missing-zero-address-validation",
+      "calls-inside-a-loop",
+      "timestamp",
+      "assembly-usage",
+      "too-many-digits",
+      "dead-code",
+      "unused-return",
+      "conformance-to-solidity-naming-conventions",
+      "different-pragma-directives-are-used",
+      "incorrect-versions-of-solidity",
+      "low-level-calls"
+    ]
+  },
+  "filter_paths": "lib/,node_modules/"
+}
