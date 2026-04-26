@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useAccount, useReadContract } from "wagmi";
 import { VideoHero } from "@/components/VideoHero";
+import { SwapWidget } from "@/components/SwapWidget";
 import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta } from "@/lib/contracts";
 
 const VAULTS = [addresses.zETH, addresses.zBTC, addresses.zXRP, addresses.zSOL] as const;
@@ -198,136 +199,140 @@ export default function Home() {
       {/* ── Video Hero ── */}
       <VideoHero>
 
+        {/* Split layout: left content + right swap widget */}
         <div
-          className="flex flex-col items-center text-center max-w-5xl mx-auto"
+          className="flex flex-col lg:flex-row items-center lg:items-start justify-between w-full max-w-7xl mx-auto gap-12"
           style={{ paddingTop: "80px" }}
         >
 
-          {/* Badge */}
-          <div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-8 border"
-            style={{
-              background: "rgba(139, 30, 45, 0.15)",
-              borderColor: "rgba(139, 30, 45, 0.4)",
-              color: "#c2353f",
-              fontFamily: "'Montserrat', sans-serif",
-              letterSpacing: "0.05em",
-            }}
-          >
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ background: "#c2353f", boxShadow: "0 0 8px #c2353f" }}
-            />
-            HyperEVM · Chain 998 · ERC-4626
-          </div>
-
-          {/* Main headline */}
-          <h1
-            className="text-6xl sm:text-7xl md:text-8xl lg:text-7xl xl:text-9xl font-bold mb-6 tracking-tight leading-none"
-            style={{ fontFamily: "'Montserrat', sans-serif" }}
-          >
-            <span className="gradient-text-gold">Zentory</span>
-            <br />
-            <span style={{ color: "#eaeaea" }}>Protocol</span>
-          </h1>
-
-          {/* Subtitle */}
-          <p
-            className="text-lg md:text-xl lg:text-xl xl:text-2xl mb-6 max-w-2xl font-light leading-relaxed"
-            style={{ color: "rgba(234, 234, 234, 0.75)" }}
-          >
-            AI-powered algorithmic trading vaults.
-            <br />
-            Alpha generation through systematic strategies.
-          </p>
-
-          <p
-            className="text-sm md:text-base mb-12 max-w-xl"
-            style={{ color: "#6a6f75" }}
-          >
-            Stake ZENT · Earn yield · Govern the protocol
-          </p>
-
-          {/* CTA buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
-            {/* Stake ZENT — primary red */}
-            <a
-              href="/stake"
-              className="px-10 py-4 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03]"
+          {/* ── Left: content ── */}
+          <div className="flex-1 flex flex-col items-start max-w-xl">
+            {/* Badge */}
+            <div
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-6 border"
               style={{
-                background: "#8b1e2d",
-                color: "#eaeaea",
-                fontFamily: "'Montserrat', sans-serif",
-                boxShadow: "0 0 40px rgba(139, 30, 45, 0.35)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background = "#c2353f";
-                (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 0 60px rgba(194, 53, 63, 0.5)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background = "#8b1e2d";
-                (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 0 40px rgba(139, 30, 45, 0.35)";
-              }}
-            >
-              Stake ZENT
-            </a>
-
-            {/* Governance — gold */}
-            <a
-              href="/govern"
-              className="px-10 py-4 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03] border"
-              style={{
-                background: "transparent",
-                color: "#b08d57",
-                borderColor: "rgba(176, 141, 87, 0.4)",
-                fontFamily: "'Montserrat', sans-serif",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background = "rgba(176, 141, 87, 0.08)";
-                (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(176, 141, 87, 0.7)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-                (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(176, 141, 87, 0.4)";
-              }}
-            >
-              Governance
-            </a>
-
-            {/* Signal Dashboard — red */}
-            <a
-              href="/signals"
-              className="px-10 py-4 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03]"
-              style={{
-                background: "rgba(139, 30, 45, 0.2)",
+                background: "rgba(139, 30, 45, 0.15)",
+                borderColor: "rgba(139, 30, 45, 0.4)",
                 color: "#c2353f",
-                border: "1px solid rgba(139, 30, 45, 0.4)",
                 fontFamily: "'Montserrat', sans-serif",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background = "rgba(139, 30, 45, 0.35)";
-                (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(139, 30, 45, 0.65)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background = "rgba(139, 30, 45, 0.2)";
-                (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(139, 30, 45, 0.4)";
+                letterSpacing: "0.05em",
               }}
             >
-              Signal Dashboard
-            </a>
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ background: "#c2353f", boxShadow: "0 0 8px #c2353f" }}
+              />
+              HyperEVM · Chain 998 · ERC-4626
+            </div>
+
+            {/* Main headline */}
+            <h1
+              className="text-5xl sm:text-6xl md:text-7xl lg:text-6xl xl:text-8xl font-bold mb-6 tracking-tight leading-none"
+              style={{ fontFamily: "'Montserrat', sans-serif" }}
+            >
+              <span className="gradient-text-gold">Zentory</span>
+              <br />
+              <span style={{ color: "#eaeaea" }}>Protocol</span>
+            </h1>
+
+            {/* Subtitle */}
+            <p
+              className="text-base md:text-lg xl:text-xl mb-6 font-light leading-relaxed"
+              style={{ color: "rgba(234, 234, 234, 0.75)" }}
+            >
+              AI-powered algorithmic trading vaults.
+              <br />
+              Alpha generation through systematic strategies.
+            </p>
+
+            <p
+              className="text-sm mb-8"
+              style={{ color: "#6a6f75" }}
+            >
+              Stake ZENT · Earn yield · Govern the protocol
+            </p>
+
+            {/* CTA buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 justify-start items-start mb-10">
+              <a
+                href="/stake"
+                className="px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03]"
+                style={{
+                  background: "#8b1e2d",
+                  color: "#eaeaea",
+                  fontFamily: "'Montserrat', sans-serif",
+                  boxShadow: "0 0 40px rgba(139, 30, 45, 0.35)",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = "#c2353f";
+                  (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 0 60px rgba(194, 53, 63, 0.5)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = "#8b1e2d";
+                  (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 0 40px rgba(139, 30, 45, 0.35)";
+                }}
+              >
+                Stake ZENT
+              </a>
+
+              <a
+                href="/govern"
+                className="px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03] border"
+                style={{
+                  background: "transparent",
+                  color: "#b08d57",
+                  borderColor: "rgba(176, 141, 87, 0.4)",
+                  fontFamily: "'Montserrat', sans-serif",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = "rgba(176, 141, 87, 0.08)";
+                  (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(176, 141, 87, 0.7)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+                  (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(176, 141, 87, 0.4)";
+                }}
+              >
+                Governance
+              </a>
+
+              <a
+                href="/signals"
+                className="px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03]"
+                style={{
+                  background: "rgba(139, 30, 45, 0.2)",
+                  color: "#c2353f",
+                  border: "1px solid rgba(139, 30, 45, 0.4)",
+                  fontFamily: "'Montserrat', sans-serif",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = "rgba(139, 30, 45, 0.35)";
+                  (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(139, 30, 45, 0.65)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = "rgba(139, 30, 45, 0.2)";
+                  (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(139, 30, 45, 0.4)";
+                }}
+              >
+                Signals
+              </a>
+            </div>
+
+            {/* Live stats */}
+            <ChainStats />
           </div>
 
-          {/* Live stats */}
-          <ChainStats />
+          {/* ── Right: swap widget ── */}
+          <div className="w-full max-w-sm flex-shrink-0">
+            <SwapWidget />
+          </div>
+
         </div>
 
         {/* Scroll indicator */}
         <div
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center"
-          style={{
-            color: "#6a6f75",
-            animation: "bounce 2s ease-in-out infinite",
-          }}
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center"
+          style={{ animation: "bounce 2s ease-in-out infinite" }}
         >
           <span
             className="text-xs uppercase tracking-widest mb-1"

@@ -31,7 +31,7 @@ export default function RootLayout({
           <main className="mx-auto max-w-7xl px-6 pt-24 pb-8">
             {children}
           </main>
-          <footer className="text-[#bfc3c7]" style={{ background: "#0b0b0d", borderTop: "1px solid #2a2f3a" }}>
+          <footer className="text-[#bfc3c7]" style={{ background: "#0b0b0d" }}>
             <div className="max-w-7xl mx-auto px-6 lg:px-8 py-12">
               <div className="flex flex-col items-center text-center">
                 <Link href="/" className="mb-6">
