@@ -14,20 +14,6 @@ const RATE_LIMIT_MAX = 10;
 const _rate = new Map<string, { windowStart: number; count: number }>();
 const EXECUTOR_ABI = parseAbi(strategyExecutorABI as any);
 
-/** JSON.stringify replacer that converts BigInt to strings for Next.js API compatibility. */
-function bigintReplacer(_key: string, value: unknown): unknown {
-  if (typeof value === "bigint") return value.toString();
-  if (Array.isArray(value)) return value.map((v) => bigintReplacer("", v));
-  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = bigintReplacer(k, v);
-    }
-    return out;
-  }
-  return value;
-}
-
 /** Convert an error to a plain JSON-safe object. */
 function errorToDetail(e: unknown) {
   const any = e as any;
@@ -41,9 +27,23 @@ function errorToDetail(e: unknown) {
   };
 }
 
+/** JSON-safe converter: BigInt → string, arrays/objects recursively. */
+function toSafeJson(value: unknown): unknown {
+  if (typeof value === "bigint") return value.toString();
+  if (Array.isArray(value)) return value.map(toSafeJson);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = toSafeJson(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 /** Wrap a NextResponse.json call so BigInt values never cause serialization failures. */
 function safeJson<T>(data: T, init?: ResponseInit): NextResponse {
-  return NextResponse.json(data, { ...init, serialize: bigintReplacer as any });
+  return NextResponse.json(toSafeJson(data) as T, init);
 }
 
 function checkAuth(req: NextRequest): NextResponse | null {
