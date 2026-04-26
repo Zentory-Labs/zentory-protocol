@@ -14,30 +14,36 @@ const RATE_LIMIT_MAX = 10;
 const _rate = new Map<string, { windowStart: number; count: number }>();
 const EXECUTOR_ABI = parseAbi(strategyExecutorABI as any);
 
-/** Convert a value to a JSON-safe equivalent (strings for BigInt, etc.). */
-function toSafeJson(value: unknown): unknown {
+/** JSON.stringify replacer that converts BigInt to strings for Next.js API compatibility. */
+function bigintReplacer(_key: string, value: unknown): unknown {
   if (typeof value === "bigint") return value.toString();
-  if (Array.isArray(value)) return value.map(toSafeJson);
-  if (value !== null && typeof value === "object") {
+  if (Array.isArray(value)) return value.map((v) => bigintReplacer("", v));
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) {
-      out[k] = toSafeJson(v);
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = bigintReplacer(k, v);
     }
     return out;
   }
   return value;
 }
 
+/** Convert an error to a plain JSON-safe object. */
 function errorToDetail(e: unknown) {
   const any = e as any;
-  return toSafeJson({
+  return {
     name: any?.name,
     message: any?.message,
     shortMessage: any?.shortMessage ?? any?.cause?.shortMessage,
     details: any?.details,
     cause: any?.cause?.message,
     metaMessages: any?.metaMessages,
-  });
+  };
+}
+
+/** Wrap a NextResponse.json call so BigInt values never cause serialization failures. */
+function safeJson<T>(data: T, init?: ResponseInit): NextResponse {
+  return NextResponse.json(data, { ...init, serialize: bigintReplacer as any });
 }
 
 function checkAuth(req: NextRequest): NextResponse | null {
@@ -46,7 +52,7 @@ function checkAuth(req: NextRequest): NextResponse | null {
   const header = req.headers.get("authorization") ?? "";
   const token = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
   if (!token || token !== API_KEY) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return safeJson({ error: "Unauthorized" }, { status: 401 });
   }
   return null;
 }
@@ -64,7 +70,7 @@ function checkRateLimit(req: NextRequest): NextResponse | null {
   }
   entry.count += 1;
   if (entry.count > RATE_LIMIT_MAX) {
-    return NextResponse.json(
+    return safeJson(
       { error: "Rate limit exceeded" },
       { status: 429, headers: { "retry-after": String(Math.ceil(RATE_LIMIT_WINDOW_MS / 1000)) } }
     );
@@ -106,19 +112,19 @@ export async function POST(req: NextRequest) {
     };
 
     if (!signalId || !asset || !direction || typeof size !== "number" || typeof price !== "number") {
-      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      return safeJson({ error: "Invalid payload" }, { status: 400 });
     }
 
     // Gate: keeper private key must be configured server-side
     if (!KEEPER_PRIVATE_KEY) {
       console.error("[POST /api/signals/execute] KEEPER_PRIVATE_KEY not configured");
-      return NextResponse.json({ error: "Keeper private key not configured" }, { status: 500 });
+      return safeJson({ error: "Keeper private key not configured" }, { status: 500 });
     }
 
     const keeperPk = normalizePrivateKey(KEEPER_PRIVATE_KEY);
     if (!keeperPk) {
       console.error("[POST /api/signals/execute] Invalid KEEPER_PRIVATE_KEY format");
-      return NextResponse.json(
+      return safeJson(
         { error: "Invalid KEEPER_PRIVATE_KEY format (expected 32-byte hex, with or without 0x prefix)" },
         { status: 500 }
       );
@@ -138,7 +144,7 @@ export async function POST(req: NextRequest) {
       const chainId = await publicClient.getChainId();
       const bytecode = await publicClient.getBytecode({ address: addresses.StrategyExecutor });
       if (!bytecode || bytecode === "0x") {
-        return NextResponse.json(
+        return safeJson(
           {
             error: "StrategyExecutor not deployed on configured RPC",
             keeper: account.address,
@@ -165,7 +171,7 @@ export async function POST(req: NextRequest) {
       } as any);
 
       if (!hasKeeperRole) {
-        return NextResponse.json(
+        return safeJson(
           { error: "Keeper wallet is not authorized (missing KEEPER_ROLE)", keeper: account.address },
           { status: 403 }
         );
@@ -173,7 +179,7 @@ export async function POST(req: NextRequest) {
 
       const balance = await publicClient.getBalance({ address: account.address });
       if (balance === 0n) {
-        return NextResponse.json(
+        return safeJson(
           { error: "Keeper wallet has no balance for gas", keeper: account.address },
           { status: 402 }
         );
@@ -185,7 +191,7 @@ export async function POST(req: NextRequest) {
         (e as any)?.cause?.shortMessage ??
         (e as any)?.message ??
         "Unknown error";
-      return NextResponse.json(
+      return safeJson(
         {
           error: "Preflight check failed",
           detail,
@@ -212,7 +218,7 @@ export async function POST(req: NextRequest) {
         (e as any)?.cause?.shortMessage ??
         (e as any)?.message ??
         "Unknown error";
-      return NextResponse.json(
+      return safeJson(
         {
           error: "On-chain execution failed",
           detail,
@@ -230,14 +236,14 @@ export async function POST(req: NextRequest) {
       receipt = await publicClient.waitForTransactionReceipt({ hash });
     } catch (e) {
       console.error("[POST /api/signals/execute] waitForTransactionReceipt failed", e);
-      return NextResponse.json({ error: "Transaction not confirmed" }, { status: 502 });
+      return safeJson({ error: "Transaction not confirmed" }, { status: 502 });
     }
 
     let supabase;
     try {
       supabase = await createClient();
     } catch {
-      return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
+      return safeJson({ error: "Supabase not configured" }, { status: 503 });
     }
 
     const warnings: Record<string, unknown> = {};
@@ -270,7 +276,7 @@ export async function POST(req: NextRequest) {
       warnings.keeper_audit_insert = errorToDetail(e);
     }
 
-    return NextResponse.json({
+    return safeJson({
       success: true,
       txHash: hash,
       blockNumber: receipt.blockNumber,
@@ -278,6 +284,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[POST /api/signals/execute]", err);
-    return NextResponse.json({ error: "Execution failed", detail: errorToDetail(err) }, { status: 500 });
+    return safeJson({ error: "Execution failed", detail: errorToDetail(err) }, { status: 500 });
   }
 }
