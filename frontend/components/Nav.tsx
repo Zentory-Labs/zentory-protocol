@@ -96,15 +96,6 @@ export default function Nav() {
               Whitepaper
               <span className={underlineClass} />
             </a>
-            <a
-              href="https://zentorylabs.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${navClass} text-amber-400 hover:text-amber-300`}
-            >
-              App ↗
-              <span className={underlineClass} />
-            </a>
           </div>
 
           {/* Wallet — right side */}
@@ -194,15 +185,6 @@ export default function Nav() {
               onClick={() => setIsMenuOpen(false)}
             >
               Whitepaper
-            </a>
-            <a
-              href="https://zentorylabs.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-4 py-3 text-amber-400 hover:text-amber-300 hover:bg-white/10 font-light uppercase tracking-wider text-sm transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              App ↗
             </a>
           </div>
         )}
