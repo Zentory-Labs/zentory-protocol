@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { injected, coinbaseWallet, walletConnect, metaMask } from "wagmi/connectors";
+import { injected, coinbaseWallet, walletConnect } from "wagmi/connectors";
 import { HYPEREVM_TESTNET } from "@/lib/contracts";
 
 const queryClient = new QueryClient();
@@ -18,9 +18,6 @@ const wagmiConfig = createConfig({
   },
   connectors: [
     injected({
-      shimDisconnect: true,
-    }),
-    metaMask({
       shimDisconnect: true,
     }),
     coinbaseWallet({
