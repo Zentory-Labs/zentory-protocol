@@ -10,10 +10,18 @@ function shorten(addr: string): string {
 const WALLET_ICONS: Record<string, string> = {
   "MetaMask": "🦊",
   "Rabby": "🐰",
-  "Coinbase Wallet": "💙",
+  "Coinbase": "💙",
   "WalletConnect": "🔗",
-  "injected": "🌐",
 };
+
+function getWalletIcon(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("metamask")) return WALLET_ICONS["MetaMask"];
+  if (n.includes("rabby")) return WALLET_ICONS["Rabby"];
+  if (n.includes("coinbase")) return WALLET_ICONS["Coinbase"];
+  if (n.includes("walletconnect")) return WALLET_ICONS["WalletConnect"];
+  return "🌐";
+}
 
 export function WalletButton() {
   const { address, isConnected } = useAccount();
@@ -112,7 +120,6 @@ export function WalletButton() {
           <div className="py-2">
             {connectors.map((connector) => {
               const name = connector.name ?? "Unknown Wallet";
-              const icon = WALLET_ICONS[name] ?? WALLET_ICONS["injected"];
               return (
                 <button
                   key={connector.uid}
@@ -131,7 +138,7 @@ export function WalletButton() {
                     (e.currentTarget as HTMLButtonElement).style.color = "#bfc3c7";
                   }}
                 >
-                  <span className="text-xl">{icon}</span>
+                  <span className="text-xl">{getWalletIcon(name)}</span>
                   <span className="text-sm font-medium" style={{ fontFamily: "'Montserrat', sans-serif" }}>{name}</span>
                 </button>
               );
