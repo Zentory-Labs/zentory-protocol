@@ -45,6 +45,15 @@ function checkRateLimit(req: NextRequest): NextResponse | null {
   return null;
 }
 
+function normalizePrivateKey(pk: string): `0x${string}` | null {
+  const trimmed = pk.trim();
+  if (!trimmed) return null;
+  const with0x = trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+  // 32 bytes hex => 66 chars with 0x
+  if (!/^0x[0-9a-fA-F]{64}$/.test(with0x)) return null;
+  return with0x as `0x${string}`;
+}
+
 // Asset symbol → vault address (HyperEVM testnet)
 const VAULT_MAP: Record<string, string> = {
   BTC: addresses.zBTC,
@@ -79,22 +88,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Keeper private key not configured" }, { status: 500 });
     }
 
+    const keeperPk = normalizePrivateKey(KEEPER_PRIVATE_KEY);
+    if (!keeperPk) {
+      console.error("[POST /api/signals/execute] Invalid KEEPER_PRIVATE_KEY format");
+      return NextResponse.json(
+        { error: "Invalid KEEPER_PRIVATE_KEY format (expected 32-byte hex, with or without 0x prefix)" },
+        { status: 500 }
+      );
+    }
+
     // Resolve asset symbol → vault address
     const vaultAddress = VAULT_MAP[asset.toUpperCase()] ?? asset;
     const isBuy = direction === "LONG";
 
-    const account = privateKeyToAccount(KEEPER_PRIVATE_KEY as `0x${string}`);
+    const account = privateKeyToAccount(keeperPk);
     const publicClient = createPublicClient({ transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
     const walletClient = createWalletClient({ account, transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
 
-    const hash = await walletClient.writeContract({
-      address: addresses.StrategyExecutor,
-      abi: strategyExecutorABI,
-      functionName: "recordTradeManual",
-      args: [vaultAddress as `0x${string}`, isBuy, BigInt(size), BigInt(Math.round(price * 1_000_000))],
-    });
+    let hash: `0x${string}`;
+    try {
+      hash = await walletClient.writeContract({
+        address: addresses.StrategyExecutor,
+        abi: strategyExecutorABI,
+        functionName: "recordTradeManual",
+        args: [vaultAddress as `0x${string}`, isBuy, BigInt(size), BigInt(Math.round(price * 1_000_000))],
+      });
+    } catch (e) {
+      console.error("[POST /api/signals/execute] writeContract failed", e);
+      return NextResponse.json({ error: "On-chain execution failed" }, { status: 502 });
+    }
 
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    let receipt;
+    try {
+      receipt = await publicClient.waitForTransactionReceipt({ hash });
+    } catch (e) {
+      console.error("[POST /api/signals/execute] waitForTransactionReceipt failed", e);
+      return NextResponse.json({ error: "Transaction not confirmed" }, { status: 502 });
+    }
 
     let supabase;
     try {
