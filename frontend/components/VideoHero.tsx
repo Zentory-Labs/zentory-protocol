@@ -19,36 +19,43 @@ export function VideoHero({ children, className = "" }: VideoHeroProps) {
   }, []);
 
   return (
-    <>
-      {/* Fixed video backdrop — true fullscreen */}
-      <div
-        className="fixed inset-0 z-0"
-        style={{ pointerEvents: "none" }}
-      >
-        <video
-          ref={videoRef}
-          src="/hero_bg.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="w-full h-full object-cover object-center"
-          style={{ display: "block" }}
-        />
-        {/* Dark overlay so content is always readable */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to bottom, rgba(11,11,13,0.55) 0%, rgba(11,11,13,0.4) 50%, rgba(11,11,13,0.7) 100%)",
-          }}
-        />
-      </div>
+    <div
+      className={`relative min-h-screen overflow-hidden ${className}`}
+      style={{ zIndex: 0 }}
+    >
+      {/* Video — covers only this section */}
+      <video
+        ref={videoRef}
+        src="/hero_bg.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover object-center"
+      />
 
-      {/* Scrollable content on top */}
-      <div className={`relative z-10 ${className}`}>
+      {/* Dark overlay — darker for better readability */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to bottom, rgba(11,11,13,0.75) 0%, rgba(11,11,13,0.65) 40%, rgba(11,11,13,0.85) 100%)",
+        }}
+      />
+
+      {/* Subtle vignette at edges */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(ellipse 90% 90% at 50% 50%, transparent 40%, rgba(11,11,13,0.5) 100%)",
+        }}
+      />
+
+      {/* Content — fills viewport */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen min-h-[100dvh] px-6">
         {children}
       </div>
-    </>
+    </div>
   );
 }

@@ -26,6 +26,27 @@ function fmtUsd(value: bigint, decimals = 18, digits = 0): string {
   })}`;
 }
 
+// ─── Token Logo ─────────────────────────────────────────────────────────────
+
+function TokenLogo({ symbol }: { symbol: string }) {
+  const logos: Record<string, { bg: string; fg: string; label: string }> = {
+    ETH: { bg: "linear-gradient(135deg, #627eea 0%, #8b5cf6 100%)", fg: "#fff", label: "ETH" },
+    BTC: { bg: "linear-gradient(135deg, #f7931a 0%, #c2353f 100%)", fg: "#fff", label: "₿" },
+    XRP: { bg: "#23292f", fg: "#eaeaea", label: "XRP" },
+    SOL: { bg: "linear-gradient(135deg, #9945ff 0%, #14f195 100%)", fg: "#fff", label: "SOL" },
+  };
+  const { bg, fg, label } = logos[symbol] ?? { bg: "#2a2f3a", fg: "#eaeaea", label: symbol };
+
+  return (
+    <div
+      className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
+      style={{ background: bg, color: fg, fontFamily: "'Montserrat', sans-serif" }}
+    >
+      {label}
+    </div>
+  );
+}
+
 // ─── Vault Card ───────────────────────────────────────────────────────────────
 
 function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
@@ -53,17 +74,7 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
       }}
     >
       <div className="flex items-center gap-3 mb-4">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold"
-          style={{
-            background: "rgba(176, 141, 87, 0.12)",
-            border: "1px solid rgba(176, 141, 87, 0.25)",
-            color: "#b08d57",
-            fontFamily: "'Montserrat', sans-serif",
-          }}
-        >
-          {meta.asset}
-        </div>
+        <TokenLogo symbol={meta.asset} />
         <div>
           <div className="font-semibold text-white text-sm" style={{ fontFamily: "'Montserrat', sans-serif" }}>
             {meta.name}
@@ -134,7 +145,7 @@ function ChainStats() {
   const statItems = [
     { label: "ZENT Supply", value: zenTotalSupply.isLoading ? "—" : `${zenFormatted}B`, accent: "#eaeaea" },
     { label: "ZENT Staked", value: totalStaked.isLoading ? "—" : stakedFormatted, accent: "#eaeaea" },
-    { label: "Alpha Vaults", value: "4", accent: "#b08d57" },
+    { label: "Layer-1 Vaults", value: "4", accent: "#b08d57" },
     ...(isConnected && zenBalance.data !== undefined
       ? [{ label: "Your ZENT", value: Number(((zenBalance.data as bigint) ?? 0n) / 10n ** 18n).toLocaleString(), accent: "#b08d57" }]
       : []),
@@ -326,7 +337,7 @@ export default function Home() {
             className="flex items-center gap-2 text-sm font-semibold"
             style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}
           >
-            <span>⬡</span> Alpha Vaults
+            <span>⬡</span> Layer-1 Vaults
           </div>
           <div className="h-px flex-1" style={{ background: "linear-gradient(to right, transparent, #2a2f3a, transparent)" }} />
         </div>
