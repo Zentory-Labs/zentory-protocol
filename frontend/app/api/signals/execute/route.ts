@@ -136,7 +136,21 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       console.error("[POST /api/signals/execute] preflight failed", e);
-      return NextResponse.json({ error: "Preflight check failed" }, { status: 502 });
+      const detail =
+        (e as any)?.shortMessage ??
+        (e as any)?.cause?.shortMessage ??
+        (e as any)?.message ??
+        "Unknown error";
+      return NextResponse.json(
+        {
+          error: "Preflight check failed",
+          detail,
+          keeper: account.address,
+          executor: addresses.StrategyExecutor,
+          rpc: RPC_URL,
+        },
+        { status: 502 }
+      );
     }
 
     let hash: `0x${string}`;
