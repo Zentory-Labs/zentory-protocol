@@ -114,7 +114,8 @@ contract DeployPipeline is Script {
 
     function run() external {
         uint256 key       = vm.envUint("PRIVATE_KEY");
-        uint256 governorKey = vm.envUint("GOVERNOR_KEY");
+        // Allow skipping GOVERNOR_KEY for testnet runs; default to deployer key.
+        uint256 governorKey = vm.envOr("GOVERNOR_KEY", key);
         address deployer  = vm.addr(key);
         address governorAddr = vm.addr(governorKey);
         address treasury  = _must("TREASURY");
