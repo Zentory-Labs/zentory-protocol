@@ -16,7 +16,7 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: ZentoryToken/contracts
+        working-directory: contracts
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,7 +41,7 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: ZentoryToken/contracts
+        working-directory: contracts
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,7 +67,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: slither-report
-          path: ZentoryToken/docs/reports/slither-ci.json
+          path: docs/reports/slither-ci.json
 
   engine:
     name: Engine (pytest)
@@ -76,7 +76,7 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: ZentoryToken/engine
+        working-directory: engine
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,7 +102,7 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: ZentoryToken/frontend
+        working-directory: frontend
     env:
       NEXT_PUBLIC_HYPEREVM_RPC: https://rpc.hyperliquid-testnet.xyz/evm
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: 8e44bbe4865b02bd238ca5d49e454c41
@@ -117,7 +117,7 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: ZentoryToken/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install deps
         run: npm ci
