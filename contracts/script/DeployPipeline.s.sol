@@ -283,6 +283,13 @@ contract DeployPipeline is Script {
         executor.grantRole(keccak256("GUARDIAN_ROLE"), guardian);
         console2.log("Keeper and guardian roles assigned.");
 
+        // Grant vault KEEPER_ROLE to StrategyExecutor so it can call vault.recordTrade()
+        // (recordTradeManual() is invoked by keeper EOA -> StrategyExecutor -> vault).
+        zeth.grantRole(zeth.KEEPER_ROLE(), address(executor));
+        zbtc.grantRole(zbtc.KEEPER_ROLE(), address(executor));
+        zxrp.grantRole(zxrp.KEEPER_ROLE(), address(executor));
+        zsol.grantRole(zsol.KEEPER_ROLE(), address(executor));
+
         // Set initial risk limits (deployer has DEFAULT_ADMIN_ROLE before transfer)
         executor.setMaxLeverageBPS(address(zeth), 30000);
         executor.setMaxLeverageBPS(address(zbtc), 30000);

@@ -14,6 +14,18 @@ const RATE_LIMIT_MAX = 10;
 const _rate = new Map<string, { windowStart: number; count: number }>();
 const EXECUTOR_ABI = parseAbi(strategyExecutorABI as any);
 
+function errorToDetail(e: unknown) {
+  const any = e as any;
+  return {
+    name: any?.name,
+    message: any?.message,
+    shortMessage: any?.shortMessage ?? any?.cause?.shortMessage,
+    details: any?.details,
+    cause: any?.cause?.message,
+    metaMessages: any?.metaMessages,
+  };
+}
+
 function checkAuth(req: NextRequest): NextResponse | null {
   // If API key isn't configured, leave endpoint open in dev (but still require keeper key).
   if (!API_KEY) return null;
@@ -214,27 +226,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
     }
 
-    await supabase
-      .from("signals")
-      .update({
-        status: "executed",
+    const warnings: Record<string, unknown> = {};
+
+    try {
+      const { error: updateErr } = await supabase
+        .from("signals")
+        .update({
+          status: "executed",
+          tx_hash: hash,
+          executed_by: account.address,
+          executor_address: addresses.StrategyExecutor,
+        })
+        .eq("id", signalId);
+      if (updateErr) warnings.signals_update = { message: updateErr.message, code: (updateErr as any).code };
+    } catch (e) {
+      warnings.signals_update = errorToDetail(e);
+    }
+
+    try {
+      const { error: insertErr } = await supabase.from("keeper_audit").insert({
+        signal_id: signalId,
         tx_hash: hash,
-        executed_by: account.address,
+        gas_used: Number(receipt.gasUsed),
         executor_address: addresses.StrategyExecutor,
-      })
-      .eq("id", signalId);
+        block_number: Number(receipt.blockNumber),
+      });
+      if (insertErr) warnings.keeper_audit_insert = { message: insertErr.message, code: (insertErr as any).code };
+    } catch (e) {
+      warnings.keeper_audit_insert = errorToDetail(e);
+    }
 
-    await supabase.from("keeper_audit").insert({
-      signal_id: signalId,
-      tx_hash: hash,
-      gas_used: Number(receipt.gasUsed),
-      executor_address: addresses.StrategyExecutor,
-      block_number: Number(receipt.blockNumber),
+    return NextResponse.json({
+      success: true,
+      txHash: hash,
+      blockNumber: receipt.blockNumber,
+      ...(Object.keys(warnings).length ? { warnings } : {}),
     });
-
-    return NextResponse.json({ success: true, txHash: hash, blockNumber: receipt.blockNumber });
   } catch (err) {
     console.error("[POST /api/signals/execute]", err);
-    return NextResponse.json({ error: "Execution failed" }, { status: 500 });
+    return NextResponse.json({ error: "Execution failed", detail: errorToDetail(err) }, { status: 500 });
   }
 }
