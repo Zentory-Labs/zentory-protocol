@@ -53,7 +53,7 @@ export function VideoHero({ children, className = "" }: VideoHeroProps) {
       />
 
       {/* Content — fills viewport */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen min-h-[100dvh] px-6">
+      <div className="relative z-10 flex flex-col items-stretch justify-center min-h-screen min-h-[100dvh] px-6">
         {children}
       </div>
     </div>

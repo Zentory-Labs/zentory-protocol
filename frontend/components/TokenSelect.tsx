@@ -60,8 +60,9 @@ export function TokenSelect({ value, onChange, excludeSymbol }: TokenSelectProps
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-32 rounded-xl overflow-hidden z-50"
+          className="absolute left-0 top-full mt-1 rounded-xl overflow-hidden z-50"
           style={{
+            minWidth: "100%",
             background: "rgba(20, 20, 23, 0.98)",
             backdropFilter: "blur(20px)",
             border: "1px solid #2a2f3a",

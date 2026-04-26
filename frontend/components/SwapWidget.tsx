@@ -86,14 +86,14 @@ export function SwapWidget() {
             Balance: 1,250.00
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <input
             type="number"
             step="any"
             placeholder="0.00"
             value={fromAmount}
             onChange={(e) => setFromAmount(e.target.value)}
-            className="flex-1 bg-transparent text-white text-2xl font-mono outline-none placeholder-white/20"
+            className="flex-1 min-w-0 bg-transparent text-white text-2xl font-mono outline-none placeholder-white/20"
             style={{ fontFamily: "'Montserrat', sans-serif" }}
           />
           <TokenSelect
@@ -137,9 +137,9 @@ export function SwapWidget() {
           <span className="text-xs" style={{ color: "#6a6f75" }}>Balance: —
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <span
-            className="flex-1 text-2xl font-mono text-white"
+            className="flex-1 min-w-0 text-2xl font-mono text-white"
             style={{ fontFamily: "'Montserrat', sans-serif" }}
           >
             {estimatedOutput}
