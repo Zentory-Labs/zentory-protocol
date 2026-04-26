@@ -9,7 +9,9 @@ function shorten(addr: string): string {
 
 const WALLET_ICONS: Record<string, string> = {
   "MetaMask": "🦊",
+  "Rabby": "🐰",
   "Coinbase Wallet": "💙",
+  "WalletConnect": "🔗",
   "injected": "🌐",
 };
 
