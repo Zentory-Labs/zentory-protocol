@@ -1,0 +1,147 @@
+name: Zentory CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  contracts:
+    name: Contracts (Foundry)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ZentoryToken/contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Forge build
+        run: forge build --sizes
+
+      - name: Forge unit tests
+        run: forge test -q
+
+      - name: Forge invariants
+        run: forge test --match-path "test/invariants/**" -q
+
+  slither:
+    name: Contracts (Slither)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ZentoryToken/contracts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Slither
+        run: python -m pip install --upgrade pip slither-analyzer
+
+      - name: Run Slither (JSON report)
+        run: |
+          mkdir -p ../docs/reports
+          slither . --json ../docs/reports/slither-ci.json
+
+      - name: Upload Slither report
+        uses: actions/upload-artifact@v4
+        with:
+          name: slither-report
+          path: ZentoryToken/docs/reports/slither-ci.json
+
+  engine:
+    name: Engine (pytest)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ZentoryToken/engine
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install engine
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run pytest
+        run: python -m pytest -q
+
+  frontend:
+    name: Frontend (build + Playwright smoke)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ZentoryToken/frontend
+    env:
+      NEXT_PUBLIC_HYPEREVM_RPC: https://rpc.hyperliquid-testnet.xyz/evm
+      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: 8e44bbe4865b02bd238ca5d49e454c41
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ZentoryToken/frontend/package-lock.json
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Start server
+        run: |
+          nohup npm run start -- -p 3000 > server.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then
+              echo "Server is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server did not start"
+          cat server.log || true
+          exit 1
+
+      - name: Playwright smoke
+        run: npm run test:e2e
+

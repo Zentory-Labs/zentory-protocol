@@ -19,6 +19,10 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Playwright
+test-results/
+playwright-report/
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts

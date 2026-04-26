@@ -7,6 +7,43 @@ import { addresses } from "@/lib/contracts";
 
 const RPC_URL = process.env.NEXT_PUBLIC_HYPEREVM_RPC ?? "https://rpc.hyperliquid-testnet.xyz/evm";
 const KEEPER_PRIVATE_KEY = process.env.KEEPER_PRIVATE_KEY ?? "";
+const API_KEY = process.env.KEEPER_API_KEY ?? "";
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 10;
+const _rate = new Map<string, { windowStart: number; count: number }>();
+
+function checkAuth(req: NextRequest): NextResponse | null {
+  // If API key isn't configured, leave endpoint open in dev (but still require keeper key).
+  if (!API_KEY) return null;
+  const header = req.headers.get("authorization") ?? "";
+  const token = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
+  if (!token || token !== API_KEY) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return null;
+}
+
+function checkRateLimit(req: NextRequest): NextResponse | null {
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    ?? req.headers.get("x-real-ip")
+    ?? "unknown";
+
+  const now = Date.now();
+  const entry = _rate.get(ip);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    _rate.set(ip, { windowStart: now, count: 1 });
+    return null;
+  }
+  entry.count += 1;
+  if (entry.count > RATE_LIMIT_MAX) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: { "retry-after": String(Math.ceil(RATE_LIMIT_WINDOW_MS / 1000)) } }
+    );
+  }
+  return null;
+}
 
 // Asset symbol → vault address (HyperEVM testnet)
 const VAULT_MAP: Record<string, string> = {
@@ -18,6 +55,11 @@ const VAULT_MAP: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = checkAuth(req);
+    if (auth) return auth;
+    const limited = checkRateLimit(req);
+    if (limited) return limited;
+
     const body = await req.json();
     const { signalId, asset, direction, size, price } = body as {
       signalId: string;

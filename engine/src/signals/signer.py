@@ -79,7 +79,9 @@ class SignalSigner:
         struct_hash = self._make_struct_hash(vault, direction, size, price, nonce, expiry)
         digest = keccak(b"\x19\x01" + domain_separator + struct_hash)
 
-        signed = self.account.sign_hash(digest)
+        # eth-account LocalAccount exposes `unsafe_sign_hash` for raw 32-byte digests.
+        # We must sign the EIP-712 digest directly (no extra prefixing).
+        signed = self.account.unsafe_sign_hash(digest)
         return signed.signature
 
     def sign_hex(

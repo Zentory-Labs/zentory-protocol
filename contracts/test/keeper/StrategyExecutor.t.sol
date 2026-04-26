@@ -447,6 +447,56 @@ contract StrategyExecutorTest is Test {
         // If it didn't revert, the test passes
     }
 
+    /// @notice Python engine signer must produce a signature that verifies in Solidity.
+    /// @dev Uses vm.ffi to call engine/scripts/sign_trade_signal.py
+    function test_pythonSignerDigestParity() external {
+        vm.warp(100);
+
+        address vault = address(0xBEEF);
+        uint8 direction = 1;
+        uint256 size = 1e6;
+        uint64 price = 65_000_00000;
+        uint256 nonce = 1;
+        uint256 expiry = block.timestamp + 3600;
+
+        // Build private key hex string for Python (32 bytes)
+        string memory pkHex = vm.toString(bytes32(SIGNER_KEY));
+
+        string[] memory cmd = new string[](11);
+        cmd[0] = "python";
+        cmd[1] = "../engine/scripts/sign_trade_signal.py";
+        cmd[2] = pkHex;
+        cmd[3] = vm.toString(vault);
+        cmd[4] = vm.toString(direction);
+        cmd[5] = vm.toString(size);
+        cmd[6] = vm.toString(uint256(price));
+        cmd[7] = vm.toString(nonce);
+        cmd[8] = vm.toString(expiry);
+        cmd[9] = vm.toString(block.chainid);
+        cmd[10] = vm.toString(address(executor));
+
+        bytes memory out = vm.ffi(cmd);
+        // Foundry's vm.ffi may return raw stdout bytes OR hex-decoded bytes depending on platform/tooling.
+        bytes memory sig;
+        if (out.length >= 2 && out[0] == bytes1("0") && out[1] == bytes1("x")) {
+            sig = vm.parseBytes(string(out));
+        } else {
+            sig = out;
+        }
+        assertEq(sig.length, 65, "signature must be 65 bytes");
+
+        vm.prank(keeper);
+        executor.executeSignal({
+            vault: vault,
+            direction: direction,
+            size: size,
+            price: price,
+            nonce: nonce,
+            expiry: expiry,
+            signature: sig
+        });
+    }
+
     // ─── Helper functions ─────────────────────────────────────────────────
 
     function _submitSignal(

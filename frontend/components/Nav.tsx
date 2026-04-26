@@ -72,15 +72,6 @@ export default function Nav() {
               );
             })}
             <a
-              href="https://zentorylabs.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`${navClass} text-[#6a6f75] hover:text-[#eaeaea]`}
-            >
-              Docs
-              <span className={underlineClass} />
-            </a>
-            <a
               href="https://zentorylabs.com/whitepaper"
               target="_blank"
               rel="noopener noreferrer"
@@ -133,15 +124,6 @@ export default function Nav() {
                 {label}
               </Link>
             ))}
-            <a
-              href="https://zentorylabs.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-4 py-3 text-white/90 hover:text-white hover:bg-white/10 font-light uppercase tracking-wider text-sm transition-colors"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Docs
-            </a>
             <a
               href="https://zentorylabs.com/whitepaper"
               target="_blank"
