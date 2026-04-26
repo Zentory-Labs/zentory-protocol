@@ -108,6 +108,23 @@ export async function POST(req: NextRequest) {
 
     // Preflight: check keeper permissions + balance for gas
     try {
+      // Ensure executor is deployed on the RPC chain
+      const chainId = await publicClient.getChainId();
+      const bytecode = await publicClient.getBytecode({ address: addresses.StrategyExecutor });
+      if (!bytecode || bytecode === "0x") {
+        return NextResponse.json(
+          {
+            error: "StrategyExecutor not deployed on configured RPC",
+            keeper: account.address,
+            executor: addresses.StrategyExecutor,
+            rpc: RPC_URL,
+            chainId,
+            expectedChainId: HYPEREVM_TESTNET.id,
+          },
+          { status: 500 }
+        );
+      }
+
       const keeperRole = await publicClient.readContract({
         address: addresses.StrategyExecutor,
         abi: EXECUTOR_ABI,
