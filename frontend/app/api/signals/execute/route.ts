@@ -181,7 +181,22 @@ export async function POST(req: NextRequest) {
       });
     } catch (e) {
       console.error("[POST /api/signals/execute] writeContract failed", e);
-      return NextResponse.json({ error: "On-chain execution failed" }, { status: 502 });
+      const detail =
+        (e as any)?.shortMessage ??
+        (e as any)?.cause?.shortMessage ??
+        (e as any)?.message ??
+        "Unknown error";
+      return NextResponse.json(
+        {
+          error: "On-chain execution failed",
+          detail,
+          keeper: account.address,
+          executor: addresses.StrategyExecutor,
+          vault: vaultAddress,
+          rpc: RPC_URL,
+        },
+        { status: 502 }
+      );
     }
 
     let receipt;
