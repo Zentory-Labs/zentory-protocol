@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { useAccount, useDisconnect, useConnect } from "wagmi";
+import { WalletButton } from "./WalletSelector";
 
 const NAV_LINKS = [
   { href: "/", label: "Vaults" },
@@ -13,17 +13,10 @@ const NAV_LINKS = [
   { href: "/govern", label: "Govern" },
 ];
 
-function shorten(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
-
 export default function Nav() {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
-  const { connect, connectors } = useConnect();
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -32,7 +25,7 @@ export default function Nav() {
   }, []);
 
   const navClass =
-    "px-3 py-2 text-xs font-medium transition-all duration-200 uppercase tracking-[0.12em] relative group text-white/90 hover:text-white";
+    "px-3 py-2 text-xs font-medium transition-all duration-200 uppercase tracking-[0.12em] relative group text-white/90 hover:text-white font-montserrat";
   const underlineClass =
     "absolute bottom-1 left-3 right-3 h-px transition-all duration-300 bg-white/0 group-hover:bg-white/40";
 
@@ -100,35 +93,7 @@ export default function Nav() {
 
           {/* Wallet — right side */}
           <div className="flex items-center gap-3 ml-auto">
-            {isConnected && address ? (
-              <div className="flex items-center gap-3">
-                <span className="hidden sm:block font-mono text-xs text-white/70">
-                  {shorten(address)}
-                </span>
-                <button
-                  onClick={() => disconnect()}
-                  className="rounded-full border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white hover:border-white/40 hover:bg-white/10 transition-all duration-300"
-                >
-                  Disconnect
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  for (const connector of connectors) {
-                    try {
-                      connect({ connector });
-                      return;
-                    } catch {
-                      // try next
-                    }
-                  }
-                }}
-                className="rounded-full bg-[#f59e0b] hover:bg-[#f59e0b]/90 text-black font-semibold px-5 py-2 text-xs tracking-[0.08em] uppercase transition-all duration-300 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30"
-              >
-                Connect
-              </button>
-            )}
+            <WalletButton />
 
             {/* Mobile hamburger */}
             <button
