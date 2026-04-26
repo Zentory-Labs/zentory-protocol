@@ -6,7 +6,7 @@ import { VideoHero } from "@/components/VideoHero";
 import { SwapWidget } from "@/components/SwapWidget";
 import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta } from "@/lib/contracts";
 
-const VAULTS = [addresses.zETH, addresses.zBTC, addresses.zXRP, addresses.zSOL] as const;
+const VAULTS = [addresses.zBTC, addresses.zETH, addresses.zSOL, addresses.zXRP] as const;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
