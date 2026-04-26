@@ -54,7 +54,13 @@ export async function POST(req: NextRequest) {
 
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-    const supabase = await createClient();
+    let supabase;
+    try {
+      supabase = await createClient();
+    } catch {
+      return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
+    }
+
     await supabase
       .from("signals")
       .update({

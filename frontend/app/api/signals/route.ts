@@ -3,18 +3,22 @@ import { createClient } from "@/utils/supabase/server";
 import type { Asset, Direction, SignalProvider } from "@/lib/signals";
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("signals")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("signals")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
 
-  if (error) {
-    console.error("[GET /api/signals]", error.message);
-    return NextResponse.json({ error: "Failed to fetch signals" }, { status: 500 });
+    if (error) {
+      console.error("[GET /api/signals]", error.message);
+      return NextResponse.json({ error: "Failed to fetch signals" }, { status: 500 });
+    }
+    return NextResponse.json(data ?? []);
+  } catch {
+    return NextResponse.json([]);
   }
-  return NextResponse.json(data ?? []);
 }
 
 export async function POST(req: NextRequest) {
@@ -32,7 +36,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const supabase = await createClient();
+    let supabase;
+    try {
+      supabase = await createClient();
+    } catch {
+      return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
+    }
+
     const { data, error } = await supabase
       .from("signals")
       .insert({
