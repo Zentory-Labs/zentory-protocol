@@ -105,6 +105,40 @@ export async function POST(req: NextRequest) {
     const publicClient = createPublicClient({ transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
     const walletClient = createWalletClient({ account, transport: http(RPC_URL), chain: HYPEREVM_TESTNET });
 
+    // Preflight: check keeper permissions + balance for gas
+    try {
+      const keeperRole = await publicClient.readContract({
+        address: addresses.StrategyExecutor,
+        abi: strategyExecutorABI,
+        functionName: "KEEPER_ROLE",
+      } as any);
+
+      const hasKeeperRole = await publicClient.readContract({
+        address: addresses.StrategyExecutor,
+        abi: strategyExecutorABI,
+        functionName: "hasRole",
+        args: [keeperRole, account.address],
+      } as any);
+
+      if (!hasKeeperRole) {
+        return NextResponse.json(
+          { error: "Keeper wallet is not authorized (missing KEEPER_ROLE)", keeper: account.address },
+          { status: 403 }
+        );
+      }
+
+      const balance = await publicClient.getBalance({ address: account.address });
+      if (balance === 0n) {
+        return NextResponse.json(
+          { error: "Keeper wallet has no balance for gas", keeper: account.address },
+          { status: 402 }
+        );
+      }
+    } catch (e) {
+      console.error("[POST /api/signals/execute] preflight failed", e);
+      return NextResponse.json({ error: "Preflight check failed" }, { status: 502 });
+    }
+
     let hash: `0x${string}`;
     try {
       hash = await walletClient.writeContract({
