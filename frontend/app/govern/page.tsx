@@ -24,11 +24,11 @@ function StateBadge({ state }: { state: number }) {
   const labels = ["Pending", "Active", "Canceled", "Defeated", "Succeeded", "Queued", "Expired", "Executed"];
   const colors = [
     "bg-white/[0.06] text-white/60 border border-white/10",
-    "bg-[#0d80fa]/10 text-[#0d80fa] border border-[#0d80fa]/20",
+    "bg-[rgba(139,30,45,0.15)] text-[#c2353f] border border-[rgba(139,30,45,0.3)]",
     "bg-white/[0.04] text-white/40 border border-white/10",
     "bg-red-500/10 text-red-400 border border-red-500/20",
     "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
-    "bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20",
+    "bg-[rgba(176,141,87,0.12)] text-[#b08d57] border border-[rgba(176,141,87,0.25)]",
     "bg-white/[0.04] text-white/30 border border-white/10",
     "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20",
   ];
@@ -89,7 +89,12 @@ function ProposalCard({ proposal, onVote }: {
             <button
               disabled={isPending}
               onClick={() => onVote(proposal.id, 1)}
-              className="rounded-lg bg-[#0d80fa]/10 hover:bg-[#0d80fa]/20 text-[#0d80fa] border border-[#0d80fa]/20 px-3 py-1.5 text-xs font-semibold disabled:opacity-50 transition-colors"
+              className="rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50 transition-colors border"
+              style={{
+                background: "rgba(139, 30, 45, 0.15)",
+                color: "#c2353f",
+                borderColor: "rgba(139, 30, 45, 0.3)",
+              }}
             >
               {isPending ? "…" : "Vote For"}
             </button>
@@ -156,12 +161,12 @@ export default function GovernPage() {
   }
 
   return (
-    <div className="min-h-screen relative" style={{ background: "#05070c" }}>
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
-      <header className="bg-[#05070c]/40 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
+    <div className="min-h-screen relative" style={{ background: "#0b0b0d" }}>
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8b1e2d]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#b08d57]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+      <header className="border-b sticky top-0 z-10" style={{ background: "rgba(20, 20, 23, 0.9)", backdropFilter: "blur(20px)", borderColor: "#2a2f3a" }}>
         <div className="mx-auto max-w-7xl px-6 py-4">
-          <h1 className="text-3xl font-bold gradient-text tracking-tight">Governance</h1>
+          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}><span className="gradient-text-gold">Governance</span></h1>
           <p className="text-xs text-white/40 mt-0.5">Vote on protocol upgrades, risk parameters, and treasury allocations</p>
         </div>
       </header>
@@ -210,7 +215,8 @@ export default function GovernPage() {
             href={`https://hypurrscan.io/address/${addresses.ZentGovernor}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="block text-xs text-blue-400 hover:text-blue-300 hover:underline"
+            className="block text-xs hover:underline transition-colors"
+            style={{ color: "#b08d57" }}
           >
             View ZentGovernor on HypurrScan →
           </a>
@@ -218,7 +224,8 @@ export default function GovernPage() {
             href={`https://hypurrscan.io/address/${addresses.Timelock}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="block text-xs text-blue-400 hover:text-blue-300 hover:underline"
+            className="block text-xs hover:underline transition-colors"
+            style={{ color: "#b08d57" }}
           >
             View Timelock on HypurrScan →
           </a>

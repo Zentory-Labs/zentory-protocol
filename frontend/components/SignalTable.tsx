@@ -62,7 +62,10 @@ function TxLink({ hash }: { hash: string }) {
       href={`${EXPLORER_BASE}/${hash}`}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-[#0d80fa] hover:text-[#60a5fa] transition-colors text-xs"
+      className="inline-flex items-center gap-1 transition-colors text-xs"
+      style={{ color: "#b08d57" }}
+      onMouseEnter={(e) => (e.currentTarget.style.color = "#c2353f")}
+      onMouseLeave={(e) => (e.currentTarget.style.color = "#b08d57")}
     >
       {hash.slice(0, 10)}…{hash.slice(-6)}
     </a>

@@ -25,7 +25,7 @@ export default function RootLayout({
 
   return (
     <html lang="en">
-      <body className="min-h-screen bg-[#05070c] text-white antialiased" suppressHydrationWarning>
+      <body className="min-h-screen text-white antialiased" style={{ background: "#0b0b0d" }} suppressHydrationWarning>
         <Providers>
           <Nav />
           <main className="mx-auto max-w-7xl px-6 pt-24 pb-8">

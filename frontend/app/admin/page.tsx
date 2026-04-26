@@ -107,14 +107,14 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen relative" style={{ background: "#05070c" }}>
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+    <div className="min-h-screen relative" style={{ background: "#0b0b0d" }}>
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8b1e2d]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#b08d57]/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
-      <header className="bg-[#05070c]/40 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
+      <header className="border-b sticky top-0 z-10" style={{ background: "rgba(20, 20, 23, 0.9)", backdropFilter: "blur(20px)", borderColor: "#2a2f3a" }}>
         <div className="mx-auto max-w-7xl px-6 py-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold gradient-text tracking-tight">Admin Panel</h1>
+            <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}><span className="gradient-text-gold">Admin Panel</span></h1>
             <span className="text-xs bg-red-500/10 border border-red-500/20 text-red-400 rounded-full px-3 py-1">
               Role-gated
             </span>
@@ -128,7 +128,7 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
             <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">Executor Status</div>
-            <div className={`text-2xl font-bold ${(isPaused.data as boolean) ? "text-[#f59e0b]" : "text-[#0d80fa]"}`}>
+            <div className="text-2xl font-bold" style={{ color: (isPaused.data as boolean) ? "#b08d57" : "#c2353f" }}>
               {(isPaused.data as boolean) ? "PAUSED" : "Active"}
             </div>
           </div>
@@ -154,11 +154,11 @@ export default function AdminPage() {
           </p>
           <button
             onClick={handlePauseToggle}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors bg-[#f59e0b]/20 border border-[#f59e0b]/30 ${
-              (isPaused.data as boolean)
-                ? "bg-[#0d80fa]/20 border-[#0d80fa]/30"
-                : "bg-[#f59e0b]/20 border-[#f59e0b]/30"
-            }`}
+            className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors border"
+            style={{
+              background: (isPaused.data as boolean) ? "rgba(139,30,45,0.2)" : "rgba(139,30,45,0.2)",
+              borderColor: "rgba(139,30,45,0.3)",
+            }}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg transition-transform ${
@@ -187,7 +187,7 @@ export default function AdminPage() {
                     onClick={() => setSelectedVault(v)}
                     className={`rounded-xl border py-2 px-3 text-sm font-medium transition-all duration-300 ${
                       selectedVault === v
-                        ? "border-[#0d80fa] bg-[#0d80fa]/10 text-[#0d80fa]"
+                        ? "border-[#8b1e2d] bg-[rgba(139,30,45,0.15)] text-[#c2353f]"
                         : "border-white/10 bg-white/5 text-white/60 hover:border-white/30 hover:bg-white/10"
                     }`}
                   >
@@ -226,12 +226,16 @@ export default function AdminPage() {
                   placeholder="e.g. 10.0"
                   value={maxPosSize}
                   onChange={(e) => setMaxPosSize(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#0d80fa]/50 focus:ring-1 focus:ring-[#0d80fa]/30 transition-colors text-sm"
+                  className="w-full rounded-xl border px-4 py-3 text-white placeholder-white/30 transition-colors text-sm"
+                  style={{ background: "rgba(42, 47, 58, 0.6)", borderColor: "#2a2f3a", color: "#eaeaea" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#8b1e2d"; e.currentTarget.style.boxShadow = "0 0 0 2px rgba(139,30,45,0.2)"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "#2a2f3a"; e.currentTarget.style.boxShadow = "none"; }}
                 />
                 <button
                   onClick={handleSetMaxPos}
                   disabled={!maxPosSize}
-                  className="rounded-xl bg-[#0d80fa] hover:bg-[#0d80fa]/90 text-white font-semibold px-6 py-3 transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.01]"
+                  className="rounded-xl font-semibold px-6 py-3 transition-all duration-300 hover:scale-[1.01] disabled:opacity-50"
+                  style={{ background: "#8b1e2d", color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
                 >
                   Set
                 </button>
@@ -247,12 +251,16 @@ export default function AdminPage() {
                   placeholder="e.g. 300 (= 3x)"
                   value={maxLevBPS}
                   onChange={(e) => setMaxLevBPS(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#0d80fa]/50 focus:ring-1 focus:ring-[#0d80fa]/30 transition-colors text-sm"
+                  className="w-full rounded-xl border px-4 py-3 text-white placeholder-white/30 transition-colors text-sm"
+                  style={{ background: "rgba(42, 47, 58, 0.6)", borderColor: "#2a2f3a", color: "#eaeaea" }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#8b1e2d"; e.currentTarget.style.boxShadow = "0 0 0 2px rgba(139,30,45,0.2)"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "#2a2f3a"; e.currentTarget.style.boxShadow = "none"; }}
                 />
                 <button
                   onClick={handleSetMaxLev}
                   disabled={!maxLevBPS}
-                  className="rounded-xl bg-[#0d80fa] hover:bg-[#0d80fa]/90 text-white font-semibold px-6 py-3 transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.01]"
+                  className="rounded-xl font-semibold px-6 py-3 transition-all duration-300 hover:scale-[1.01] disabled:opacity-50"
+                  style={{ background: "#8b1e2d", color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
                 >
                   Set
                 </button>
@@ -284,7 +292,10 @@ export default function AdminPage() {
                   href={`https://hypurrscan.io/address/${addr}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-mono text-xs text-[#0d80fa] hover:text-[#0d80fa]/80 transition-colors"
+                  className="font-mono text-xs transition-colors"
+                  style={{ color: "#b08d57" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#c2353f")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#b08d57")}
                 >
                   {shorten(addr)} →
                 </a>

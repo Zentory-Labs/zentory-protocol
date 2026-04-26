@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useAccount, useReadContract } from "wagmi";
 import { VideoHero } from "@/components/VideoHero";
 import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta } from "@/lib/contracts";
@@ -29,20 +30,35 @@ function fmtUsd(value: bigint, decimals = 18, digits = 0): string {
 // ─── Token Logo ─────────────────────────────────────────────────────────────
 
 function TokenLogo({ symbol }: { symbol: string }) {
-  const logos: Record<string, { bg: string; fg: string; label: string }> = {
-    ETH: { bg: "linear-gradient(135deg, #627eea 0%, #8b5cf6 100%)", fg: "#fff", label: "ETH" },
-    BTC: { bg: "linear-gradient(135deg, #f7931a 0%, #c2353f 100%)", fg: "#fff", label: "₿" },
-    XRP: { bg: "#23292f", fg: "#eaeaea", label: "XRP" },
-    SOL: { bg: "linear-gradient(135deg, #9945ff 0%, #14f195 100%)", fg: "#fff", label: "SOL" },
+  const logos: Record<string, string> = {
+    ETH: "/token-logos/eth.png",
+    BTC: "/token-logos/btc.png",
+    XRP: "/token-logos/xrp.png",
+    SOL: "/token-logos/sol.png",
   };
-  const { bg, fg, label } = logos[symbol] ?? { bg: "#2a2f3a", fg: "#eaeaea", label: symbol };
+  const src = logos[symbol];
+
+  if (src) {
+    return (
+      <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 border" style={{ borderColor: "#2a2f3a" }}>
+        <Image
+          src={src}
+          alt={symbol}
+          width={40}
+          height={40}
+          className="object-cover w-full h-full"
+          style={{ display: "block" }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
-      className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0"
-      style={{ background: bg, color: fg, fontFamily: "'Montserrat', sans-serif" }}
+      className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 border"
+      style={{ background: "#2a2f3a", color: "#eaeaea", borderColor: "#2a2f3a", fontFamily: "'Montserrat', sans-serif" }}
     >
-      {label}
+      {symbol}
     </div>
   );
 }
@@ -278,23 +294,23 @@ export default function Home() {
               Governance
             </a>
 
-            {/* Signal Dashboard — cool blue */}
+            {/* Signal Dashboard — red */}
             <a
               href="/signals"
               className="px-10 py-4 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03]"
               style={{
-                background: "rgba(58, 123, 213, 0.12)",
-                color: "#3a7bd5",
-                border: "1px solid rgba(58, 123, 213, 0.3)",
+                background: "rgba(139, 30, 45, 0.2)",
+                color: "#c2353f",
+                border: "1px solid rgba(139, 30, 45, 0.4)",
                 fontFamily: "'Montserrat', sans-serif",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background = "rgba(58, 123, 213, 0.2)";
-                (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(58, 123, 213, 0.55)";
+                (e.currentTarget as HTMLAnchorElement).style.background = "rgba(139, 30, 45, 0.35)";
+                (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(139, 30, 45, 0.65)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.background = "rgba(58, 123, 213, 0.12)";
-                (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(58, 123, 213, 0.3)";
+                (e.currentTarget as HTMLAnchorElement).style.background = "rgba(139, 30, 45, 0.2)";
+                (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(139, 30, 45, 0.4)";
               }}
             >
               Signal Dashboard

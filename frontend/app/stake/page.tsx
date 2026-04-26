@@ -136,10 +136,10 @@ export default function StakePage() {
   if (!isConnected) {
     return (
       <div className="min-h-screen relative flex items-center justify-center" style={{ background: "#05070c" }}>
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8b1e2d]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#b08d57]/5 rounded-full blur-3xl pointer-events-none -z-10" />
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-white mb-4">ZENT Staking</h1>
+          <h1 className="text-2xl font-bold text-white mb-4" style={{ fontFamily: "'Montserrat', sans-serif" }}>ZENT Staking</h1>
           <p className="text-white/50">Connect your wallet to stake ZENT</p>
         </div>
       </div>
@@ -147,11 +147,11 @@ export default function StakePage() {
   }
 
   return (
-    <div className="min-h-screen relative" style={{ background: "#05070c" }}>
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#0d80fa]/5 rounded-full blur-3xl pointer-events-none -z-10" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#f59e0b]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+    <div className="min-h-screen relative" style={{ background: "#0b0b0d" }}>
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8b1e2d]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#b08d57]/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
-      <header className="bg-[#05070c]/40 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
+      <header className="border-b sticky top-0 z-10" style={{ background: "rgba(20, 20, 23, 0.9)", backdropFilter: "blur(20px)", borderColor: "#2a2f3a" }}>
         <div className="mx-auto max-w-7xl px-6 py-4">
           <h1 className="text-2xl font-bold text-white">ZENT Staking</h1>
           <p className="text-xs text-white/40 mt-0.5">Lock ZENT to earn veZENT and access Alpha Vaults</p>
@@ -168,14 +168,14 @@ export default function StakePage() {
           ].map(({ label, value, accent }) => (
             <div key={label} className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
               <div className="text-xs text-white/40 mb-1 uppercase tracking-wider">{label}</div>
-              <div className={`text-2xl font-bold font-mono ${accent ? "gradient-text-amber" : "text-white"}`}>{value}</div>
+              <div className={`text-2xl font-bold font-mono ${accent ? "gradient-text-gold" : "text-white"}`}>{value}</div>
             </div>
           ))}
         </div>
 
         {/* Your Position */}
         <div className="rounded-2xl border border-white/[0.1] bg-black/60 backdrop-blur-xl p-5 glass-hover">
-          <h2 className="text-sm font-semibold text-[#f59e0b] uppercase tracking-wider mb-4">Your Position</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>Your Position</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <div className="text-xs text-white/40 mb-1">Staked ZENT</div>
@@ -224,13 +224,21 @@ export default function StakePage() {
                 placeholder="1000"
                 value={stakeAmount}
                 onChange={(e) => setStakeAmount(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-[#0d80fa]/50 focus:ring-1 focus:ring-[#0d80fa]/30 transition-colors font-mono text-sm"
+                className="w-full rounded-xl border px-4 py-3 text-white font-mono text-sm transition-colors"
+                style={{
+                  background: "rgba(42, 47, 58, 0.6)",
+                  borderColor: "#2a2f3a",
+                  color: "#eaeaea",
+                  outline: "none",
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#8b1e2d"; e.currentTarget.style.boxShadow = "0 0 0 2px rgba(139,30,45,0.2)"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#2a2f3a"; e.currentTarget.style.boxShadow = "none"; }}
               />
             </div>
 
             <div>
               <label className="mb-1.5 block text-xs font-medium text-white/60 uppercase tracking-wider">
-                Lock Duration: <span className="text-amber-400">{lockDays} days</span>
+                Lock Duration: <span style={{ color: "#b08d57" }}>{lockDays} days</span>
               </label>
               <input
                 type="range"
@@ -238,7 +246,7 @@ export default function StakePage() {
                 max={730}
                 value={lockDays}
                 onChange={(e) => setLockDays(Number(e.target.value))}
-                className="w-full accent-[#0d80fa]"
+                className="w-full" style={{ accentColor: "#8b1e2d" }}
               />
               <div className="flex justify-between text-xs text-white/40 mt-1">
                 <span>7 days</span>
@@ -268,7 +276,15 @@ export default function StakePage() {
             <button
               type="submit"
               disabled={isPending || !stakeAmount || parseFloat(stakeAmount) <= 0}
-              className="w-full rounded-xl bg-[#0d80fa] hover:bg-[#0d80fa]/90 text-white font-semibold py-3 transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="w-full rounded-xl font-semibold py-3 transition-all duration-300 hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              style={{
+                background: "#8b1e2d",
+                color: "#eaeaea",
+                fontFamily: "'Montserrat', sans-serif",
+                boxShadow: "0 0 30px rgba(139,30,45,0.3)",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#c2353f"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#8b1e2d"; }}
             >
               {isPending ? "Confirm in wallet…" : "Stake ZENT"}
             </button>
@@ -281,7 +297,8 @@ export default function StakePage() {
             href={`https://hypurrscan.io/address/${addresses.ZENTStaking}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+            className="text-xs hover:underline transition-colors"
+            style={{ color: "#b08d57" }}
           >
             View ZENTStaking on HypurrScan →
           </a>
