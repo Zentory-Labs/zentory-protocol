@@ -14,16 +14,30 @@ const RATE_LIMIT_MAX = 10;
 const _rate = new Map<string, { windowStart: number; count: number }>();
 const EXECUTOR_ABI = parseAbi(strategyExecutorABI as any);
 
+/** Convert a value to a JSON-safe equivalent (strings for BigInt, etc.). */
+function toSafeJson(value: unknown): unknown {
+  if (typeof value === "bigint") return value.toString();
+  if (Array.isArray(value)) return value.map(toSafeJson);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = toSafeJson(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 function errorToDetail(e: unknown) {
   const any = e as any;
-  return {
+  return toSafeJson({
     name: any?.name,
     message: any?.message,
     shortMessage: any?.shortMessage ?? any?.cause?.shortMessage,
     details: any?.details,
     cause: any?.cause?.message,
     metaMessages: any?.metaMessages,
-  };
+  });
 }
 
 function checkAuth(req: NextRequest): NextResponse | null {
