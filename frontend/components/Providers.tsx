@@ -1,20 +1,16 @@
 "use client";
 
 import { ReactNode } from "react";
-import { WagmiProvider, createConfig, http } from "wagmi";
+import { WagmiProvider, createConfig } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { injected, coinbaseWallet } from "wagmi/connectors";
-import { HYPEREVM_TESTNET } from "@/lib/contracts";
+import { wagmiTransports, wagmiChains } from "@/lib/wallet/connectors";
 
 const queryClient = new QueryClient();
 
-const RPC_URL = process.env.NEXT_PUBLIC_HYPEREVM_RPC ?? "https://rpc.hyperliquid-testnet.xyz/evm";
-
 const wagmiConfig = createConfig({
-  chains: [HYPEREVM_TESTNET],
-  transports: {
-    [HYPEREVM_TESTNET.id]: http(RPC_URL),
-  },
+  chains: wagmiChains,
+  transports: wagmiTransports,
   connectors: [
     injected({
       shimDisconnect: true,
