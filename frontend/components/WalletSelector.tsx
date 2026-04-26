@@ -40,13 +40,30 @@ export function WalletButton() {
   if (isConnected && address) {
     return (
       <div className="flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-[#0d80fa]/20 border border-[#0d80fa]/40 flex items-center justify-center">
-          <div className="h-2 w-2 rounded-full bg-emerald-400" />
+        <div
+          className="h-8 w-8 rounded-lg flex items-center justify-center border"
+          style={{ background: "rgba(139, 30, 45, 0.2)", borderColor: "rgba(139, 30, 45, 0.4)" }}
+        >
+          <div className="h-2 w-2 rounded-full" style={{ background: "#b08d57" }} />
         </div>
-        <span className="hidden sm:block font-mono text-xs text-white/70">{shorten(address)}</span>
+        <span className="hidden sm:block font-mono text-xs" style={{ color: "#bfc3c7" }}>{shorten(address)}</span>
         <button
           onClick={() => disconnect()}
-          className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs text-white/70 hover:text-white hover:border-white/40 hover:bg-white/10 transition-all duration-300"
+          className="rounded-lg border px-3 py-1.5 text-xs transition-all duration-300"
+          style={{
+            background: "transparent",
+            borderColor: "#2a2f3a",
+            color: "#6a6f75",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "#8b1e2d";
+            (e.currentTarget as HTMLButtonElement).style.color = "#c2353f";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "#2a2f3a";
+            (e.currentTarget as HTMLButtonElement).style.color = "#6a6f75";
+          }}
         >
           Disconnect
         </button>
@@ -60,9 +77,9 @@ export function WalletButton() {
         onClick={() => setOpen((v) => !v)}
         className="rounded-xl border px-4 py-2 text-xs font-medium transition-all duration-300 flex items-center gap-2"
         style={{
-          background: "rgba(0, 229, 255, 0.08)",
-          borderColor: "rgba(0, 229, 255, 0.25)",
-          color: "#00e5ff",
+          background: "rgba(139, 30, 45, 0.2)",
+          borderColor: "rgba(139, 30, 45, 0.45)",
+          color: "#c2353f",
           fontFamily: "'Montserrat', sans-serif",
         }}
       >
@@ -79,16 +96,16 @@ export function WalletButton() {
 
       {open && (
         <div
-        className="absolute right-0 top-full mt-2 w-64 rounded-2xl overflow-hidden z-[100]"
-        style={{
-          background: "rgba(10, 13, 24, 0.95)",
-          backdropFilter: "blur(20px)",
-          border: "1px solid rgba(0, 229, 255, 0.15)",
-          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 229, 255, 0.05)",
-        }}
-      >
-          <div className="px-4 py-3 border-b border-white/[0.06]">
-            <p className="text-xs text-white/40 uppercase tracking-wider">Select wallet</p>
+          className="absolute right-0 top-full mt-2 w-64 rounded-2xl overflow-hidden z-[100]"
+          style={{
+            background: "rgba(20, 20, 23, 0.97)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid #2a2f3a",
+            boxShadow: "0 20px 60px rgba(0, 0, 0, 0.7), 0 0 30px rgba(139, 30, 45, 0.08)",
+          }}
+        >
+          <div className="px-4 py-3" style={{ borderBottom: "1px solid #2a2f3a" }}>
+            <p className="text-xs uppercase tracking-wider" style={{ color: "#6a6f75" }}>Select wallet</p>
           </div>
           <div className="py-2">
             {connectors.map((connector) => {
@@ -101,10 +118,19 @@ export function WalletButton() {
                     connect({ connector });
                     setOpen(false);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-3 transition-colors"
+                  style={{ color: "#bfc3c7" }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "rgba(139, 30, 45, 0.08)";
+                    (e.currentTarget as HTMLButtonElement).style.color = "#eaeaea";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                    (e.currentTarget as HTMLButtonElement).style.color = "#bfc3c7";
+                  }}
                 >
                   <span className="text-xl">{icon}</span>
-                  <span className="text-sm text-white/90 font-medium">{name}</span>
+                  <span className="text-sm font-medium" style={{ fontFamily: "'Montserrat', sans-serif" }}>{name}</span>
                 </button>
               );
             })}

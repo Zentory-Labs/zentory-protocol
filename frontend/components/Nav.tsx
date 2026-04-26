@@ -25,17 +25,17 @@ export default function Nav() {
   }, []);
 
   const navClass =
-    "px-3 py-2 text-xs font-medium transition-all duration-200 uppercase tracking-[0.12em] relative group font-montserrat text-[rgba(232,230,240,0.75)] hover:text-[#00e5ff]";
+    "px-3 py-2 text-xs font-medium transition-all duration-200 uppercase tracking-[0.12em] relative group font-montserrat text-[#bfc3c7] hover:text-[#eaeaea]";
   const underlineClass =
-    "absolute bottom-1 left-3 right-3 h-px transition-all duration-300 bg-transparent group-hover:bg-[rgba(0,229,255,0.4)]";
+    "absolute bottom-1 left-3 right-3 h-px transition-all duration-300 bg-transparent group-hover:bg-[rgba(194,53,63,0.5)]";
 
   return (
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500
         backdrop-blur-2xl backdrop-saturate-150
         ${isScrolled
-          ? "bg-[#030508]/50 border-b border-[rgba(0,229,255,0.06)] shadow-lg shadow-black/30"
-          : "bg-[#030508]/80 border-b border-[rgba(0,229,255,0.08)]"}`}
+          ? "bg-[#0b0b0d]/70 border-b border-[#2a2f3a] shadow-lg shadow-black/40"
+          : "bg-[#0b0b0d]/90 border-b border-[#2a2f3a]"}`}
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-start items-center h-20 gap-8 lg:gap-10">
@@ -66,7 +66,7 @@ export default function Nav() {
                   {label}
                   <span className={underlineClass} />
                   {isActive && (
-                    <span className="absolute bottom-1 left-3 right-3 h-px" style={{ background: "#00e5ff" }} />
+                    <span className="absolute bottom-1 left-3 right-3 h-px" style={{ background: "#8b1e2d" }} />
                   )}
                 </Link>
               );
@@ -75,7 +75,7 @@ export default function Nav() {
               href="https://zentorylabs.com"
               target="_blank"
               rel="noopener noreferrer"
-              className={`${navClass} text-white/60 hover:text-[#00e5ff]`}
+              className={`${navClass} text-[#6a6f75] hover:text-[#eaeaea]`}
             >
               Docs
               <span className={underlineClass} />
@@ -84,7 +84,7 @@ export default function Nav() {
               href="https://zentorylabs.com/whitepaper"
               target="_blank"
               rel="noopener noreferrer"
-              className={`${navClass} text-white/60 hover:text-[#00e5ff]`}
+              className={`${navClass} text-[#6a6f75] hover:text-[#eaeaea]`}
             >
               Whitepaper
               <span className={underlineClass} />
