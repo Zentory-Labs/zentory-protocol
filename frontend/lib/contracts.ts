@@ -1,39 +1,39 @@
 // Deployed contract addresses on HyperEVM testnet (chain 998)
 export const addresses = {
   // Core
-  ZENT: "0x526aaa271f5e54d737f79a6173b3a0fd7185dc33",
-  Vesting: "0x413e61d6f8bb881fdd02546bbc04c1b92429410c",
+  ZENT: "0xb6387CDF70804687eD68b4eE91f7F3C81eF479Ca",
+  Vesting: "0x7baee73a735375e17dF6A1C5d50eE86700B7039A",
 
   // Vaults
-  zETH: "0x29e9d6d167db74485ccae763a8692688c28c8d93",
-  zBTC: "0xae5a4352c002a7d323f37bf682a29f81a5241c21",
-  zXRP: "0x9e6a4ebf70533ddf0350bf69ad1b998c75e5422c",
-  zSOL: "0xc56cf443a4e622d91fd786b218164e4b0178a997",
+  zETH: "0xe34fe1537648104c571a04D0e2Ed425D4eC05661",
+  zBTC: "0x128D65cd5650CB9c079070e6cfF067F1945B8051",
+  zXRP: "0x2c1876928a3B8a095a5bb1364601f2Df72970A90",
+  zSOL: "0x088043D7e068eF678498A266Acd669B516552F47",
 
   // Mock assets (for testnet — replace with real tokens on mainnet)
-  WETH: "0x45a85401c657802a6cdea33bf887a30335149e61",
-  WBTC: "0x1a23fba455c6e625def7f69cc2bb3b3a628f372a",
-  WXRP: "0x16dea5d797a97ba130c708de40efd6dfda37efd4",
-  WSOL: "0x27d9e82104890f772fc86030bb439efb14752ddb",
+  WETH: "0xb9BD979509c6Da50dC6b14BA4E6a90707C132CF5",
+  WBTC: "0x7600439c95E8e7263256Ec872DFF65aeB91a3D8c",
+  WXRP: "0x0abBD235B5c433B25270be00085bfAE1888583ea",
+  WSOL: "0xAF994F6c7Acb653C0359e462f8f7576D114771A8",
 
   // Staking & Fees
-  ZENTStaking: "0x4861420f0a7baab69ae2d4c1c1de1155728a161b",
-  ModelBonding: "0x99b8bc5c86f27ec38d6abbc6e76dcbdfbb2201f1",
+  ZENTStaking: "0x606C854274fF8873EA83FA9913e60D2B576d934f",
+  ModelBonding: "0x7d3c330604eA55eC7b5b4713865F3c713f42F0a9",
   FeeDistributor: {
-    zETH: "0x701199c86342c0fec304530a0fc5dcc533cfe3c8",
-    zBTC: "0x7e49a37c1b93ad8cb2bb3527a108b3ead6bc0333",
-    zXRP: "0x19940b4ee59e823ed7e93bf1d9012ff13f715e8e",
-    zSOL: "0xb21a10b910193a145e5f042a8781768a52482d1a",
+    zETH: "0x7B71eeD7FD0670bb6dC3F3207441998242f9F158",
+    zBTC: "0x562DA6047467Cee4EE9dA2a644CB48790E1862Eb",
+    zXRP: "0x5c3a05203a587a08a038f6aDEdB11b996D3C05f0",
+    zSOL: "0xB8E1eDcAfa83DFE199EaA028Fc11a5D1b77958da",
   },
 
   // Governance
-  Timelock: "0x47e11c831e355f3566a33f913ea3bcb12b6983cb",
-  Zentroller: "0xa56fb921e139f971677cf7b942d16aeb8d1e9cc7",
-  ZentGovernor: "0x661b753bdefe3d7fde2154dc0bbbdd9f18ec801b",
+  Timelock: "0x8bB94d7e81a314Ce6e6C830A1aEC3759FA69A4Fa",
+  Zentroller: "0x9dC82631d9E5ADC3059535598125ec4dB376F906",
+  ZentGovernor: "0x407Cdb109aA355C6CC21ba80c905A8f13B82AaF4",
 
   // Keeper
-  HyperCoreAdapter: "0x05b6921967d75e189aeaad2b39291fe03a1e5094",
-  StrategyExecutor: "0x337a9fce9fc0a3ac50c6f924af5ccb4dff65586f",
+  HyperCoreAdapter: "0x0794c919E0698fEEAb5eA4ad1c1cb19FE4eb12D8",
+  StrategyExecutor: "0x7e6df18bF031FCB77B52Bc76cbB933d3E2a0e185",
 } as const;
 
 // ─── ABIs ───────────────────────────────────────────────────────────────────
