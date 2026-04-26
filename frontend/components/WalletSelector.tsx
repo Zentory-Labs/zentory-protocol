@@ -58,7 +58,13 @@ export function WalletButton() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="rounded-xl border border-white/20 bg-white/5 hover:bg-white/10 hover:border-white/30 px-4 py-2 text-xs text-white font-medium transition-all duration-300 flex items-center gap-2"
+        className="rounded-xl border px-4 py-2 text-xs font-medium transition-all duration-300 flex items-center gap-2"
+        style={{
+          background: "rgba(0, 229, 255, 0.08)",
+          borderColor: "rgba(0, 229, 255, 0.25)",
+          color: "#00e5ff",
+          fontFamily: "'Montserrat', sans-serif",
+        }}
       >
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
           <rect x="2" y="6" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.5"/>
@@ -72,7 +78,15 @@ export function WalletButton() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-black/90 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden z-[100]">
+        <div
+        className="absolute right-0 top-full mt-2 w-64 rounded-2xl overflow-hidden z-[100]"
+        style={{
+          background: "rgba(10, 13, 24, 0.95)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(0, 229, 255, 0.15)",
+          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 229, 255, 0.05)",
+        }}
+      >
           <div className="px-4 py-3 border-b border-white/[0.06]">
             <p className="text-xs text-white/40 uppercase tracking-wider">Select wallet</p>
           </div>
