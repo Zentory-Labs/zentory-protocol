@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Optional
 
 from genetic_programming.chromosome import Chromosome
@@ -36,7 +35,6 @@ class TradeSignal:
 
     def digest(self, domain_separator: bytes) -> bytes:
         """Full EIP-712 digest: keccak256(domain || encoding(self))."""
-        import hashlib
         return hashlib.sha256(domain_separator + self.to_bytes()).digest()
 
 
@@ -128,7 +126,6 @@ def _sign_signal(
     # domain = chainId + address(executor)
     # For test: chainId=31337 (Foundry), executor=vault (placeholder)
     # In production the executor is the StrategyExecutor address
-    domain = b""  # placeholder — actual domain set by executor at call time
 
     payload = vault + str(direction) + str(size) + str(nonce) + str(expiry)
     msg_hash = keccak(payload.encode())

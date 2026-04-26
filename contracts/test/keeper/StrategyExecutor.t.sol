@@ -414,6 +414,39 @@ contract StrategyExecutorTest is Test {
         });
     }
 
+    // ─── Signature Verification ───────────────────────────────────────────
+
+    /// @notice Valid signature from authorized signer must pass; wrong signer must revert.
+    function test_rejectsWrongSignerSignature() external {
+        vm.warp(100);
+
+        // Sign with a DIFFERENT key (not the authorized signer)
+        uint256 wrongKey = 0xBADC0DE;
+        bytes32 digest = _makeDigest(address(1), 1, 1e6, 65_000_00000, 1, block.timestamp + 3600);
+        bytes memory sig = _sign(digest, wrongKey); // signed by wrong key
+
+        vm.prank(keeper);
+        vm.expectRevert(); // InvalidSignature
+        executor.executeSignal({
+            vault:      address(1),
+            direction:  1,
+            size:       1e6,
+            price:      65_000_00000,
+            nonce:      1,
+            expiry:     block.timestamp + 3600,
+            signature:  sig
+        });
+    }
+
+    /// @notice Valid signature from authorized signer must pass end-to-end.
+    function test_validSignatureFromAuthorizedSignerSucceeds() external {
+        vm.warp(100);
+
+        // _submitSignal uses SIGNER_KEY which is the authorized signer
+        _submitSignal(address(1), 1, 1e6, 65_000_00000, 1, block.timestamp + 3600);
+        // If it didn't revert, the test passes
+    }
+
     // ─── Helper functions ─────────────────────────────────────────────────
 
     function _submitSignal(

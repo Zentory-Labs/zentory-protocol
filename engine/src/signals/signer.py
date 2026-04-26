@@ -1,7 +1,6 @@
 """EIP-712 signing for StrategyExecutor signals."""
 from __future__ import annotations
 
-import eth_account
 from eth_account.account import Account
 from eth_hash.auto import keccak
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from typing import TypedDict
 
-from .interface import Direction, SignalBatch, TradingSignal
+from .interface import SignalBatch
 from .signer import SignalSigner
 
 

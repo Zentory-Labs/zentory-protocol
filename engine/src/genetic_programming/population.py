@@ -1,7 +1,6 @@
 """GP Population management — tournament selection, breeding, diversity maintenance."""
 from __future__ import annotations
 
-import bisect
 import random
 from dataclasses import dataclass, field
 

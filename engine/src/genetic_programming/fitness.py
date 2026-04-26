@@ -60,7 +60,6 @@ def evaluate(chrom: Chromosome, prices: Array) -> float:
     slow_ma    = max(fast_ma + 1, int(chrom.gene_named("slow_ma_period")))
     rsi_buy   = chrom.gene_named("rsi_buy_threshold")
     rsi_sell  = chrom.gene_named("rsi_sell_threshold")
-    vol_filter = max(chrom.gene_named("volatility_filter"), 1e-6)
     pos_size  = max(chrom.gene_named("position_size_pct"), 0.01)
     stop_loss = max(chrom.gene_named("stop_loss_pct"), 0.001)
     take_profit = max(chrom.gene_named("take_profit_pct"), 0.001)

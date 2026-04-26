@@ -44,9 +44,6 @@ def generate_signal(chrom: Chromosome, prices: Array) -> TrendSignal:
     fast_ma_vals = _sma(prices, fast_ma)
     slow_ma_vals = _sma(prices, slow_ma)
 
-    # Align: sma produces len(price) - window + 1 values
-    offset = slow_ma - 1  # how many prices we need to drop from the front
-
     if len(fast_ma_vals) < 2 or len(slow_ma_vals) < 2:
         return TrendSignal(Direction.CLOSE, 0.0, "ma_window_too_small")
 
@@ -57,7 +54,6 @@ def generate_signal(chrom: Chromosome, prices: Array) -> TrendSignal:
 
     # ── Regime: bull if price above its own slow MA ──────────────────────
     price_now  = prices[-1]
-    price_prev = prices[-2] if len(prices) > 1 else prices[-1]
 
     bull = price_now > slow
     bear = price_now < slow
@@ -70,12 +66,12 @@ def generate_signal(chrom: Chromosome, prices: Array) -> TrendSignal:
 
     # ── Volatility filter ─────────────────────────────────────────────────
     returns = np.diff(prices[-slow_ma:])
-    vol = float(np.std(returns)) if len(returns) > 1 else 0.0
-    avg_vol = max(vol_filter, 1e-6)
+    float(np.std(returns)) if len(returns) > 1 else 0.0
+    max(vol_filter, 1e-6)
 
     # ── Regime weight from genes ──────────────────────────────────────────
-    regime_bull = chrom.gene_named("regime_bull_alpha")
-    regime_bear = chrom.gene_named("regime_bear_alpha")
+    chrom.gene_named("regime_bull_alpha")
+    chrom.gene_named("regime_bear_alpha")
 
     # ── Decision logic ───────────────────────────────────────────────────
     if not bullish_cross and not bearish_cross:

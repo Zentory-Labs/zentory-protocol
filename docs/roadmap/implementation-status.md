@@ -4,15 +4,15 @@ This document maps the original build plan (`docs/plans/2026-04-24-001-feat-zent
 
 ## Repos in play
 
-- **Protocol core (contracts + engine)**: `C:\Users\juan\OneDrive\Documents\GitHub\ZentoryToken`
-- **DApp (deployed to app.zentorylabs.com)**: `C:\Users\juan\OneDrive\Documents\GitHub\zentory-protocol-dapp-v2`
-- **Marketing**: `C:\Users\juan\OneDrive\Documents\GitHub\zentorylabs.com`
+- **Protocol core (contracts + engine + frontend)**: `ZentoryToken/` — single monorepo for contracts, Python trading engine, and DApp frontend
+- **Archived frontend**: `ZentoryToken/frontend-old/` — deprecated; `zentory-protocol-dapp-v2` merged here as `frontend/` on 2026-04-26
+- **Marketing**: `zentorylabs.com/`
 
 Legend: **Done** / **Partial** / **Missing**. “Partial” means the thing exists but is not correct or not safely end-to-end.
 
 ## U1 — Scaffold monorepo & infra
 
-- **Done**: `contracts/`, `engine/`, `frontend/` exist in `ZentoryToken`.
+- **Done**: `contracts/`, `engine/`, `frontend/` exist in `ZentoryToken` as a unified monorepo. The `zentory-protocol-dapp-v2` frontend was merged in on 2026-04-26.
 - **Partial**: CI is present for contracts (`contracts/.github/workflows/test.yml`), but frontend/engine CI is not clearly standardized.
 
 ## U2 — ZENT ERC-20 token
@@ -90,7 +90,7 @@ Pivot in `goal.md`: manual execution now; Lumibot for backtesting; GP compute la
 ## U10 — Frontend dashboard
 
 - **Partial**
-  - **Deployed DApp** is in `zentory-protocol-dapp-v2` and contains:
+  - **Canonical DApp** is in `ZentoryToken/frontend/` (merged from `zentory-protocol-dapp-v2` on 2026-04-26) and contains:
     - vault overview
     - staking
     - governance (limited)

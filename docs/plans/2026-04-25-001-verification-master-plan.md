@@ -67,7 +67,7 @@ Comprehensive end-to-end verification of the Zentory Protocol before mainnet/tok
 ### In scope
 - All contracts in `contracts/src/`
 - All engine sign/verify paths (`engine/src/signals/`)
-- All DApp pages and API routes (`zentory-protocol-dapp-v2/app/`, `zentory-protocol-dapp-v2/app/api/`)
+- All DApp pages and API routes (`frontend/app/`, `frontend/app/api/`)
 - Privileged keeper execute endpoints
 - Wallet connection and chain validation flows
 
@@ -314,8 +314,8 @@ Comprehensive end-to-end verification of the Zentory Protocol before mainnet/tok
 - `engine/tests/test_api_security.py` — auth + rate limiting tests
 
 ### DApp
-- `zentory-protocol-dapp-v2/tests/smoke.spec.ts` — Playwright smoke tests
-- `zentory-protocol-dapp-v2/tests/security.spec.ts` — auth/chain validation tests
+- `frontend/tests/smoke.spec.ts` — Playwright smoke tests
+- `frontend/tests/security.spec.ts` — auth/chain validation tests
 
 ### Docs
 - `docs/reports/slither-YYYY-MM-DD.json` — Slither output

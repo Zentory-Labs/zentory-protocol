@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
-from typing import Sequence
+from dataclasses import dataclass
 
 
 # ─── Gene definitions ────────────────────────────────────────────────────────

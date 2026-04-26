@@ -1,7 +1,6 @@
 """Hyperliquid executor — fetches prices, runs GP, submits signed signals on-chain."""
 from __future__ import annotations
 
-import os
 import structlog
 from dataclasses import dataclass
 
@@ -93,9 +92,6 @@ class HyperliquidExecutor:
     async def _submit_transaction(self, payload: dict) -> str:
         """Build and broadcast a call to StrategyExecutor.executeSignal."""
         from eth_account import Account
-        from eth_hash.auto import keccak
-        import json
-        import time
 
         w3 = self._web3
         if w3 is None:
