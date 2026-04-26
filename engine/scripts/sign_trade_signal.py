@@ -6,6 +6,7 @@ Outputs a 0x-prefixed hex ECDSA signature for StrategyExecutor TradeSignal.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 
@@ -24,7 +25,15 @@ def main() -> None:
         sys.path.insert(0, src_path)
 
     try:
-        from signals.signer import SignalSigner  # type: ignore
+        # IMPORTANT: load signer module directly to avoid importing `signals/__init__.py`,
+        # which pulls in optional runtime deps (e.g. httpx) not needed for signing.
+        signer_path = os.path.join(src_path, "signals", "signer.py")
+        spec = importlib.util.spec_from_file_location("_zentory_signal_signer", signer_path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError("Could not create import spec for signer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        SignalSigner = getattr(mod, "SignalSigner")
     except Exception as e:  # pragma: no cover
         _die(f"Failed to import engine signer: {e}")
 
