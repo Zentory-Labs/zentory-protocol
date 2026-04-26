@@ -55,7 +55,11 @@ forge script script/DeployStaking.s.sol --rpc-url $HYPEREVM_RPC --private-key $P
 
 **Dependencies:** `ZENT`, Governor address
 
-**Fee split:** 50% buyback & burn, 5% GP engine, 5% insurance, 40% treasury
+**Fee split** (set per FeeDistributor at deployment, defaults shown):
+- 50% → buyback & burn (ZENT)
+- 25% → GP engine (signal provider reward)
+- 15% → insurance pool
+- 10% → treasury
 
 **Outputs:**
 - `deployments.json` keys `ZENT_STAKING`, `MODEL_BONDING`, `Z_ETH_FEES`, `Z_BTC_FEES`, `Z_XRP_FEES`, `Z_SOL_FEES`
@@ -70,7 +74,7 @@ forge script script/DeployGovernance.s.sol --rpc-url $HYPEREVM_RPC --private-key
 
 **Contracts deployed:**
 - `Timelock` — 48-hour delay timelock
-- `Zentroller` — Risk council (pause/unpause vaults)
+- `Zentroller` — Linkage contract resolving ZENT staking address for the governor (no pause capability)
 - `ZentGovernor` — DAO with 2-day voting delay, 7-day voting period
 
 **Dependencies:** `ZENT`, `ZENTStaking`
@@ -165,8 +169,7 @@ ETHERSCAN_API_KEY=...       # For verification (optional)
 | Parameter | Value |
 |---|---|
 | Max leverage (all vaults) | 30000 BPS (3×) |
-| Performance fee | 20% |
-| Management fee | 2% |
+| Performance fee | 20% (BaseVault) |
 | Min stake (ZENTStaking) | 1,000 ZENT |
 | Min lock (ZENTStaking) | 7 days |
 | Max lock (ZENTStaking) | 730 days |

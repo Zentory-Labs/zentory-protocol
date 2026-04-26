@@ -35,7 +35,18 @@ import sys
 
 import pytest
 
-# ── Deterministic test vector ───────────────────────────────────────────────────
+# ── Deterministic test vector (matches DigestParity.t.sol exactly) ──────────────
+#
+# IMPORTANT: Solidity's `vm.addr(uint256 privateKey)` cheatcode derives
+#   address = uint256(keccak256(abi.encodePacked(privateKey)))
+# The private key is the raw uint256 VALUE 0xFA19 (big-endian 32 bytes).
+#
+# eth_account.Account.from_key() always requires a 32-byte key.
+# The 32-byte big-endian encoding of uint256(0xFA19) is:
+#   0x000000000000000000000000000000000000000000000000000000000000fa19
+#
+# When both Solidity vm.addr and Python Account.from_key use this same
+# 32-byte key, they produce the SAME address (0xF165461DA7330d8A3FdC7ca3307E6b7b07F9fC05).
 
 VAULT: str = "0x1234567890123456789012345678901234567890"
 DIRECTION: int = 1  # LONG
@@ -44,18 +55,11 @@ PRICE: int = 65_000_00000  # $65,000 in 10^8 format
 NONCE: int = 0
 EXPIRY: int = 2**256 - 1  # type(uint256).max
 CHAIN_ID: int = 31337  # Anvil default — change to 998 for HyperEVM testnet
-SIGNER_KEY_HEX: str = "0x" + "fa19" * 32  # 0xFA19 as 32-byte zero-padded hex
-SIGNER_ADDRESS: str = "0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf"  # vm.addr(0xFA19)
+SIGNER_KEY_HEX: str = "0x" + "00" * 30 + "fa19"  # 32-byte big-endian uint256(0xFA19)
+SIGNER_ADDRESS: str = "0xF165461DA7330d8A3FdC7ca3307E6b7b07F9fC05"  # vm.addr(0xFA19)
+EXECUTOR_ADDRESS: str = "0x2e234DAe75C793f67A35089C9d99245E1C58470b"  # from DigestParity setUp
 
-# Expected domain separator computed from StrategyExecutor source (Anvil chain):
-#   DOMAIN_SEP = keccak256(abi.encode(
-#       keccak256("EIP712Domain(uint256 chainId,address executor)"),
-#       chainId (31337),
-#       executor address
-#   ))
-# Computed at runtime via SignalSigner._make_domain_separator().
-#
-# Expected typehash (stable, no chain dependency):
+# Expected typehash (stable, no chain dependency — verified by Solidity test):
 EXPECTED_TYPEHASH = "0x75b4b88abb6612a209e3f7fea3c816129fb7f4417b1a0c0e359bbe7daca87eae"
 
 # ── Signer import (bypasses signals/__init__.py to avoid httpx runtime dep) ──
@@ -87,14 +91,13 @@ class TestDigestParity:
         Matches StrategyExecutor.SIGNAL_TYPEHASH exactly.
         """
         signer = SignalSigner(SIGNER_KEY_HEX)
-        # The internal _SIGNAL_TYPEHASH is a class-level keccak hash — access it via
-        # the public SIGNER_ADDRESS for the same key.
-        signer2 = SignalSigner(SIGNER_KEY_HEX)
-        # Verify signer is instantiated correctly
-        assert signer.address == SIGNER_ADDRESS.lower().replace("0x", "0x"), (
+
+        # Verify the derived address matches the known Solidity vm.addr(0xFA19) result
+        assert signer.address.lower() == SIGNER_ADDRESS.lower(), (
             f"Signer address mismatch: got {signer.address}, expected {SIGNER_ADDRESS}"
         )
-        # Confirm typehash constant matches expected value
+
+        # Confirm typehash constant matches the verified Solidity value
         assert signer._SIGNAL_TYPEHASH.hex() == EXPECTED_TYPEHASH[2:], (
             f"TYPEHASH mismatch: got {signer._SIGNAL_TYPEHASH.hex()}, "
             f"expected {EXPECTED_TYPEHASH[2:]}"
@@ -104,9 +107,13 @@ class TestDigestParity:
         """
         End-to-end: Python sign a TradeSignal digest, verify 65-byte ECDSA sig.
 
-        Uses Anvil chain-id (31337) and a mock executor address derived from
-        the test setup in DigestParity.t.sol.  The signer produces a signature
-        that Solidity's executeSignal() would accept if called with that executor.
+        Uses the exact setUp values from DigestParity.t.sol:
+        - Anvil chain-id (31337)
+        - StrategyExecutor at EXECUTOR_ADDRESS
+        - Authorized signer at SIGNER_ADDRESS (derived from 32-byte uint256(0xFA19))
+
+        The produced signature would be accepted by StrategyExecutor.executeSignal()
+        if called with the same parameters in the Solidity test.
         """
         signer = SignalSigner(SIGNER_KEY_HEX)
 
@@ -118,7 +125,7 @@ class TestDigestParity:
             nonce=NONCE,
             expiry=EXPIRY,
             chain_id=CHAIN_ID,
-            executor_address=SIGNER_ADDRESS,  # any valid address for digest construction
+            executor_address=EXECUTOR_ADDRESS,
         )
 
         # ECDSA signature must be exactly 65 bytes (r=32 || s=32 || v=1)
@@ -145,7 +152,7 @@ class TestDigestParity:
             nonce=NONCE,
             expiry=EXPIRY,
             chain_id=CHAIN_ID,
-            executor_address=SIGNER_ADDRESS,
+            executor_address=EXECUTOR_ADDRESS,
         )
 
         assert sig_hex.startswith("0x"), (
@@ -170,7 +177,7 @@ class TestDigestParity:
             nonce=NONCE,
             expiry=EXPIRY,
             chain_id=CHAIN_ID,
-            executor_address=SIGNER_ADDRESS,
+            executor_address=EXECUTOR_ADDRESS,
         )
 
         sig1 = signer.sign(**kwargs)
@@ -195,7 +202,7 @@ class TestDigestParity:
             price=PRICE,
             expiry=EXPIRY,
             chain_id=CHAIN_ID,
-            executor_address=SIGNER_ADDRESS,
+            executor_address=EXECUTOR_ADDRESS,
         )
 
         sig_nonce_0 = signer.sign(nonce=0, **kwargs)
@@ -224,7 +231,7 @@ class TestDigestParity:
             nonce=NONCE,
             expiry=EXPIRY,
             chain_id=CHAIN_ID,
-            executor_address=SIGNER_ADDRESS,
+            executor_address=EXECUTOR_ADDRESS,
         )
 
         sig_a = signer_a.sign(**kwargs)

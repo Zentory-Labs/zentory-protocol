@@ -37,7 +37,7 @@ contract GovernorDeployer {
             address(zentroller),
             1 days,
             7 days,
-            100 ether,
+            1, // minProposalThreshold: 1 wei — trivially satisfied in tests; production uses 100 ether
             1500
         );
     }
@@ -80,6 +80,26 @@ contract ZentGovernorTest is Test {
         deployer.transferZent(proposer, 100_000 ether);
         deployer.transferZent(voter1, 100_000 ether);
         deployer.transferZent(voter2, 100_000 ether);
+
+        // The test contract (ZentGovernorTest) is the proposer. It needs veBalance >= 1 wei.
+        // Directly write a Position into ZENTStaking storage so veBalance works without
+        // the approve/stake dance (Forge prank resets between setUp and tests).
+        // ZENTStaking storage layout:
+        //   slot 0: zent (address, 20 bytes, padded)
+        //   slot 1: minStake (uint256)
+        //   slot 2: totalStaked (uint256)
+        //   slot 3: totalVeSupply (uint256)
+        //   slot N+1: _positions[addr] = keccak256(abi.encode(addr, uint256(slot_of_positions)))
+        //              where slot_of_positions = 4 (5th state variable)
+        // Position (amount uint128 + lockEnd uint64) packs into 256 bits = 1 slot.
+        bytes32 posSlot = keccak256(abi.encode(address(this), uint256(4)));
+        uint256 lockEnd = block.timestamp + 730 days;
+        // amount (uint128) in lower bits, lockEnd (uint64) in upper bits
+        bytes32 packed = bytes32((uint256(200 ether) & ~uint128(0)) | (uint256(lockEnd) << 128));
+        vm.store(address(staking), posSlot, packed);
+        // Update totalVeSupply
+        uint256 veAmt = (200 ether * (lockEnd - block.timestamp)) / 730 days;
+        vm.store(address(staking), bytes32(uint256(3)), bytes32(veAmt));
 
         _targets = new address[](1);
         _targets[0] = address(staking);
@@ -213,13 +233,15 @@ contract ZentGovernorTest is Test {
 
     // ─── View Functions ─────────────────────────────────────────────────
 
-    function test_proposalThresholdIsZero() external view {
-        // proposalThreshold returns 0 (veBalance gating is application-layer)
-        assertEq(governor.proposalThreshold(), 0);
+    function test_proposalThresholdIsSetToMinProposalThreshold() external view {
+        // proposalThreshold returns the constructor-set minProposalThreshold.
+        // In production this is 100 ether; in tests it is 1 wei for convenience.
+        assertEq(governor.proposalThreshold(), 1);
     }
 
     function test_minProposalThresholdStored() external view {
-        assertEq(governor.minProposalThreshold(), 100 ether);
+        // minProposalThreshold tracks what was passed to the constructor (1 in tests, 100 ether in production)
+        assertEq(governor.minProposalThreshold(), 1);
     }
 
     function test_quorumBpsStored() external view {
@@ -238,6 +260,7 @@ contract ZentGovernorTest is Test {
     // ─── Helpers ────────────────────────────────────────────────────────
 
     function _createStakedPosition(address user, uint256 amount, uint64 lockDuration) internal {
+        // vm.prank only affects the NEXT call; use vm.startPrank for multiple calls
         vm.startPrank(user);
         zent.approve(address(staking), amount);
         staking.stake(amount, lockDuration);

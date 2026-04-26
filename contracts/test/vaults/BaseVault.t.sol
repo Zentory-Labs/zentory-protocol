@@ -62,8 +62,10 @@ contract BaseVaultTest is Test {
         vm.label(bob, "bob");
         vm.label(feeRecipient, "feeRecipient");
 
-        // Grant keeper role to keeper address
+        // Grant keeper role to keeper address and to this test contract
+        // (evaluateFees is now KEEPER_ROLE-gated so the test contract needs it too)
         vault.grantRole(vault.KEEPER_ROLE(), keeper);
+        vault.grantRole(vault.KEEPER_ROLE(), address(this));
 
         // Grant risk council role to this test contract (admin) for circuit breaker tests
         vault.grantRole(vault.RISK_COUNCIL_ROLE(), address(this));
@@ -169,6 +171,8 @@ contract BaseVaultTest is Test {
         BaseVault vault8 = new BaseVault(
             address(asset8), "zBTC Share", "zBTC", 30000, 10000, 2000, 500, 2000, feeRecipient, address(this)
         );
+        // Grant KEEPER_ROLE to this test contract for the new vault instance
+        vault8.grantRole(vault8.KEEPER_ROLE(), address(this));
 
         uint256 deposit = 100 * asset8Unit;
         asset8.mint(alice, deposit);

@@ -34,6 +34,9 @@ interface IZENTStaking {
     /// @notice Raw staked balance for `user` (ignores lock state).
     function stakedBalance(address user) external view returns (uint256);
 
+    /// @notice Sum of veBalance across all stakers (total voting weight).
+    function totalVeSupply() external view returns (uint256);
+
     /// @notice Governor-adjustable vault-access threshold.
     function setMinStake(uint256 newMinStake) external;
 }

@@ -43,3 +43,19 @@ To prove alerts “fire correctly” on testnet:
 2. Capture the alert delivery evidence (screenshot/log)
 3. Record tx hash + timestamp
 
+## Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `monitoring-plan.md` (this doc) | **Done** | Plan defined |
+| `incident-response.md` | **Done** | Runbook complete |
+| On-chain event indexing | **NOT WIRED** | Requires Tenderly / Defender / custom indexer |
+| Alert routing (A1–A4) | **NOT WIRED** | Requires PagerDuty / OpsGenie / Discord webhook |
+| API rate-limit alerting | **NOT WIRED** | Vercel Analytics + custom log aggregation needed |
+| Monitoring dashboard | **NOT WIRED** | Requires Grafana / Tenderly dashboard |
+| G9 evidence (alert test) | **NOT DONE** | Must run on HyperEVM testnet before mainnet |
+
+**Before mainnet**: wire at least one on-chain monitoring tool (Tenderly or OpenZeppelin Defender) and one alert routing channel. See `monitoring-setup.md` for step-by-step instructions.
+
+**Setup guide**: `docs/runbooks/monitoring-setup.md` — contains step-by-step Tenderly/Defender setup, alert routing config, and G9/G10 evidence collection procedures.
+

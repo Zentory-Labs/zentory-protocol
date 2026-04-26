@@ -9,14 +9,12 @@ class SignalSigner:
     """
     Signs trading signals using EIP-712 so they can be verified by StrategyExecutor.
 
-    The domain separator matches OpenZeppelin's EIP712:
-        keccak256(
-            keccak(b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
-            + keccak(b"Zentory StrategyExecutor")
-            + keccak(b"1")
-            + chainId.to_bytes(32, "big")
-            + int(executor_address, 16).to_bytes(32, "big")
-        )
+    The domain separator matches StrategyExecutor.DOMAIN_SEPARATOR:
+        keccak256(abi.encode(
+            keccak256("EIP712Domain(uint256 chainId,address executor)"),
+            chainId,
+            executor_address
+        ))
 
     The struct hash matches StrategyExecutor.SIGNAL_TYPEHASH:
         keccak256(
@@ -95,8 +93,8 @@ class SignalSigner:
         chain_id: int,
         executor_address: str,
     ) -> str:
-        """Same as sign() but returns a hex string with 0x prefix."""
-        return self.sign(vault, direction, size, price, nonce, expiry, chain_id, executor_address).hex()
+        """Same as sign() but returns a 0x-prefixed hex string."""
+        return "0x" + self.sign(vault, direction, size, price, nonce, expiry, chain_id, executor_address).hex()
 
     def _make_domain_separator(self, chain_id: int, executor_address: str) -> bytes:
         """Build the EIP-712 domain separator matching StrategyExecutor.

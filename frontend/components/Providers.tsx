@@ -9,7 +9,22 @@ import { HYPEREVM_TESTNET } from "@/lib/contracts";
 const queryClient = new QueryClient();
 
 const RPC_URL = process.env.NEXT_PUBLIC_HYPEREVM_RPC ?? "https://rpc.hyperliquid-testnet.xyz/evm";
-const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "8e44bbe4865b02bd238ca5d49e454c41";
+
+/**
+ * WalletConnect Project ID — required for production.
+ * In development, set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID in .env.local.
+ * Without a valid project ID the WalletConnect connector will not function.
+ */
+function getWalletConnectProjectId(): string {
+  const id = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  if (!id) {
+    throw new Error(
+      "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set. "
+      + "Create a project at https://cloud.walletconnect.com and add it to .env.local"
+    );
+  }
+  return id;
+}
 
 const wagmiConfig = createConfig({
   chains: [HYPEREVM_TESTNET],
@@ -26,9 +41,11 @@ const wagmiConfig = createConfig({
     coinbaseWallet({
       appName: "Zentory Protocol",
     }),
-    walletConnect({
-      projectId: WALLETCONNECT_PROJECT_ID,
-    }),
+    // WalletConnect is only included when the project ID env var is present.
+    // This prevents the module-level throw from crashing the build.
+    ...(process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+      ? [walletConnect({ projectId: getWalletConnectProjectId() })]
+      : []),
   ],
 });
 

@@ -80,16 +80,18 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
 
     // ─── Proposal Threshold ───────────────────────────────────────────────
 
-    /// @notice Proposals can be submitted by anyone (veBalance gating is application-layer).
-    function proposalThreshold() public pure override(Governor) returns (uint256) {
-        return 0;
+    /// @notice Minimum veZENT balance required to submit a governance proposal.
+    function proposalThreshold() public view override(Governor) returns (uint256) {
+        return minProposalThreshold;
     }
 
     // ─── Quorum ─────────────────────────────────────────────────────
 
-    /// @dev Returns quorum = ZENT.totalSupply * quorumBps / 10000.
+    /// @dev Returns quorum = total voting weight (veSupply) * quorumBps / 10000.
+    ///      Uses ZENTStaking.totalVeSupply() so quorum reflects actual vote-escrowed weight,
+    ///      not raw token supply (which could allow quorum to be reached with negligible participation).
     function quorum(uint256) public view override(Governor) returns (uint256) {
-        return (IERC20Metadata(zentToken).totalSupply() * quorumBps) / 10000;
+        return (zentroller.staking().totalVeSupply() * quorumBps) / 10000;
     }
 
     // ─── Timing ────────────────────────────────────────────────────────

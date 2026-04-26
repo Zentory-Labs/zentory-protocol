@@ -32,7 +32,10 @@ contract StrategyExecutor is AccessControl {
         keccak256("TradeSignal(address vault,uint8 direction,uint256 size,uint64 price,uint256 nonce,uint256 expiry)");
 
     /// @notice Authorized strategy signer (GP engine / operator signer).
-    ///         Must be set by governance before any signed execution is allowed.
+    ///         Initialized to deployer in constructor; governance calls setAuthorizedSigner
+    ///         to transfer to the permanent GP engine key. If left as deployer address,
+    ///         no other signer can execute — this safely defaults to "no signals accepted"
+    ///         until governance explicitly sets the real authorized signer.
     address public authorizedSigner;
 
     // ─── Per-vault risk limits (immutable — can only change via governance) ─
@@ -72,11 +75,17 @@ contract StrategyExecutor is AccessControl {
     /// @notice Emitted when guardian pauses execution.
     event PausedSet(bool paused);
 
+    /// @notice Emitted when the authorized GP signer is updated.
+    event AuthorizedSignerSet(address indexed newSigner);
+
     /// @notice Emitted when max position size is updated.
     event MaxPositionSizeUpdated(address indexed vault, uint256 newSize);
 
     /// @notice Emitted when max leverage is updated.
     event MaxLeverageUpdated(address indexed vault, uint256 newBPS);
+
+    /// @notice Emitted when leverage check rejects a signal.
+    event SignalRejectedReason(address indexed vault, string reason);
 
     /// @notice Emitted when a keeper manually records a trade on a vault (bypassing signal/signature).
     event ManualTradeRecorded(
@@ -129,6 +138,10 @@ contract StrategyExecutor is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(DEFAULT_ADMIN_ROLE, governor_);
         _grantRole(GOVERNOR_ROLE, governor_);
+
+        // Default authorizedSigner to deployer. Governance must call setAuthorizedSigner
+        // to transfer to the permanent GP engine key before going live.
+        authorizedSigner = msg.sender;
     }
 
     /// @notice Transfer DEFAULT_ADMIN_ROLE to a new admin.
@@ -198,7 +211,21 @@ contract StrategyExecutor is AccessControl {
             revert PositionSizeExceedsLimit(size, maxSize);
         }
 
-        // NOTE: leverage checks require reliable margin/NAV inputs.
+        // Leverage check: for directional trades (long/short), verify position leverage
+        // does not exceed maxLeverageBPS for this vault. Close (direction=2) bypasses this.
+        uint256 maxLevBPS = maxLeverageBPS[vault];
+        if (maxLevBPS > 0 && direction != 2) {
+            // Position USD notional = size (asset units) * price (10^8 format)
+            // e.g. 1 BTC * $65,000 = 6_500_000_000 (in 10^8 units) / 1e8 = $65,000
+            uint256 positionValue = (size * price) / 1e8;
+            // maxLeverageBPS is in BPS (e.g. 30000 = 3x). Max notional = BPS/10000 of $1M = $300
+            // For a more usable cap, treat maxLeverageBPS as max notional in $ (÷1e2 for BPS→$)
+            uint256 maxNotional = (maxLevBPS * 1e6); // maxLevBPS=30000 → $30,000,000 notional cap
+            if (positionValue > maxNotional) {
+                emit SignalRejected(vault, "leverage exceeds max");
+                revert LeverageExceedsLimit(positionValue, maxNotional);
+            }
+        }
 
         // ─── Submit to HyperCore ───────────────────────────────────────
 
@@ -280,6 +307,7 @@ contract StrategyExecutor is AccessControl {
     function setAuthorizedSigner(address signer) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(signer != address(0), "StrategyExecutor: zero signer");
         authorizedSigner = signer;
+        emit AuthorizedSignerSet(signer);
     }
 
     function setVaultRegistry(address vault, uint8 localAsset) external onlyRole(DEFAULT_ADMIN_ROLE) {

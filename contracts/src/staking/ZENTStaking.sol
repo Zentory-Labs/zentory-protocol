@@ -34,6 +34,9 @@ contract ZENTStaking is AccessControl, IZENTStaking {
     /// @notice Sum of all active stakes.
     uint256 public totalStaked;
 
+    /// @notice Sum of veBalance across all active positions (total voting weight).
+    uint256 public totalVeSupply;
+
     struct Position {
         uint128 amount;
         uint64 lockEnd;
@@ -64,8 +67,12 @@ contract ZENTStaking is AccessControl, IZENTStaking {
         require(_positions[msg.sender].amount == 0, "ZENTStaking: position exists");
 
         lockEnd = uint64(block.timestamp) + lockDuration;
-        _positions[msg.sender] = Position({amount: amount.toUint128(), lockEnd: lockEnd});
+        uint128 amount128 = amount.toUint128();
+        _positions[msg.sender] = Position({amount: amount128, lockEnd: lockEnd});
         totalStaked += amount;
+
+        uint256 ve = _veAt(amount128, lockEnd, uint64(block.timestamp));
+        totalVeSupply += ve;
 
         emit Staked(msg.sender, amount, lockEnd);
         zent.safeTransferFrom(msg.sender, address(this), amount);
@@ -79,9 +86,14 @@ contract ZENTStaking is AccessControl, IZENTStaking {
         require(pos.amount > 0, "ZENTStaking: no position");
         require(block.timestamp < pos.lockEnd, "ZENTStaking: lock expired");
 
-        uint256 newAmount = uint256(pos.amount) + amount;
+        uint128 oldAmount = pos.amount;
+        uint256 newAmount = uint256(oldAmount) + amount;
         pos.amount = newAmount.toUint128();
         totalStaked += amount;
+
+        uint256 oldVe = _veAt(oldAmount, pos.lockEnd, uint64(block.timestamp));
+        uint256 newVe = _veAt(pos.amount, pos.lockEnd, uint64(block.timestamp));
+        totalVeSupply = totalVeSupply - oldVe + newVe;
 
         emit Increased(msg.sender, amount, newAmount);
         zent.safeTransferFrom(msg.sender, address(this), amount);
@@ -109,8 +121,10 @@ contract ZENTStaking is AccessControl, IZENTStaking {
         require(amount > 0, "ZENTStaking: no position");
         require(block.timestamp >= pos.lockEnd, "ZENTStaking: locked");
 
+        uint256 oldVe = _veAt(uint128(amount), pos.lockEnd, uint64(block.timestamp));
         delete _positions[msg.sender];
         totalStaked -= amount;
+        totalVeSupply -= oldVe;
 
         emit Withdrawn(msg.sender, amount);
         zent.safeTransfer(msg.sender, amount);
@@ -127,6 +141,12 @@ contract ZENTStaking is AccessControl, IZENTStaking {
 
         uint256 remaining = uint256(pos.lockEnd) - block.timestamp;
         return (uint256(pos.amount) * remaining) / MAX_LOCK;
+    }
+
+    /// @dev Pure helper: computes veBalance at a given (amount, lockEnd, timestamp).
+    function _veAt(uint128 amount, uint64 lockEnd, uint64 at) private pure returns (uint256) {
+        if (amount == 0 || at >= lockEnd) return 0;
+        return (uint256(amount) * (uint256(lockEnd) - at)) / MAX_LOCK;
     }
 
     /// @inheritdoc IZENTStaking

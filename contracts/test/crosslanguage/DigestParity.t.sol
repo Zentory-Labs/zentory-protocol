@@ -17,13 +17,18 @@ import {HyperCoreAdapter} from "../../src/keeper/HyperCoreAdapter.sol";
 ///
 /// Example Python verification:
 ///   cd engine
-///   pip install eth_account eth_hash web3
+///   pip install eth_account "eth-hash[pycryptodome]"
 ///   python3 -c "
-///     from src.signals.signer import SignalSigner
-///     s = SignalSigner('0x' + 'fa19' * 32)
-///     sig = s.sign_hex(vault='0x...', direction=1, size=..., price=...,
-///                       nonce=0, expiry=2**256-1, chain_id=998,
-///                       executor_address='0x...')
+///     import importlib.util, sys, os
+///     spec = importlib.util.spec_from_file_location('_s', os.path.join('src','signals','signer.py'))
+///     mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+///     SignalSigner = getattr(mod, 'SignalSigner')
+///     # 32-byte big-endian encoding of uint256(0xFA19)
+///     s = SignalSigner('0x' + '00'*30 + 'fa19')
+///     sig = s.sign_hex(vault='0x1234567890123456789012345678901234567890', direction=1,
+///                       size=1_000_000, price=65_000_00000, nonce=0,
+///                       expiry=2**256-1, chain_id=31337,
+///                       executor_address='0x2e234DAe75C793f67A35089C9d99245E1C58470b')
 ///     print(sig)
 ///   "
 contract DigestParityTest is Test {

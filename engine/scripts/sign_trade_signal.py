@@ -67,11 +67,8 @@ def main() -> None:
         executor_address=executor,
     )
 
-    # SignalSigner.sign_hex returns hex without 0x prefix; Foundry expects 0x...
-    if sig.startswith("0x"):
-        print(sig)
-    else:
-        print("0x" + sig)
+    # sign_hex() now returns 0x-prefixed hex directly
+    print(sig)
 
 
 if __name__ == "__main__":

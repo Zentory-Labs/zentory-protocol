@@ -7,6 +7,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IVault} from "./IVault.sol";
 import {IFeeDistributor} from "../interfaces/IFeeDistributor.sol";
 import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
@@ -16,7 +17,7 @@ import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
 ///         representing proportional ownership of the vault's underlying asset.
 ///         Performance fee is charged only on alpha above the HODL baseline (NAV > high-water mark).
 ///         All risk rails are immutable constants — adjustable only via DAO governance.
-contract BaseVault is ERC4626, AccessControl, IVault {
+contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     using SafeERC20 for IERC20;
 
     // ─── Roles ───────────────────────────────────────────────────────────────
@@ -39,6 +40,14 @@ contract BaseVault is ERC4626, AccessControl, IVault {
     uint256 public performanceFeeAccrued;
     bool public override isCircuitBreakerActive;
     int8 public override currentDirection;
+
+    // ─── Events ───────────────────────────────────────────────────────────
+
+    /// @notice Emitted when the circuit breaker is automatically triggered by checkCircuitBreaker().
+    event CircuitBreakerAutoTriggered(uint256 drawdownBPS, uint256 thresholdBPS);
+
+    /// @notice Emitted when a keeper closes the current vault position.
+    event PositionClosed();
 
     // ─── Trade Log ─────────────────────────────────────────────────────────
     struct Trade {
@@ -147,7 +156,7 @@ contract BaseVault is ERC4626, AccessControl, IVault {
 
     // ─── Performance Fee ───────────────────────────────────────────────────
 
-    function evaluateFees() external {
+    function evaluateFees() external onlyRole(KEEPER_ROLE) {
         uint256 nav = getNavPerShare();
         uint256 hwm = highWaterMark;
 
@@ -169,7 +178,7 @@ contract BaseVault is ERC4626, AccessControl, IVault {
         lastNavPerShare = nav;
     }
 
-    function claimFees() external returns (uint256 claimed) {
+    function claimFees() external nonReentrant returns (uint256 claimed) {
         claimed = performanceFeeAccrued;
         require(claimed > 0, "No fees to claim");
         performanceFeeAccrued = 0;
@@ -222,6 +231,7 @@ contract BaseVault is ERC4626, AccessControl, IVault {
         currentDirection = int8(0);
         currentPositionSize = 0;
         currentEntryPrice = 0;
+        emit PositionClosed();
     }
 
     // ─── Risk Controls ─────────────────────────────────────────────────────
@@ -235,6 +245,25 @@ contract BaseVault is ERC4626, AccessControl, IVault {
     function deactivateCircuitBreaker() external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(isCircuitBreakerActive, "Not active");
         isCircuitBreakerActive = false;
+    }
+
+    /// @notice Automatically trigger the circuit breaker if the current NAV drawdown
+    ///         from the high-water mark exceeds circuitBreakerDrawdownBPS.
+    ///         Anyone can call this — it is not access-controlled — so keepers, keepers-of-last-resort,
+    ///         or monitoring bots can trigger it without needing a role.
+    function checkCircuitBreaker() external {
+        if (isCircuitBreakerActive) return;
+
+        uint256 hwm = highWaterMark;
+        uint256 nav = getNavPerShare();
+        if (nav >= hwm) return;
+
+        uint256 drawdownBPS = ((hwm - nav) * 10000) / hwm;
+        if (drawdownBPS >= circuitBreakerDrawdownBPS) {
+            isCircuitBreakerActive = true;
+            emit CircuitBreakerActivated("auto");
+            emit CircuitBreakerAutoTriggered(drawdownBPS, circuitBreakerDrawdownBPS);
+        }
     }
 
     /// @inheritdoc IVault
