@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { privateKeyToAccount } from "viem/accounts";
-import { createPublicClient, createWalletClient, http } from "viem";
+import { createPublicClient, createWalletClient, http, parseAbi } from "viem";
 import { strategyExecutorABI, HYPEREVM_TESTNET } from "@/lib/contracts";
 import { addresses } from "@/lib/contracts";
 
@@ -12,6 +12,7 @@ const API_KEY = process.env.KEEPER_API_KEY ?? "";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
 const _rate = new Map<string, { windowStart: number; count: number }>();
+const EXECUTOR_ABI = parseAbi(strategyExecutorABI as any);
 
 function checkAuth(req: NextRequest): NextResponse | null {
   // If API key isn't configured, leave endpoint open in dev (but still require keeper key).
@@ -109,13 +110,13 @@ export async function POST(req: NextRequest) {
     try {
       const keeperRole = await publicClient.readContract({
         address: addresses.StrategyExecutor,
-        abi: strategyExecutorABI,
+        abi: EXECUTOR_ABI,
         functionName: "KEEPER_ROLE",
       } as any);
 
       const hasKeeperRole = await publicClient.readContract({
         address: addresses.StrategyExecutor,
-        abi: strategyExecutorABI,
+        abi: EXECUTOR_ABI,
         functionName: "hasRole",
         args: [keeperRole, account.address],
       } as any);
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
     try {
       hash = await walletClient.writeContract({
         address: addresses.StrategyExecutor,
-        abi: strategyExecutorABI,
+        abi: EXECUTOR_ABI,
         functionName: "recordTradeManual",
         args: [vaultAddress as `0x${string}`, isBuy, BigInt(size), BigInt(Math.round(price * 1_000_000))],
       });
