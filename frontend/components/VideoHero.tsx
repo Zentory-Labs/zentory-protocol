@@ -34,12 +34,12 @@ export function VideoHero({ children, className = "" }: VideoHeroProps) {
         className="absolute inset-0 w-full h-full object-cover object-center"
       />
 
-      {/* Dark overlay — darker for better readability */}
+      {/* Dark overlay — very dark so hero blends into page background */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(11,11,13,0.75) 0%, rgba(11,11,13,0.65) 40%, rgba(11,11,13,0.85) 100%)",
+            "linear-gradient(to bottom, rgba(11,11,13,0.82) 0%, rgba(11,11,13,0.78) 50%, rgba(11,11,13,0.92) 100%)",
         }}
       />
 
