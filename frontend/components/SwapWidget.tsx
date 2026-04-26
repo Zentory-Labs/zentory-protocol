@@ -1,22 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useAccount } from "wagmi";
+import { TokenSelect } from "./TokenSelect";
 
 const TOKENS = [
-  { symbol: "ETH", name: "Ethereum", logo: "/token-logos/eth.png", price: 3450 },
-  { symbol: "BTC", name: "Bitcoin", logo: "/token-logos/btc.png", price: 97500 },
-  { symbol: "USDT", name: "Tether", logo: "/token-logos/usdt.png", price: 1.0 },
-  { symbol: "SOL", name: "Solana", logo: "/token-logos/sol.png", price: 185 },
+  { symbol: "ETH" as const, name: "Ethereum", price: 3450 },
+  { symbol: "BTC" as const, name: "Bitcoin", price: 97500 },
+  { symbol: "USDT" as const, name: "Tether", price: 1.0 },
+  { symbol: "SOL" as const, name: "Solana", price: 185 },
 ];
 
 const ZENT_PRICE = 0.08; // mock ZENT price in USD
 
 export function SwapWidget() {
   const { address, isConnected } = useAccount();
-  const [fromToken, setFromToken] = useState("ZENT");
-  const [toToken, setToToken] = useState("ETH");
+  const [fromToken, setFromToken] = useState<"ZENT" | "ETH" | "BTC" | "USDT" | "SOL">("ZENT");
+  const [toToken, setToToken] = useState<"ZENT" | "ETH" | "BTC" | "USDT" | "SOL">("ETH");
   const [fromAmount, setFromAmount] = useState("");
   const [slippage, setSlippage] = useState(0.5);
 
@@ -96,24 +96,10 @@ export function SwapWidget() {
             className="flex-1 bg-transparent text-white text-2xl font-mono outline-none placeholder-white/20"
             style={{ fontFamily: "'Montserrat', sans-serif" }}
           />
-          <div className="flex items-center gap-2">
-            <select
-              value={fromToken}
-              onChange={(e) => setFromToken(e.target.value)}
-              className="rounded-xl border px-3 py-2 text-sm font-medium cursor-pointer outline-none appearance-none"
-              style={{
-                background: "rgba(42,47,58,0.8)",
-                borderColor: "#2a2f3a",
-                color: "#eaeaea",
-                fontFamily: "'Montserrat', sans-serif",
-              }}
-            >
-              <option value="ZENT">ZENT</option>
-              {TOKENS.map((t) => (
-                <option key={t.symbol} value={t.symbol}>{t.symbol}</option>
-              ))}
-            </select>
-          </div>
+          <TokenSelect
+            value={fromToken}
+            onChange={(v) => setFromToken(v as typeof fromToken)}
+          />
         </div>
         <div className="mt-1 text-xs" style={{ color: "#6a6f75" }}>
           ≈ ${fromAmount && !isNaN(parseFloat(fromAmount)) ? (parseFloat(fromAmount) * fromPrice).toFixed(2) : "0.00"} USD
@@ -158,22 +144,10 @@ export function SwapWidget() {
           >
             {estimatedOutput}
           </span>
-          <select
+          <TokenSelect
             value={toToken}
-            onChange={(e) => setToToken(e.target.value)}
-            className="rounded-xl border px-3 py-2 text-sm font-medium cursor-pointer outline-none appearance-none"
-            style={{
-              background: "rgba(42,47,58,0.8)",
-              borderColor: "#2a2f3a",
-              color: "#eaeaea",
-              fontFamily: "'Montserrat', sans-serif",
-            }}
-          >
-            <option value="ZENT">ZENT</option>
-            {TOKENS.map((t) => (
-              <option key={t.symbol} value={t.symbol}>{t.symbol}</option>
-            ))}
-          </select>
+            onChange={(v) => setToToken(v as typeof toToken)}
+          />
         </div>
         <div className="mt-1 text-xs" style={{ color: "#6a6f75" }}>
           ≈ ${fromAmount && !isNaN(parseFloat(fromAmount)) ? (parseFloat(estimatedOutput) * toPrice).toFixed(2) : "0.00"} USD
