@@ -11,8 +11,9 @@ Environment:
   STRATEGY_EXECUTOR         default deployed StrategyExecutor on testnet
 
 Optional:
-  FROM_BLOCK                 default: latest - 2000 blocks (capped)
+  FROM_BLOCK                 default: latest - 1000 blocks (RPC max range)
   TO_BLOCK                   default: latest
+  MAX_BLOCK_RANGE            default 1000 (HyperEVM RPC limit for eth_getLogs)
 """
 
 from __future__ import annotations
@@ -95,6 +96,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--from-block", type=int, default=None)
     p.add_argument("--to-block", type=int, default=None)
+    p.add_argument("--max-range", type=int, default=int(os.environ.get("MAX_BLOCK_RANGE", "1000")))
     args = p.parse_args()
 
     rpc = os.environ.get("HYPEREVM_RPC_URL", "https://rpc.hyperliquid-testnet.xyz/evm").strip()
@@ -112,19 +114,26 @@ def main() -> None:
     if args.from_block is not None:
         from_block = args.from_block
     else:
-        span = 2000
+        span = min(args.max_range, 1000)
         from_block = max(0, to_block - span)
 
-    filt = {
-        "fromBlock": hex(from_block),
-        "toBlock": hex(to_block),
-        "address": exe,
-        "topics": [TOPIC0],
-    }
+    max_range = max(1, min(args.max_range, 1000))
 
-    logs = rpc_call(rpc, "eth_getLogs", [filt])
-    if not isinstance(logs, list):
-        raise RuntimeError(f"unexpected eth_getLogs payload: {type(logs)}")
+    logs: list[dict[str, Any]] = []
+    chunk_start = from_block
+    while chunk_start <= to_block:
+        chunk_end = min(chunk_start + max_range - 1, to_block)
+        filt = {
+            "fromBlock": hex(chunk_start),
+            "toBlock": hex(chunk_end),
+            "address": exe,
+            "topics": [TOPIC0],
+        }
+        chunk_logs = rpc_call(rpc, "eth_getLogs", [filt])
+        if not isinstance(chunk_logs, list):
+            raise RuntimeError(f"unexpected eth_getLogs payload: {type(chunk_logs)}")
+        logs.extend(chunk_logs)
+        chunk_start = chunk_end + 1
 
     rows: list[dict[str, Any]] = []
     for log in logs:
@@ -134,7 +143,7 @@ def main() -> None:
             print("skip_log", e, log.get("transactionHash"))
 
     upsert_attempts(supabase_url, key, rows)
-    print(f"blocks {from_block}-{to_block} logs={len(logs)} upserts={len(rows)}")
+    print(f"blocks {from_block}-{to_block} logs={len(logs)} upserts={len(rows)} (chunk_size<={max_range})")
 
 
 if __name__ == "__main__":

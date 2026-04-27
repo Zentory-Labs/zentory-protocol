@@ -8,15 +8,30 @@ from typing import Any
 import httpx
 
 
+def _info_http_base(url: str) -> str:
+    """
+    Accept either API root (https://api.hyperliquid-testnet.xyz) or full info URL
+    (https://api.hyperliquid-testnet.xyz/info) and return exactly .../info with no double path.
+    """
+    u = url.strip().rstrip("/")
+    while u.endswith("/info"):
+        u = u[: -len("/info")].rstrip("/")
+    # No trailing slash — httpx merges paths; a trailing slash on base can break POST to "".
+    return (u + "/info").rstrip("/")
+
+
 @dataclass(frozen=True)
 class HyperliquidInfoConfig:
-    base_url: str = "https://api.hyperliquid-testnet.xyz/info"
+    # Prefer origin only; full ".../info" also works — see _info_http_base.
+    base_url: str = "https://api.hyperliquid-testnet.xyz"
 
 
 class HyperliquidInfoClient:
     def __init__(self, config: HyperliquidInfoConfig | None = None):
         cfg = config or HyperliquidInfoConfig()
-        self._client = httpx.Client(base_url=cfg.base_url.rstrip("/") + "/info", timeout=30.0)
+        # Always POST to the absolute /info URL (avoid httpx base_url + "" merge quirks).
+        self._info_url = _info_http_base(cfg.base_url)
+        self._client = httpx.Client(timeout=30.0)
 
     def close(self) -> None:
         self._client.close()
@@ -31,7 +46,7 @@ class HyperliquidInfoClient:
         payload: dict[str, Any] = {"type": "userFills", "user": user}
         if aggregate_by_time is not None:
             payload["aggregateByTime"] = aggregate_by_time
-        r = self._client.post("", json=payload)
+        r = self._client.post(self._info_url, json=payload)
         r.raise_for_status()
         return r.json()
 
@@ -52,6 +67,6 @@ class HyperliquidInfoClient:
             payload["endTime"] = end_time_ms
         if aggregate_by_time is not None:
             payload["aggregateByTime"] = aggregate_by_time
-        r = self._client.post("", json=payload)
+        r = self._client.post(self._info_url, json=payload)
         r.raise_for_status()
         return r.json()

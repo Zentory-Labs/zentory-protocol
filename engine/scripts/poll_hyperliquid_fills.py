@@ -5,7 +5,7 @@ Environment variables:
   SUPABASE_SERVICE_ROLE_KEY    (required)
 
 Optional:
-  HYPERLIQUID_INFO_URL         default https://api.hyperliquid-testnet.xyz/info
+  HYPERLIQUID_INFO_URL         API root or .../info (default https://api.hyperliquid-testnet.xyz)
 
 Mapping:
   VAULT_TRADING_MAP            JSON object: {"<vault_address>":"<hl_user_address>", ...}
@@ -90,11 +90,11 @@ def poll_once() -> int:
     if not isinstance(mapping, dict) or not mapping:
         raise SystemExit("VAULT_TRADING_MAP must be a non-empty JSON object")
 
-    hl_base = os.environ.get("HYPERLIQUID_INFO_URL", "https://api.hyperliquid-testnet.xyz/info")
+    hl_base = os.environ.get("HYPERLIQUID_INFO_URL", "https://api.hyperliquid-testnet.xyz").strip()
 
     rows: list[dict[str, Any]] = []
 
-    with HyperliquidInfoClient(HyperliquidInfoConfig(base_url=hl_base.replace("/info", "").rstrip("/"))) as hl:
+    with HyperliquidInfoClient(HyperliquidInfoConfig(base_url=hl_base)) as hl:
         for vault_address, hl_user in mapping.items():
             fills = hl.user_fills(str(hl_user))
 
