@@ -246,14 +246,9 @@ contract SimulateEndToEnd is Script {
         uint256 nav = zETHVault(vault).getNavPerShare();
         uint256 assetDecimals = _getDecimals(asset);
         uint256 assetUnit = 10 ** assetDecimals;
-        console2.log(
-            string.concat(name, " TVL:"),
-            tvl / assetUnit,
-            string.concat("(", name, ")"),
-            "  NAV/share:",
-            nav / (assetUnit / 1e4),  // show as basis points of asset unit
-            "bps"
-        );
+        console2.log(string.concat(name, " TVL:"), tvl / assetUnit);
+        // show NAV/share as basis points of the asset unit
+        console2.log("  NAV/share (bps):", nav / (assetUnit / 1e4));
     }
 
     function _getDecimals(address asset) internal view returns (uint8) {
