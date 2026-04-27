@@ -1,156 +1,189 @@
 # Monitoring Setup Guide — G9 / G10 Evidence
 
-This guide walks through wiring on-chain monitoring (G9) and testing the incident runbook (G10).
+This guide sets up on-chain monitoring using a lightweight Python script that polls
+the HyperEVM RPC directly — no external service (Tenderly/Defender) required.
 
 ---
 
-## Step 1 — Choose a Monitoring Provider
+## Why This Approach?
 
-**Option A: Tenderly (recommended for speed)**
+| Tool | HyperEVM Support | Cost |
+|------|----------------|------|
+| Tenderly | No | Free tier |
+| OpenZeppelin Defender | Shutting down July 2026 | N/A |
+| **Custom Monitor** | Any chain | Free (just RPC calls) |
 
-1. Sign up at https://tenderly.co (free tier available)
-2. Click **Add Project** → name it `Zentory Protocol`
-3. Add contract addresses after deployment:
-   - `StrategyExecutor`
-   - Each `BaseVault` instance
-   - `ZentGovernor`
-   - `Timelock`
-
-4. Under **Contracts → Alerts**, create alerts:
-
-| Alert Name | Trigger | Action |
-|---|---|---|
-| `A1-PausedSet` | `PausedSet` event on StrategyExecutor | Email + PagerDuty |
-| `A2-RoleChange` | `RoleGranted` or `RoleRevoked` on any contract | Email + PagerDuty |
-| `A3-SignalRejected` | `SignalRejected` event, >5 in 1 hour | Discord webhook |
-
-5. Save the **Alert ID** (shown in URL after creation) — you'll reference it in evidence.
-
-**Option B: OpenZeppelin Defender**
-
-1. Sign up at https://defender.openzeppelin.com (free tier available)
-2. Create a **Relayer** (autonomous agent with private key for sending txs)
-3. Add contracts via **Contracts → Add Contract**
-4. Create **Sentinals** (event monitors):
-
-| Sentinel | Event | Action |
-|---|---|---|
-| `S1-Pause` | `PausedSet(bool)` on StrategyExecutor | Email |
-| `S2-Roles` | `RoleGranted`/`RoleRevoked` on AccessControl | Email |
-| `S3-Rejected` | `SignalRejected` on StrategyExecutor | Webhook |
+The monitor uses `eth_getLogs` which is free on public RPC endpoints and works
+with any EVM-compatible chain.
 
 ---
 
-## Step 2 — Configure Alert Routing
+## Step 1 — Get a Discord Webhook
 
-For each alert, set one or more destinations:
-
-| Destination | Use Case |
-|---|---|
-| Email (ops@zentory.io) | A1 critical alerts |
-| PagerDuty / OpsGenie | A1/A2 after-hours escalation |
-| Discord webhook (`#alerts` channel) | A3/A4 noisy/debug alerts |
-| Slack webhook (`#security-ops`) | Alternative to Discord |
+1. Open Discord → right-click your server → **Edit Server**
+2. Go to **Integrations → Webhooks** → **New Webhook**
+3. Name it `Zentory Alerts` and copy the webhook URL
+4. It looks like: `https://discord.com/api/webhooks/...`
 
 ---
 
-## Step 3 — Collect G9 Evidence (Alert Firing Proof)
-
-G9 requires proof that alerts fire when events occur. Do this on **testnet**:
-
-### 3a. Trigger a Test Pause
+## Step 2 — Install Dependencies
 
 ```bash
-# In the contracts/ directory
-forge script script/DeployPipeline.s.sol \
-  --rpc-url $HYPEREVM_TESTNET_RPC \
-  --private-key $TEST_DEPLOYER_KEY \
-  --broadcast -vvv
-
-# Then pause via the guardian key
-cast send <STRATEGY_EXECUTOR_ADDRESS> \
-  "setPaused(bool)" true \
-  --rpc-url $HYPEREVM_TESTNET_RPC \
-  --private-key $GUARDIAN_KEY
+cd ZentoryToken/engine
+pip install -e ".[dev]"
 ```
 
-### 3b. Capture Alert Evidence
+Required packages: `web3`, `structlog`, `httpx`
 
-1. **Screenshot the alert email or Slack/Discord notification** arriving within 5 minutes.
-2. Note the **triggering transaction hash** and **block timestamp**.
-3. Save as `docs/reports/g9-alert-evidence-YYYY-MM-DD.png` (or `.pdf`).
+---
 
-### 3c. Unpause to Reset
+## Step 3 — Test the Monitor
 
 ```bash
-cast send <STRATEGY_EXECUTOR_ADDRESS> \
-  "setPaused(bool)" false \
-  --rpc-url $HYPEREVM_TESTNET_RPC \
-  --private-key $GUARDIAN_KEY
+# Send a test alert to your Discord channel
+python -m monitor.event_monitor --test --discord-webhook "YOUR_DISCORD_WEBHOOK_URL"
+```
+
+You should see a green "Zentory Monitor" test alert in your Discord channel.
+
+---
+
+## Step 4 — Run the Monitor
+
+### Option A: Run in background (PowerShell)
+
+```powershell
+$env:DISCORD_WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL"
+python -m monitor.event_monitor --poll-interval 30
+```
+
+### Option B: Run as a background service
+
+```bash
+# On Linux/macOS with systemd
+cp deploy/monitor/zentory-monitor.service /etc/systemd/system/
+systemctl enable zentory-monitor
+systemctl start zentory-monitor
+
+# View logs
+journalctl -u zentory-monitor -f
+```
+
+### Option C: Run with PM2 (Node.js ecosystem alternative)
+
+```bash
+pm2 start --name zentory-monitor "python -m monitor.event_monitor --poll-interval 30"
+pm2 save
+pm2 startup
 ```
 
 ---
 
-## Step 4 — Collect G10 Evidence (Runbook Test)
+## Step 5 — Verify Past Events (G9 Evidence)
 
-G10 requires a controlled end-to-end test of the incident runbook. Execute on **testnet**.
+The monitor will immediately scan past blocks and fire alerts for events
+already on-chain. Run it once and capture the Discord notifications:
 
-### Prerequisites
-
-- Monitoring wired (from Step 1–2)
-- Incident runbook reviewed (`docs/runbooks/incident-response.md`)
-- Testnet deployer key with `GUARDIAN_ROLE` on StrategyExecutor
-
-### Test Procedure
-
-| Step | Action | Expected Result |
-|---|---|---|
-| 1 | Simulate alert condition: pause StrategyExecutor | Alert fires within 5 min |
-| 2 | On-call receives page/email | Alert acknowledged in PagerDuty |
-| 3 | IC reviews alert, checks Tenderly/Defender dashboard | Tx hash + event visible |
-| 4 | IC determines it's a controlled test | No real incident opened |
-| 5 | Unpause contract | System returns to normal |
-| 6 | Document evidence | Save tx hash + timestamp + screenshot |
-
-### Evidence to Collect
-
-Save all of the following to `docs/reports/g10-runbook-test-YYYY-MM-DD/`:
-- Screenshot of alert delivery (email, Slack, PagerDuty)
-- Transaction hash of the pause tx
-- Transaction hash of the unpause tx
-- Block timestamps for both
-- Tenderly/Defender event log screenshot showing `PausedSet` event
-- Notes on response time (alert latency)
-
----
-
-## Step 5 — Update Implementation Status
-
-After completing the above, update `docs/runbooks/monitoring-plan.md`:
-
-```markdown
-| Component | Status | Notes |
-|---|---|---|
-| On-chain event indexing | **WIRED** | Tenderly project added |
-| Alert routing (A1–A4) | **WIRED** | PagerDuty + Discord configured |
-| API rate-limit alerting | **WIRED** | Vercel Analytics + log aggregation |
-| Monitoring dashboard | **WIRED** | Tenderly dashboard: https://... |
-| G9 evidence (alert test) | **DONE** | `docs/reports/g9-alert-evidence-2026-04-XX.png` |
-| G10 evidence (runbook tested) | **DONE** | `docs/reports/g10-runbook-test-2026-04-XX/` |
+```bash
+python -m monitor.event_monitor --poll-interval 30
 ```
 
+Look for these historical events that were already fired:
+
+| Event | TX Hash | Block |
+|-------|---------|-------|
+| PausedSet(true) | `0x89d821...` | 51978896 |
+| PausedSet(false) | `0xce90d7...` | 51978957 |
+
+**Screenshot your Discord channel** — those alerts are your G9 evidence.
+
 ---
 
-## Quick-Reference: Contract Events to Monitor
+## Alert Severity Reference
 
-| Contract | Event | Severity |
-|---|---|---|
-| `StrategyExecutor` | `PausedSet(bool paused)` | **Critical (A1)** |
-| `StrategyExecutor` | `SignalRejected` | **Medium (A3)** |
-| `StrategyExecutor` | `RoleGranted`/`RoleRevoked` | **Critical (A2)** |
-| `BaseVault` | `CircuitBreakerActivated` | **High** |
-| `BaseVault` | `CircuitBreakerAutoTriggered` | **High** |
-| `BaseVault` | `TradeExecuted` | **Info** |
-| `BaseVault` | `PerformanceFeeAccrued` | **Info** |
-| `ZentGovernor` | `ProposalCreated` | **Info** |
-| `ZentGovernor` | `VoteCast` | **Info** |
+| Severity | Event | Discord Color |
+|----------|-------|--------------|
+| CRITICAL | `PausedSet(bool)` on StrategyExecutor | Red |
+| CRITICAL | `RoleGranted` / `RoleRevoked` on any contract | Red |
+| HIGH | `CircuitBreakerActivated` on any vault | Orange |
+| MEDIUM | `FeesDistributed` on FeeDistributor | Yellow |
+| LOW | `ManualTradeRecorded`, `Staked`, `Withdraw` | Green |
+
+---
+
+## All Monitored Contracts
+
+| Contract | Address |
+|----------|---------|
+| ZENT | `0x271cd48...` |
+| ZENTVesting | `0xf7c45f...` |
+| zETH Vault | `0xbe8a9d...` |
+| zBTC Vault | `0x93669d...` |
+| zXRP Vault | `0x8B15204...` |
+| zSOL Vault | `0xb62BA9d...` |
+| ZENTStaking | `0x4E2e7F...` |
+| FeeDistributor (zETH) | `0x8Fb48F...` |
+| FeeDistributor (zBTC) | `0x403e8C...` |
+| FeeDistributor (zXRP) | `0xC69f8a...` |
+| FeeDistributor (zSOL) | `0xE990BF...` |
+| Timelock | `0x1504cA...` |
+| Zentroller | `0x24f9401...` |
+| ZentGovernor | `0x21ba1F...` |
+| HyperCoreAdapter | `0xfFc1Da...` |
+| StrategyExecutor | `0x427c941...` |
+
+---
+
+## G9 / G10 Evidence Collection
+
+### G9 — Alert Firing Proof
+
+1. Run `python -m monitor.event_monitor --test` to confirm Discord notifications work
+2. Run the monitor with your webhook — it will immediately fire alerts for the
+   `PausedSet` events from blocks 51978896 and 51978957
+3. Screenshot the Discord alert in your channel
+4. Save to `docs/reports/g9-alert-evidence-2026-04-27/`
+
+### G10 — Runbook Test
+
+1. Confirm Discord alert arrived within 5 minutes of running the monitor
+2. Screenshot the alert showing severity (CRITICAL) and tx hash
+3. Document the response time
+4. Save to `docs/reports/g10-runbook-test-2026-04-27/`
+
+---
+
+## Monitoring Events (Complete List)
+
+The monitor tracks these event signatures:
+
+| Event | Contract(s) | Severity |
+|-------|------------|---------|
+| `PausedSet(bool)` | StrategyExecutor | CRITICAL |
+| `RoleGranted(bytes32,address)` | All contracts | CRITICAL |
+| `RoleRevoked(bytes32,address)` | All contracts | CRITICAL |
+| `CircuitBreakerActivated` | All 4 vaults | HIGH |
+| `CircuitBreakerAutoTriggered` | All 4 vaults | HIGH |
+| `ManualTradeRecorded` | StrategyExecutor | LOW |
+| `FeesDistributed` | FeeDistributors | MEDIUM |
+| `Accumulated` | FeeDistributors | MEDIUM |
+| `Staked` | ZENTStaking | LOW |
+| `Withdrawn` | ZENTStaking | LOW |
+
+---
+
+## Troubleshooting
+
+**No events appearing:**
+- Verify your RPC URL is accessible: `curl -X POST https://rpc.hyperliquid-testnet.xyz/evm -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`
+- Check the Discord webhook is valid
+- Run with `--from-block 51978896` to force a specific starting block
+
+**Getting rate limited:**
+- Increase `--poll-interval` to 60 seconds
+- The monitor deduplicates events so you'll never miss anything
+
+**Want to add more events:**
+- Add the event signature hash to `EVENT_SIGNATURES` in `event_monitor.py`
+- Get the signature with: `cast sig "EventName(arg1,arg2)"`

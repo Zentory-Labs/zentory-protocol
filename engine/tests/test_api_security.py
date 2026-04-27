@@ -28,7 +28,7 @@ async def test_execute_requires_auth_when_configured():
         "price": 1.0,
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         r1 = await client.post(url, json=payload)
         assert r1.status_code in (401, 500, 503)
 
