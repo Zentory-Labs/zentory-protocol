@@ -2,13 +2,17 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, parseAbi } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { VideoHero } from "@/components/VideoHero";
 import { SwapWidget } from "@/components/SwapWidget";
 import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta, HYPEREVM_TESTNET } from "@/lib/contracts";
 
 const VAULTS = [addresses.zBTC, addresses.zETH, addresses.zSOL, addresses.zXRP] as const;
+
+const VAULT_ABI_VIEM = parseAbi(VAULT_ABI as unknown as string[]);
+const ZENT_ABI_VIEM = parseAbi(ZENT_ABI as unknown as string[]);
+const STAKING_ABI_VIEM = parseAbi(STAKING_ABI as unknown as string[]);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -104,8 +108,8 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
         setIsLoading(true);
         setIsError(false);
         const [assets, navPerShare] = await Promise.all([
-          publicClient.readContract({ address: vault as any, abi: VAULT_ABI as any, functionName: "totalAssets" }),
-          publicClient.readContract({ address: vault as any, abi: VAULT_ABI as any, functionName: "getNavPerShare" }),
+          publicClient.readContract({ address: vault as any, abi: VAULT_ABI_VIEM as any, functionName: "totalAssets" }),
+          publicClient.readContract({ address: vault as any, abi: VAULT_ABI_VIEM as any, functionName: "getNavPerShare" }),
         ]);
         if (cancelled) return;
         setTvl(assets as bigint);
@@ -227,8 +231,8 @@ function ChainStats() {
       try {
         setChainReadError(false);
         const [s, t] = await Promise.all([
-          publicClient.readContract({ address: addresses.ZENT as any, abi: ZENT_ABI as any, functionName: "totalSupply" }),
-          publicClient.readContract({ address: addresses.ZENTStaking as any, abi: STAKING_ABI as any, functionName: "totalStaked" }),
+          publicClient.readContract({ address: addresses.ZENT as any, abi: ZENT_ABI_VIEM as any, functionName: "totalSupply" }),
+          publicClient.readContract({ address: addresses.ZENTStaking as any, abi: STAKING_ABI_VIEM as any, functionName: "totalStaked" }),
         ]);
         if (cancelled) return;
         setSupply(s as bigint);
