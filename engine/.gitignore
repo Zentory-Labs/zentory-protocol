@@ -8,3 +8,6 @@ dist/
 build/
 *.egg-info/
 
+# Local HL user mapping (copy from vault-trading-map.example.json)
+vault-trading-map.json
+

@@ -14,6 +14,8 @@ Optional:
   FROM_BLOCK                 default: latest - 1000 blocks (RPC max range)
   TO_BLOCK                   default: latest
   MAX_BLOCK_RANGE            default 1000 (HyperEVM RPC limit for eth_getLogs)
+  CHUNK_DELAY_SEC            sleep between eth_getLogs chunks (default 0.75; reduces rate limits)
+  RPC_MAX_RETRIES            retries per request on -32005 rate limited (default 12)
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from typing import Any
 
 import httpx
@@ -29,17 +32,44 @@ from eth_abi import decode
 TOPIC0 = "0x7d8a7739c884cee63d3f5dd59938ec9e356acfe8327ab9111a1a32e19d11ac20"
 
 
-def rpc_call(url: str, method: str, params: list) -> Any:
-    r = httpx.post(
-        url,
-        json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
-        timeout=60.0,
-    )
-    r.raise_for_status()
-    j = r.json()
-    if "error" in j:
-        raise RuntimeError(j["error"])
-    return j["result"]
+def _is_rpc_rate_limit(err: Any) -> bool:
+    if isinstance(err, dict):
+        if err.get("code") == -32005:
+            return True
+        msg = str(err.get("message", "")).lower()
+        return "rate" in msg and "limit" in msg
+    return False
+
+
+def rpc_call(
+    url: str,
+    method: str,
+    params: list,
+    *,
+    max_retries: int = 12,
+    initial_backoff_sec: float = 0.5,
+) -> Any:
+    """JSON-RPC POST with exponential backoff on public-RPC rate limits (-32005)."""
+    backoff = max(0.05, float(initial_backoff_sec))
+    last_err: Any = None
+    for _ in range(max_retries):
+        r = httpx.post(
+            url,
+            json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+            timeout=120.0,
+        )
+        r.raise_for_status()
+        j = r.json()
+        if "error" in j:
+            err = j["error"]
+            if _is_rpc_rate_limit(err):
+                last_err = err
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 90.0)
+                continue
+            raise RuntimeError(err)
+        return j["result"]
+    raise RuntimeError(last_err or "RPC rate limited: retries exhausted")
 
 
 def hex_to_int(h: str) -> int:
@@ -97,7 +127,19 @@ def main() -> None:
     p.add_argument("--from-block", type=int, default=None)
     p.add_argument("--to-block", type=int, default=None)
     p.add_argument("--max-range", type=int, default=int(os.environ.get("MAX_BLOCK_RANGE", "1000")))
+    p.add_argument(
+        "--chunk-delay",
+        type=float,
+        default=None,
+        help="Seconds to sleep between eth_getLogs chunks (default: CHUNK_DELAY_SEC or 0.75)",
+    )
     args = p.parse_args()
+
+    chunk_delay = args.chunk_delay
+    if chunk_delay is None:
+        chunk_delay = float(os.environ.get("CHUNK_DELAY_SEC", "0.75"))
+
+    rpc_max_retries = int(os.environ.get("RPC_MAX_RETRIES", "12"))
 
     rpc = os.environ.get("HYPEREVM_RPC_URL", "https://rpc.hyperliquid-testnet.xyz/evm").strip()
     exe = os.environ.get("STRATEGY_EXECUTOR", "0x427c94150f3f700Dc2EDf7bCc97155A467E41F21").strip()
@@ -107,7 +149,7 @@ def main() -> None:
     if not supabase_url or not key:
         raise SystemExit("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
 
-    latest_hex = rpc_call(rpc, "eth_blockNumber", [])
+    latest_hex = rpc_call(rpc, "eth_blockNumber", [], max_retries=rpc_max_retries)
     latest = hex_to_int(latest_hex)
 
     to_block = args.to_block if args.to_block is not None else latest
@@ -129,11 +171,13 @@ def main() -> None:
             "address": exe,
             "topics": [TOPIC0],
         }
-        chunk_logs = rpc_call(rpc, "eth_getLogs", [filt])
+        chunk_logs = rpc_call(rpc, "eth_getLogs", [filt], max_retries=rpc_max_retries)
         if not isinstance(chunk_logs, list):
             raise RuntimeError(f"unexpected eth_getLogs payload: {type(chunk_logs)}")
         logs.extend(chunk_logs)
         chunk_start = chunk_end + 1
+        if chunk_start <= to_block and chunk_delay > 0:
+            time.sleep(chunk_delay)
 
     rows: list[dict[str, Any]] = []
     for log in logs:
