@@ -85,7 +85,8 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
   const assetDecimals = getAssetDecimals(meta.asset);
   const totalAssets = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "totalAssets" } as any);
   const navPerShare = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "getNavPerShare" } as any);
-  const tvl = (totalAssets.data as bigint) ?? 0n;
+  const tvl = totalAssets.data as bigint | undefined;
+  const nav = navPerShare.data as bigint | undefined;
 
   return (
     <div
@@ -116,8 +117,14 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
       </div>
       <div className="space-y-2">
         {[
-          { label: "TVL", value: totalAssets.isLoading ? "—" : fmtUsd(tvl, assetDecimals, 2) },
-          { label: "NAV / Share", value: navPerShare.isLoading ? "—" : fmt((navPerShare.data as bigint) ?? 0n, assetDecimals, 6) },
+          {
+            label: "TVL",
+            value: totalAssets.isLoading ? "—" : (tvl === undefined ? "—" : fmtUsd(tvl, assetDecimals, 2)),
+          },
+          {
+            label: "NAV / Share",
+            value: navPerShare.isLoading ? "—" : (nav === undefined ? "—" : fmt(nav, assetDecimals, 6)),
+          },
         ].map(({ label, value }) => (
           <div key={label} className="flex justify-between items-center">
             <span className="text-xs" style={{ color: "#6a6f75" }}>{label}</span>

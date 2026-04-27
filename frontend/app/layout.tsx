@@ -56,9 +56,6 @@ export default function RootLayout({
                     Legal &amp; risk disclosure
                   </p>
                   <LegalDisclaimer variant="footer" className="mb-4" />
-                  <p className="text-[12px] leading-relaxed" style={{ color: "rgba(191,195,199,0.6)", fontFamily: "'Montserrat', sans-serif" }}>
-                    Materials on this site have been prepared for general informational purposes only and do not constitute financial, legal, tax, or investment advice. No offer or solicitation to buy or sell any security, token, or product is made. Zentory Labs Token and Zentory Labs Models involve risk; past or hypothetical performance does not guarantee future results. Access may be restricted by jurisdiction. You should seek independent legal, tax, and financial advice before making any decision.
-                  </p>
                 </div>
 
                 {/* Links */}
@@ -89,23 +86,6 @@ export default function RootLayout({
               </p>
             </div>
 
-            {/* Full legal disclosure */}
-            <div
-              className="py-10 px-6 border-t"
-              style={{ background: "#0d0d10", borderColor: "rgba(42,47,58,0.4)" }}
-            >
-              <div
-                className="max-w-3xl mx-auto rounded-2xl p-5"
-                style={{ background: "#0d0d10", border: "1px solid rgba(42,47,58,0.3)" }}
-              >
-                <h3 className="text-[11px] uppercase tracking-widest font-semibold mb-3" style={{ color: "rgba(191,195,199,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
-                  Legal &amp; Risk Disclosure
-                </h3>
-                <p className="text-[12px] leading-relaxed" style={{ color: "rgba(191,195,199,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
-                  This website and all materials have been prepared for general informational purposes only and do not constitute financial, legal, tax, or investment advice. No offer or solicitation to buy or sell any security, token, or product is made. Zentory Labs Token and Zentory Labs Models involve risk; past or hypothetical performance does not guarantee future results. Access may be restricted by jurisdiction. Zentory Protocol utilizes genetic programming and algorithmic trading strategies which carry substantial risk of loss. You should seek independent legal, tax, and financial advice before making any decision.
-                </p>
-              </div>
-            </div>
           </footer>
         </Providers>
         <Analytics />

@@ -90,10 +90,7 @@ export default function Nav() {
       <div className="flex items-center gap-3 ml-auto">
         <WhitelistPopup />
         <button
-          onClick={() => {
-            sessionStorage.removeItem("zentory_waitlist_shown");
-            window.location.reload();
-          }}
+          onClick={() => window.dispatchEvent(new Event("open-waitlist-modal"))}
           className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all hover:scale-[1.02]"
           style={{
             background: "rgba(139,30,45,0.12)",
