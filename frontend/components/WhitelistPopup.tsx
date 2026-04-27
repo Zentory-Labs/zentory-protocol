@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { insertWhitelistEmail } from "@/lib/whitelist";
 
 const STORAGE_KEY = "zentory_waitlist_last_seen";
-const COOL_DOWN_DAYS = 14;
 
 function CloseIcon() {
   return (
@@ -31,26 +30,6 @@ export default function WhitelistPopup() {
   useEffect(() => {
     const openHandler = () => setIsOpen(true);
     window.addEventListener("open-waitlist-modal", openHandler);
-
-    // Autopopup only if user hasn't seen it recently.
-    // Uses localStorage (persists across sessions) and a cooldown to avoid being spammy.
-    try {
-      const lastSeen = Number(localStorage.getItem(STORAGE_KEY) ?? "0");
-      const msSince = Date.now() - lastSeen;
-      const shouldAutoOpen = lastSeen === 0 || msSince > COOL_DOWN_DAYS * 24 * 60 * 60 * 1000;
-      if (shouldAutoOpen) {
-        const timer = window.setTimeout(() => {
-          setIsOpen(true);
-          localStorage.setItem(STORAGE_KEY, String(Date.now()));
-        }, 12000);
-        return () => {
-          window.removeEventListener("open-waitlist-modal", openHandler);
-          window.clearTimeout(timer);
-        };
-      }
-    } catch {
-      // ignore storage errors
-    }
 
     return () => window.removeEventListener("open-waitlist-modal", openHandler);
   }, []);

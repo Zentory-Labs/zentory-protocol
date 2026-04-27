@@ -9,6 +9,7 @@ import { HYPEREVM_TESTNET } from "@/lib/contracts";
 const queryClient = new QueryClient();
 
 const RPC_URL = process.env.NEXT_PUBLIC_HYPEREVM_RPC ?? "https://rpc.hyperliquid-testnet.xyz/evm";
+const TRANSPORT_URL = process.env.NODE_ENV === "production" ? "/api/rpc" : RPC_URL;
 
 /**
  * WalletConnect Project ID — required for production.
@@ -29,7 +30,7 @@ function getWalletConnectProjectId(): string {
 const wagmiConfig = createConfig({
   chains: [HYPEREVM_TESTNET],
   transports: {
-    [HYPEREVM_TESTNET.id]: http(RPC_URL),
+    [HYPEREVM_TESTNET.id]: http(TRANSPORT_URL),
   },
   connectors: [
     injected({
