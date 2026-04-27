@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useAccount, useReadContract } from "wagmi";
 import { VideoHero } from "@/components/VideoHero";
 import { SwapWidget } from "@/components/SwapWidget";
-import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta } from "@/lib/contracts";
+import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta, HYPEREVM_TESTNET } from "@/lib/contracts";
 
 const VAULTS = [addresses.zBTC, addresses.zETH, addresses.zSOL, addresses.zXRP] as const;
 
@@ -83,8 +83,18 @@ function TokenLogo({ symbol }: { symbol: string }) {
 function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
   const meta = vaultMeta[vault];
   const assetDecimals = getAssetDecimals(meta.asset);
-  const totalAssets = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "totalAssets" } as any);
-  const navPerShare = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "getNavPerShare" } as any);
+  const totalAssets = useReadContract({
+    chainId: HYPEREVM_TESTNET.id,
+    address: vault,
+    abi: VAULT_ABI,
+    functionName: "totalAssets",
+  } as any);
+  const navPerShare = useReadContract({
+    chainId: HYPEREVM_TESTNET.id,
+    address: vault,
+    abi: VAULT_ABI,
+    functionName: "getNavPerShare",
+  } as any);
   const tvl = totalAssets.data as bigint | undefined;
   const nav = navPerShare.data as bigint | undefined;
 
@@ -171,12 +181,25 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
 function ChainStats() {
   const { address, isConnected } = useAccount();
 
-  const zenTotalSupply = useReadContract({ address: addresses.ZENT, abi: ZENT_ABI, functionName: "totalSupply" } as any);
+  const zenTotalSupply = useReadContract({
+    chainId: HYPEREVM_TESTNET.id,
+    address: addresses.ZENT,
+    abi: ZENT_ABI,
+    functionName: "totalSupply",
+  } as any);
   const zenBalance = useReadContract({
-    address: addresses.ZENT, abi: ZENT_ABI, functionName: "balanceOf",
+    chainId: HYPEREVM_TESTNET.id,
+    address: addresses.ZENT,
+    abi: ZENT_ABI,
+    functionName: "balanceOf",
     args: address ? [address] : undefined, query: { enabled: !!isConnected },
   } as any);
-  const totalStaked = useReadContract({ address: addresses.ZENTStaking, abi: STAKING_ABI, functionName: "totalStaked" } as any);
+  const totalStaked = useReadContract({
+    chainId: HYPEREVM_TESTNET.id,
+    address: addresses.ZENTStaking,
+    abi: STAKING_ABI,
+    functionName: "totalStaked",
+  } as any);
 
   const supply = zenTotalSupply.data as bigint | undefined;
   const staked = totalStaked.data as bigint | undefined;
@@ -201,7 +224,21 @@ function ChainStats() {
   ];
 
   return (
-    <div className="flex flex-wrap justify-center lg:justify-start gap-6 md:gap-10">
+    <div className="flex flex-col gap-3">
+      {(zenTotalSupply.isError || totalStaked.isError) && (
+        <div
+          className="rounded-xl border px-4 py-2 text-xs"
+          style={{
+            background: "rgba(194,53,63,0.08)",
+            borderColor: "rgba(194,53,63,0.25)",
+            color: "rgba(234,234,234,0.8)",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+        >
+          Chain read failed. This usually means the RPC is blocked or the wallet is on the wrong network.
+        </div>
+      )}
+      <div className="flex flex-wrap justify-center lg:justify-start gap-6 md:gap-10">
       {statItems.map(({ label, value, accent }) => (
         <div key={label} className="text-center">
           <div
@@ -218,6 +255,7 @@ function ChainStats() {
           </div>
         </div>
       ))}
+      </div>
     </div>
   );
 }
