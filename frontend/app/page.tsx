@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import { createPublicClient, http } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { VideoHero } from "@/components/VideoHero";
 import { SwapWidget } from "@/components/SwapWidget";
@@ -83,20 +85,47 @@ function TokenLogo({ symbol }: { symbol: string }) {
 function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
   const meta = vaultMeta[vault];
   const assetDecimals = getAssetDecimals(meta.asset);
-  const totalAssets = useReadContract({
-    chainId: HYPEREVM_TESTNET.id,
-    address: vault,
-    abi: VAULT_ABI,
-    functionName: "totalAssets",
-  } as any);
-  const navPerShare = useReadContract({
-    chainId: HYPEREVM_TESTNET.id,
-    address: vault,
-    abi: VAULT_ABI,
-    functionName: "getNavPerShare",
-  } as any);
-  const tvl = totalAssets.data as bigint | undefined;
-  const nav = navPerShare.data as bigint | undefined;
+  const [tvl, setTvl] = useState<bigint | null>(null);
+  const [nav, setNav] = useState<bigint | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+
+  const publicClient = useMemo(() => {
+    return createPublicClient({
+      chain: HYPEREVM_TESTNET as any,
+      transport: http("/api/rpc"),
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        setIsLoading(true);
+        setIsError(false);
+        const [assets, navPerShare] = await Promise.all([
+          publicClient.readContract({ address: vault as any, abi: VAULT_ABI as any, functionName: "totalAssets" }),
+          publicClient.readContract({ address: vault as any, abi: VAULT_ABI as any, functionName: "getNavPerShare" }),
+        ]);
+        if (cancelled) return;
+        setTvl(assets as bigint);
+        setNav(navPerShare as bigint);
+      } catch {
+        if (cancelled) return;
+        setIsError(true);
+        setTvl(null);
+        setNav(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    load();
+    const id = window.setInterval(load, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [publicClient, vault]);
 
   return (
     <div
@@ -129,11 +158,11 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
         {[
           {
             label: "TVL",
-            value: totalAssets.isLoading ? "—" : (tvl === undefined ? "—" : fmtUsd(tvl, assetDecimals, 2)),
+            value: isLoading ? "—" : (tvl === null ? "—" : fmtUsd(tvl, assetDecimals, 2)),
           },
           {
             label: "NAV / Share",
-            value: navPerShare.isLoading ? "—" : (nav === undefined ? "—" : fmt(nav, assetDecimals, 6)),
+            value: isLoading ? "—" : (nav === null ? "—" : fmt(nav, assetDecimals, 6)),
           },
         ].map(({ label, value }) => (
           <div key={label} className="flex justify-between items-center">
@@ -181,12 +210,44 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
 function ChainStats() {
   const { address, isConnected } = useAccount();
 
-  const zenTotalSupply = useReadContract({
-    chainId: HYPEREVM_TESTNET.id,
-    address: addresses.ZENT,
-    abi: ZENT_ABI,
-    functionName: "totalSupply",
-  } as any);
+  const [supply, setSupply] = useState<bigint | null>(null);
+  const [staked, setStaked] = useState<bigint | null>(null);
+  const [chainReadError, setChainReadError] = useState(false);
+
+  const publicClient = useMemo(() => {
+    return createPublicClient({
+      chain: HYPEREVM_TESTNET as any,
+      transport: http("/api/rpc"),
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        setChainReadError(false);
+        const [s, t] = await Promise.all([
+          publicClient.readContract({ address: addresses.ZENT as any, abi: ZENT_ABI as any, functionName: "totalSupply" }),
+          publicClient.readContract({ address: addresses.ZENTStaking as any, abi: STAKING_ABI as any, functionName: "totalStaked" }),
+        ]);
+        if (cancelled) return;
+        setSupply(s as bigint);
+        setStaked(t as bigint);
+      } catch {
+        if (cancelled) return;
+        setChainReadError(true);
+        setSupply(null);
+        setStaked(null);
+      }
+    }
+    load();
+    const id = window.setInterval(load, 20_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [publicClient]);
+
   const zenBalance = useReadContract({
     chainId: HYPEREVM_TESTNET.id,
     address: addresses.ZENT,
@@ -194,15 +255,6 @@ function ChainStats() {
     functionName: "balanceOf",
     args: address ? [address] : undefined, query: { enabled: !!isConnected },
   } as any);
-  const totalStaked = useReadContract({
-    chainId: HYPEREVM_TESTNET.id,
-    address: addresses.ZENTStaking,
-    abi: STAKING_ABI,
-    functionName: "totalStaked",
-  } as any);
-
-  const supply = zenTotalSupply.data as bigint | undefined;
-  const staked = totalStaked.data as bigint | undefined;
 
   const supplyTokens = supply ? Number(supply / 10n ** 18n) : 0;
   const supplyHuman =
@@ -215,8 +267,8 @@ function ChainStats() {
   const stakedFormatted = staked ? fmt(staked, 18, 0) : "—";
 
   const statItems = [
-    { label: "ZENT Supply", value: zenTotalSupply.isLoading ? "—" : (supply ? supplyHuman : "—"), accent: "#eaeaea" },
-    { label: "ZENT Staked", value: totalStaked.isLoading ? "—" : stakedFormatted, accent: "#eaeaea" },
+    { label: "ZENT Supply", value: supply ? supplyHuman : "—", accent: "#eaeaea" },
+    { label: "ZENT Staked", value: stakedFormatted, accent: "#eaeaea" },
     { label: "Layer-1 Vaults", value: "4", accent: "#b08d57" },
     ...(isConnected && zenBalance.data !== undefined
       ? [{ label: "Your ZENT", value: Number(((zenBalance.data as bigint) ?? 0n) / 10n ** 18n).toLocaleString(undefined, { maximumFractionDigits: 2 }), accent: "#b08d57" }]
@@ -225,7 +277,7 @@ function ChainStats() {
 
   return (
     <div className="flex flex-col gap-3">
-      {(zenTotalSupply.isError || totalStaked.isError) && (
+      {chainReadError && (
         <div
           className="rounded-xl border px-4 py-2 text-xs"
           style={{
@@ -235,7 +287,7 @@ function ChainStats() {
             fontFamily: "'Montserrat', sans-serif",
           }}
         >
-          Chain read failed. This usually means the RPC is blocked or the wallet is on the wrong network.
+          Chain read failed. If this persists, the backend RPC proxy may be misconfigured.
         </div>
       )}
       <div className="flex flex-wrap justify-center lg:justify-start gap-6 md:gap-10">
