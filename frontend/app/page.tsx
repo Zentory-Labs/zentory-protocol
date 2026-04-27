@@ -10,6 +10,14 @@ const VAULTS = [addresses.zBTC, addresses.zETH, addresses.zSOL, addresses.zXRP] 
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
+function getAssetDecimals(asset: string): number {
+  // These correspond to the mock assets deployed on HyperEVM testnet.
+  // ETH/SOL mocks are 18, BTC mock is 8, XRP mock is 6.
+  if (asset === "BTC") return 8;
+  if (asset === "XRP") return 6;
+  return 18;
+}
+
 function fmt(value: bigint, decimals = 18, digits = 2): string {
   if (value === 0n) return "0";
   const div = 10n ** BigInt(decimals);
@@ -19,13 +27,19 @@ function fmt(value: bigint, decimals = 18, digits = 2): string {
   });
 }
 
-function fmtUsd(value: bigint, decimals = 18, digits = 0): string {
+function fmtUsd(value: bigint, decimals = 18, digits = 2): string {
   if (value === 0n) return "$0";
   const div = 10n ** BigInt(decimals);
-  return `$${Number(value / div).toLocaleString(undefined, {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  })}`;
+  // NOTE: We don't have oracle pricing here; this is "units formatted with $".
+  // It's still useful for showing non-zero TVL and comparing deltas in UI.
+  return `$${Number(value) / Number(div)}`.replace(
+    /\$(.*)/,
+    (_, n) =>
+      `$${Number(n).toLocaleString(undefined, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      })}`
+  );
 }
 
 // ─── Token Logo ─────────────────────────────────────────────────────────────
@@ -68,6 +82,7 @@ function TokenLogo({ symbol }: { symbol: string }) {
 
 function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
   const meta = vaultMeta[vault];
+  const assetDecimals = getAssetDecimals(meta.asset);
   const totalAssets = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "totalAssets" } as any);
   const navPerShare = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "getNavPerShare" } as any);
   const tvl = (totalAssets.data as bigint) ?? 0n;
@@ -101,8 +116,8 @@ function VaultCard({ vault }: { vault: (typeof VAULTS)[number] }) {
       </div>
       <div className="space-y-2">
         {[
-          { label: "TVL", value: totalAssets.isLoading ? "—" : fmtUsd(tvl) },
-          { label: "NAV / Share", value: navPerShare.isLoading ? "—" : fmt((navPerShare.data as bigint) ?? 0n) },
+          { label: "TVL", value: totalAssets.isLoading ? "—" : fmtUsd(tvl, assetDecimals, 2) },
+          { label: "NAV / Share", value: navPerShare.isLoading ? "—" : fmt((navPerShare.data as bigint) ?? 0n, assetDecimals, 6) },
         ].map(({ label, value }) => (
           <div key={label} className="flex justify-between items-center">
             <span className="text-xs" style={{ color: "#6a6f75" }}>{label}</span>
@@ -156,11 +171,21 @@ function ChainStats() {
   } as any);
   const totalStaked = useReadContract({ address: addresses.ZENTStaking, abi: STAKING_ABI, functionName: "totalStaked" } as any);
 
-  const zenFormatted = Number(((zenTotalSupply.data as bigint) ?? 0n) / 10n ** 18n).toLocaleString(undefined, { maximumFractionDigits: 0 });
-  const stakedFormatted = fmt((totalStaked.data as bigint) ?? 0n, 18, 0);
+  const supply = zenTotalSupply.data as bigint | undefined;
+  const staked = totalStaked.data as bigint | undefined;
+
+  const supplyTokens = supply ? Number(supply / 10n ** 18n) : 0;
+  const supplyHuman =
+    supplyTokens >= 1_000_000_000
+      ? `${(supplyTokens / 1_000_000_000).toFixed(1)}B`
+      : supplyTokens >= 1_000_000
+        ? `${(supplyTokens / 1_000_000).toFixed(1)}M`
+        : supplyTokens.toLocaleString();
+
+  const stakedFormatted = staked ? fmt(staked, 18, 0) : "—";
 
   const statItems = [
-    { label: "ZENT Supply", value: zenTotalSupply.isLoading ? "—" : `${zenFormatted}B`, accent: "#eaeaea" },
+    { label: "ZENT Supply", value: zenTotalSupply.isLoading ? "—" : (supply ? supplyHuman : "—"), accent: "#eaeaea" },
     { label: "ZENT Staked", value: totalStaked.isLoading ? "—" : stakedFormatted, accent: "#eaeaea" },
     { label: "Layer-1 Vaults", value: "4", accent: "#b08d57" },
     ...(isConnected && zenBalance.data !== undefined

@@ -10,6 +10,12 @@ export default defineConfig({
     baseURL,
     trace: "on-first-retry",
   },
+  webServer: {
+    command: process.env.CI ? "npm run build && npm run start -- --port 3000" : "npm run dev -- --port 3000",
+    url: baseURL,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
   reporter: [["list"]],
 });
 

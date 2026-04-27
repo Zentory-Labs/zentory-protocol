@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("smoke", () => {
   test("home loads and renders hero + swap", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Zentory Protocol")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /zentory\s+protocol/i })).toBeVisible();
     await expect(page.getByText("ZENT Swap")).toBeVisible();
   });
 

@@ -62,7 +62,7 @@ contract SimulateEndToEnd is Script {
         address keeper       = vm.addr(keeperKey);
 
         console2.log("==========================================");
-        console2.log("  ZENTORY PROTOCOL — E2E SIMULATION");
+        console2.log("  ZENTORY PROTOCOL - E2E SIMULATION");
         console2.log("==========================================");
         console2.log("Deployer:", deployer);
         console2.log("Keeper:  ", keeper);
