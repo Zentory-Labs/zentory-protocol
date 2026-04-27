@@ -5,9 +5,13 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { WalletButton } from "./WalletSelector";
+import dynamic from "next/dynamic";
+
+const WhitelistPopup = dynamic(() => import("./WhitelistPopup"), { ssr: false });
 
 const NAV_LINKS = [
   { href: "/", label: "Vaults" },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/signals", label: "Signals" },
   { href: "/stake", label: "Stake" },
   { href: "/govern", label: "Govern" },
@@ -82,9 +86,25 @@ export default function Nav() {
             </a>
           </div>
 
-          {/* Wallet — right side */}
-          <div className="flex items-center gap-3 ml-auto">
-            <WalletButton />
+      {/* Wallet — right side */}
+      <div className="flex items-center gap-3 ml-auto">
+        <WhitelistPopup />
+        <button
+          onClick={() => {
+            sessionStorage.removeItem("zentory_waitlist_shown");
+            window.location.reload();
+          }}
+          className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition-all hover:scale-[1.02]"
+          style={{
+            background: "rgba(139,30,45,0.12)",
+            borderColor: "rgba(139,30,45,0.35)",
+            color: "#c2353f",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+        >
+          Join Waitlist
+        </button>
+        <WalletButton />
 
             {/* Mobile hamburger */}
             <button

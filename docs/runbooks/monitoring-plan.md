@@ -6,29 +6,36 @@
 - Detect unusual trade execution patterns
 - Detect repeated rejected signals (potential abuse)
 
-## Monitoring Tool: Custom Event Monitor
+## Monitoring Tool
+
+**Custom Python Event Monitor** + **Alchemy** + **Discord**
 
 Tenderly does not support HyperEVM. OpenZeppelin Defender is shutting down (July 2026).
-The protocol uses a lightweight **custom Python monitor** (`engine/src/monitor/event_monitor.py`)
-that polls the HyperEVM RPC directly via `eth_getLogs` — no API key or external service required.
-
-See `docs/runbooks/monitoring-setup.md` for setup instructions.
+The protocol uses a lightweight Python monitor (`engine/src/monitor/event_monitor.py`)
+that polls HyperEVM via `eth_getLogs` using an Alchemy API key (free tier, 5M units/month).
 
 ### How it works
 
-- Polls `eth_getLogs` every N seconds (default: 30s)
-- Matches event signatures for all 21 deployed contracts
-- Sends Discord/Slack webhook alerts for CRITICAL events immediately
-- Maintains a local state file (`.monitor_state.json`) to track last block checked
-- Dedupes events by tx hash + log index
+- Polls `eth_getLogs` every N seconds (default: 30s) across all 17 contracts
+- Matches event signatures for critical events
+- Sends color-coded Discord webhook alerts (red=CRITICAL, orange=HIGH, etc.)
+- Maintains local state (`.monitor_state.json`) for deduplication and resumption
+- Rate-limit aware with automatic backoff
 
 ### On-chain events monitored
 
-- **StrategyExecutor**: `PausedSet(bool)`, `RoleGranted`, `RoleRevoked`, `ManualTradeRecorded`
-- **All 4 Vaults**: `CircuitBreakerActivated`, `CircuitBreakerAutoTriggered`, `Deposit`, `Withdraw`
-- **FeeDistributors**: `FeesDistributed`, `Accumulated`
-- **ZENTStaking**: `Staked`, `Withdrawn`
-- **ZentGovernor**: `ProposalCreated`, `VoteCast`
+| Event | Contract(s) | Severity |
+|-------|------------|---------|
+| `PausedSet(bool)` | StrategyExecutor | CRITICAL |
+| `RoleGranted(bytes32,address)` | All contracts | CRITICAL |
+| `RoleRevoked(bytes32,address)` | All contracts | CRITICAL |
+| `CircuitBreakerActivated` | All 4 vaults | HIGH |
+| `CircuitBreakerAutoTriggered` | All 4 vaults | HIGH |
+| `ManualTradeRecorded` | StrategyExecutor | LOW |
+| `FeesDistributed` | FeeDistributors | MEDIUM |
+| `Accumulated` | FeeDistributors | MEDIUM |
+| `Staked` | ZENTStaking | LOW |
+| `Withdrawn` | ZENTStaking | LOW |
 
 ### Alert thresholds
 
@@ -41,8 +48,8 @@ See `docs/runbooks/monitoring-setup.md` for setup instructions.
 
 To prove alerts fire correctly on testnet:
 
-1. Run the monitor with your Discord webhook
-2. It will immediately fire alerts for historical events already on-chain
+1. Run the monitor with your Alchemy API key + Discord webhook
+2. It immediately fires alerts for historical `PausedSet` events already on-chain
 3. Capture Discord notification screenshots as evidence
 
 ## Implementation Status
@@ -52,13 +59,14 @@ To prove alerts fire correctly on testnet:
 | `monitoring-plan.md` (this doc) | **Done** | Plan defined |
 | `incident-response.md` | **Done** | Runbook complete |
 | On-chain event monitor | **Done** | `engine/src/monitor/event_monitor.py` |
-| Alert routing (A1-A4) | **READY** | Discord webhook only (setup in monitoring-setup.md) |
+| Alchemy integration | **Ready** | Free tier at alchemy.com/hyperevm |
+| Discord webhook alerts | **Ready** | Color-coded by severity |
 | API rate-limit alerting | **WIRED** | 401 responses logged; rate limit returns 429 |
-| G9 evidence (alert test) | **READY** | Run monitor; Discord alerts fire for historical events |
-| G10 evidence (runbook tested) | **READY** | Controlled pause/unpause executed; run monitor for evidence |
+| G9 evidence (alert test) | **READY** | Run monitor with Alchemy; Discord alerts fire for historical events |
+| G10 evidence (runbook tested) | **READY** | Controlled pause/unpause executed; monitor provides evidence |
 
 **On-chain events fired (G9/G10 prerequisite)**:
 - Pause: `0x89d821c0c53d02f6d5fbfbdcbde4de6a8b54bbe872f02ef66887a2ba44e41d56` (block 51978896)
 - Unpause: `0xce90d74a0d803970ad59c0e4bd3d8fb85afaed254c8edef1682cc5ded8d26563` (block 51978957)
 
-**Setup guide**: `docs/runbooks/monitoring-setup.md` — step-by-step Discord webhook setup and monitor usage.
+**Setup guide**: `docs/runbooks/monitoring-setup.md` -- step-by-step Alchemy + Discord webhook setup and monitor usage.

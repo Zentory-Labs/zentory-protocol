@@ -156,15 +156,15 @@ function ChainStats() {
   } as any);
   const totalStaked = useReadContract({ address: addresses.ZENTStaking, abi: STAKING_ABI, functionName: "totalStaked" } as any);
 
-  const zenFormatted = Number(((zenTotalSupply.data as bigint) ?? 0n) / 10n ** 27n).toLocaleString(undefined, { maximumFractionDigits: 0 });
-  const stakedFormatted = fmt((totalStaked.data as bigint) ?? 0n);
+  const zenFormatted = Number(((zenTotalSupply.data as bigint) ?? 0n) / 10n ** 18n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const stakedFormatted = fmt((totalStaked.data as bigint) ?? 0n, 18, 0);
 
   const statItems = [
     { label: "ZENT Supply", value: zenTotalSupply.isLoading ? "—" : `${zenFormatted}B`, accent: "#eaeaea" },
     { label: "ZENT Staked", value: totalStaked.isLoading ? "—" : stakedFormatted, accent: "#eaeaea" },
     { label: "Layer-1 Vaults", value: "4", accent: "#b08d57" },
     ...(isConnected && zenBalance.data !== undefined
-      ? [{ label: "Your ZENT", value: Number(((zenBalance.data as bigint) ?? 0n) / 10n ** 18n).toLocaleString(), accent: "#b08d57" }]
+      ? [{ label: "Your ZENT", value: Number(((zenBalance.data as bigint) ?? 0n) / 10n ** 18n).toLocaleString(undefined, { maximumFractionDigits: 2 }), accent: "#b08d57" }]
       : []),
   ];
 

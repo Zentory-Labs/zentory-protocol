@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAccount } from "wagmi";
 import { TokenSelect } from "./TokenSelect";
 
@@ -13,12 +13,31 @@ const TOKENS = [
 
 const ZENT_PRICE = 0.08; // mock ZENT price in USD
 
+const PRESET_AMOUNTS = [100, 1000, 10000];
+
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
 export function SwapWidget() {
   const { address, isConnected } = useAccount();
   const [fromToken, setFromToken] = useState<"ZENT" | "ETH" | "BTC" | "USDT" | "SOL">("ZENT");
   const [toToken, setToToken] = useState<"ZENT" | "ETH" | "BTC" | "USDT" | "SOL">("ETH");
   const [fromAmount, setFromAmount] = useState("");
   const [slippage, setSlippage] = useState(0.5);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const toTokenData = TOKENS.find((t) => t.symbol === toToken)!;
   const fromPrice = fromToken === "ZENT" ? ZENT_PRICE : TOKENS.find((t) => t.symbol === fromToken)?.price ?? 1;
@@ -32,6 +51,16 @@ export function SwapWidget() {
     if (!isConnected) return;
     // Mock swap — would connect to DEX contract in production
     alert(`Swap ${fromAmount} ${fromToken} → ${estimatedOutput} ${toToken}\n(Swap contract integration coming soon)`);
+  };
+
+  const handleBlur = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const adjustAmount = (delta: number) => {
+    const current = parseFloat(fromAmount) || 0;
+    const next = Math.max(0, current + delta);
+    setFromAmount(next === 0 ? "" : String(next));
   };
 
   return (
@@ -86,16 +115,56 @@ export function SwapWidget() {
             Balance: 1,250.00
           </span>
         </div>
-        <div className="flex items-center gap-3 min-w-0">
+
+        {/* Preset amount quick-select */}
+        <div className="flex gap-2 mb-3">
+          {PRESET_AMOUNTS.map((amt) => (
+            <button
+              key={amt}
+              onClick={() => setFromAmount(String(amt))}
+              className="flex-1 text-xs py-1 rounded-lg border transition-all hover:border-white/40 active:scale-95"
+              style={{
+                borderColor: fromAmount === String(amt) ? "rgba(139,30,45,0.7)" : "rgba(42,47,58,0.8)",
+                background: fromAmount === String(amt) ? "rgba(139,30,45,0.2)" : "transparent",
+                color: fromAmount === String(amt) ? "#c2353f" : "rgba(106,111,117,0.9)",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+            >
+              {amt.toLocaleString()}
+            </button>
+          ))}
+        </div>
+
+        {/* Input row with +/- controls */}
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={() => adjustAmount(-10)}
+            className="w-8 h-8 rounded-lg border flex items-center justify-center flex-shrink-0 transition-all hover:border-white/40 active:scale-95"
+            style={{ background: "rgba(42,47,58,0.5)", borderColor: "#2a2f3a", color: "#6a6f75" }}
+            aria-label="Decrease amount"
+          >
+            <MinusIcon />
+          </button>
           <input
-            type="number"
+            ref={inputRef}
+            type="text"
+            inputMode="decimal"
             step="any"
             placeholder="0.00"
             value={fromAmount}
             onChange={(e) => setFromAmount(e.target.value)}
-            className="flex-1 min-w-0 bg-transparent text-white text-2xl font-mono outline-none placeholder-white/20"
+            onBlur={handleBlur}
+            className="flex-1 min-w-0 bg-transparent text-white text-2xl font-mono outline-none placeholder-white/20 text-right"
             style={{ fontFamily: "'Montserrat', sans-serif" }}
           />
+          <button
+            onClick={() => adjustAmount(10)}
+            className="w-8 h-8 rounded-lg border flex items-center justify-center flex-shrink-0 transition-all hover:border-white/40 active:scale-95"
+            style={{ background: "rgba(42,47,58,0.5)", borderColor: "#2a2f3a", color: "#6a6f75" }}
+            aria-label="Increase amount"
+          >
+            <PlusIcon />
+          </button>
           <TokenSelect
             value={fromToken}
             onChange={(v) => setFromToken(v as typeof fromToken)}

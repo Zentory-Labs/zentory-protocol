@@ -1,5 +1,6 @@
 execution
 genetic_programming
+monitor
 signals
 strategy
 zentory_engine

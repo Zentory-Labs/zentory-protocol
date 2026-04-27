@@ -7,108 +7,130 @@ the HyperEVM RPC directly — no external service (Tenderly/Defender) required.
 
 ## Why This Approach?
 
-| Tool | HyperEVM Support | Cost |
-|------|----------------|------|
-| Tenderly | No | Free tier |
-| OpenZeppelin Defender | Shutting down July 2026 | N/A |
-| **Custom Monitor** | Any chain | Free (just RPC calls) |
+| Tool | HyperEVM Support | Status |
+|------|-----------------|--------|
+| Tenderly | No | Not supported |
+| OpenZeppelin Defender | Shutting down July 2026 | Disabled new signups |
+| **Custom Monitor + Alchemy** | Any EVM chain | Free tier, unlimited logs |
 
-The monitor uses `eth_getLogs` which is free on public RPC endpoints and works
-with any EVM-compatible chain.
+The monitor uses `eth_getLogs` which is free on Alchemy's HyperEVM tier
+(5M compute units/month free). The public RPC works for testing but is
+rate-limited for production use.
 
 ---
 
-## Step 1 — Get a Discord Webhook
+## Step 1 — Get an Alchemy API Key (Free, 5 min)
+
+1. Go to https://www.alchemy.com/hyperevm
+2. Sign up (free — no credit card)
+3. Create an app: **App Type = HyperEVM**, **Network = Hyperliquid Testnet**
+4. Copy your **API Key** (something like `abc123def456`)
+
+---
+
+## Step 2 — Get a Discord Webhook
 
 1. Open Discord → right-click your server → **Edit Server**
 2. Go to **Integrations → Webhooks** → **New Webhook**
 3. Name it `Zentory Alerts` and copy the webhook URL
-4. It looks like: `https://discord.com/api/webhooks/...`
 
 ---
 
-## Step 2 — Install Dependencies
+## Step 3 — Install Dependencies
 
 ```bash
 cd ZentoryToken/engine
 pip install -e ".[dev]"
 ```
 
-Required packages: `web3`, `structlog`, `httpx`
+Required: `web3`, `structlog`, `httpx` (all in `pyproject.toml`)
 
 ---
 
-## Step 3 — Test the Monitor
+## Step 4 — Test the Monitor
 
 ```bash
 # Send a test alert to your Discord channel
-python -m monitor.event_monitor --test --discord-webhook "YOUR_DISCORD_WEBHOOK_URL"
+python -m monitor.event_monitor \
+  --discord-webhook "YOUR_DISCORD_WEBHOOK_URL" \
+  --test
 ```
 
 You should see a green "Zentory Monitor" test alert in your Discord channel.
 
 ---
 
-## Step 4 — Run the Monitor
+## Step 5 — Run the Monitor
 
-### Option A: Run in background (PowerShell)
+### With Alchemy (recommended for production)
+
+```bash
+python -m monitor.event_monitor \
+  --alchemy-api-key "YOUR_ALCHEMY_KEY" \
+  --discord-webhook "YOUR_DISCORD_WEBHOOK_URL" \
+  --poll-interval 30
+```
+
+### With public RPC (rate-limited — fine for testing)
+
+```bash
+python -m monitor.event_monitor \
+  --discord-webhook "YOUR_DISCORD_WEBHOOK_URL" \
+  --poll-interval 60
+```
+
+### Run in background (PowerShell)
 
 ```powershell
 $env:DISCORD_WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL"
+$env:ALCHEMY_API_KEY = "YOUR_ALCHEMY_KEY"
 python -m monitor.event_monitor --poll-interval 30
-```
-
-### Option B: Run as a background service
-
-```bash
-# On Linux/macOS with systemd
-cp deploy/monitor/zentory-monitor.service /etc/systemd/system/
-systemctl enable zentory-monitor
-systemctl start zentory-monitor
-
-# View logs
-journalctl -u zentory-monitor -f
-```
-
-### Option C: Run with PM2 (Node.js ecosystem alternative)
-
-```bash
-pm2 start --name zentory-monitor "python -m monitor.event_monitor --poll-interval 30"
-pm2 save
-pm2 startup
 ```
 
 ---
 
-## Step 5 — Verify Past Events (G9 Evidence)
+## Step 6 — G9 Evidence Collection
 
-The monitor will immediately scan past blocks and fire alerts for events
-already on-chain. Run it once and capture the Discord notifications:
+The monitor will immediately scan past blocks and fire alerts for the
+`PausedSet` events already on-chain. Run it and screenshot Discord:
 
 ```bash
-python -m monitor.event_monitor --poll-interval 30
+python -m monitor.event_monitor \
+  --alchemy-api-key "YOUR_ALCHEMY_KEY" \
+  --discord-webhook "YOUR_DISCORD_WEBHOOK_URL"
 ```
 
-Look for these historical events that were already fired:
+You should see **two CRITICAL (red) alerts** appear immediately:
 
 | Event | TX Hash | Block |
 |-------|---------|-------|
 | PausedSet(true) | `0x89d821...` | 51978896 |
 | PausedSet(false) | `0xce90d7...` | 51978957 |
 
-**Screenshot your Discord channel** — those alerts are your G9 evidence.
+Screenshot both Discord alerts and save to `docs/reports/g9-alert-evidence-2026-04-27/`.
+
+---
+
+## G10 Evidence — Runbook Test
+
+1. Confirm the Discord CRITICAL alerts arrived within ~30 seconds of starting the monitor
+2. Screenshot the alerts showing:
+   - CRITICAL severity (red embed)
+   - `PausedSet` event name
+   - Contract: StrategyExecutor
+   - TX hash matches `0x89d821...`
+3. Save to `docs/reports/g10-runbook-test-2026-04-27/`
 
 ---
 
 ## Alert Severity Reference
 
-| Severity | Event | Discord Color |
-|----------|-------|--------------|
-| CRITICAL | `PausedSet(bool)` on StrategyExecutor | Red |
-| CRITICAL | `RoleGranted` / `RoleRevoked` on any contract | Red |
-| HIGH | `CircuitBreakerActivated` on any vault | Orange |
-| MEDIUM | `FeesDistributed` on FeeDistributor | Yellow |
-| LOW | `ManualTradeRecorded`, `Staked`, `Withdraw` | Green |
+| Severity | Discord Color | Events |
+|----------|--------------|--------|
+| CRITICAL | Red | `PausedSet(bool)`, `RoleGranted`, `RoleRevoked` |
+| HIGH | Orange | `CircuitBreakerActivated`, `CircuitBreakerAutoTriggered` |
+| MEDIUM | Yellow | `FeesDistributed`, `Accumulated` |
+| LOW | Green | `ManualTradeRecorded`, `Staked`, `Withdrawn` |
 
 ---
 
@@ -135,55 +157,32 @@ Look for these historical events that were already fired:
 
 ---
 
-## G9 / G10 Evidence Collection
+## CLI Options
 
-### G9 — Alert Firing Proof
+```bash
+python -m monitor.event_monitor [OPTIONS]
 
-1. Run `python -m monitor.event_monitor --test` to confirm Discord notifications work
-2. Run the monitor with your webhook — it will immediately fire alerts for the
-   `PausedSet` events from blocks 51978896 and 51978957
-3. Screenshot the Discord alert in your channel
-4. Save to `docs/reports/g9-alert-evidence-2026-04-27/`
-
-### G10 — Runbook Test
-
-1. Confirm Discord alert arrived within 5 minutes of running the monitor
-2. Screenshot the alert showing severity (CRITICAL) and tx hash
-3. Document the response time
-4. Save to `docs/reports/g10-runbook-test-2026-04-27/`
-
----
-
-## Monitoring Events (Complete List)
-
-The monitor tracks these event signatures:
-
-| Event | Contract(s) | Severity |
-|-------|------------|---------|
-| `PausedSet(bool)` | StrategyExecutor | CRITICAL |
-| `RoleGranted(bytes32,address)` | All contracts | CRITICAL |
-| `RoleRevoked(bytes32,address)` | All contracts | CRITICAL |
-| `CircuitBreakerActivated` | All 4 vaults | HIGH |
-| `CircuitBreakerAutoTriggered` | All 4 vaults | HIGH |
-| `ManualTradeRecorded` | StrategyExecutor | LOW |
-| `FeesDistributed` | FeeDistributors | MEDIUM |
-| `Accumulated` | FeeDistributors | MEDIUM |
-| `Staked` | ZENTStaking | LOW |
-| `Withdrawn` | ZENTStaking | LOW |
+  --alchemy-api-key KEY   Alchemy API key (free at alchemy.com/hyperevm)
+  --discord-webhook URL   Discord webhook URL
+  --rpc-url URL           Custom RPC URL (overrides --alchemy-api-key)
+  --poll-interval SECONDS Seconds between polls (default: 30)
+  --from-block NUMBER     Start from this block (default: last saved)
+  --test                  Send test alert and exit
+```
 
 ---
 
 ## Troubleshooting
 
-**No events appearing:**
-- Verify your RPC URL is accessible: `curl -X POST https://rpc.hyperliquid-testnet.xyz/evm -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`
-- Check the Discord webhook is valid
-- Run with `--from-block 51978896` to force a specific starting block
-
 **Getting rate limited:**
+- Use `--alchemy-api-key` (Alchemy free tier has 5M compute units/month)
 - Increase `--poll-interval` to 60 seconds
-- The monitor deduplicates events so you'll never miss anything
 
-**Want to add more events:**
-- Add the event signature hash to `EVENT_SIGNATURES` in `event_monitor.py`
-- Get the signature with: `cast sig "EventName(arg1,arg2)"`
+**No events appearing:**
+- Verify Alchemy key is correct: `curl https://eth-hyperliquid-YOUR_KEY.g.alchemy.com/evm -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'`
+- Verify Discord webhook is valid
+- Run with `--from-block 51978896` to force starting from the event block
+
+**Monitor running but missing events:**
+- Check the state file: `engine/src/monitor/.monitor_state.json`
+- Delete it and re-run to rescan from `from_block`

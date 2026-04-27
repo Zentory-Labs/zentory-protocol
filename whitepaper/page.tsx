@@ -405,8 +405,10 @@ export default function WhitepaperPage() {
                                     <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                         <h5 className="text-white/90 font-semibold text-sm mb-2">Access & Staking</h5>
                                         <p className="text-xs text-white/60">
-                                            ZENT staking required to access alpha vaults. More TVL requires more ZENT locked,
-                                            creating organic demand tied to protocol growth.
+                                            Users must stake at least the <strong className="text-white/80">minStake</strong> threshold
+                                            of ZENT to unlock vault access. There is no proportional TVL-to-staking requirement —
+                                            a flat minimum threshold applies. This creates baseline demand tied to protocol growth,
+                                            as each new depositor must acquire and lock ZENT to participate.
                                         </p>
                                     </div>
                                     <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
@@ -721,7 +723,9 @@ export default function WhitepaperPage() {
                                 </h3>
                                 <p className="text-sm text-white/70 mb-5">
                                     Performance fees are only charged when strategies generate genuine alpha above the HODL baseline — with a high-water mark
-                                    ensuring fees are never charged on unrealised or below-benchmark performance. The 20% fee is split as follows:
+                                    ensuring fees are never charged on unrealised or below-benchmark performance. The 20% performance fee is collected by the
+                                    vault and forwarded to the <strong className="text-white/80">FeeDistributor</strong> contract, which enforces the
+                                    50/25/15/10 split on-chain:
                                 </p>
                                 <div className="grid md:grid-cols-2 gap-4 mb-5">
                                     <div className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
@@ -761,6 +765,11 @@ export default function WhitepaperPage() {
                                             Fully transparent — treasury holdings are publicly verifiable on-chain.
                                         </p>
                                     </div>
+                                </div>
+                                <div className="rounded-xl border border-[#0d80fa]/20 bg-[#0d80fa]/5 backdrop-blur-sm p-3 text-xs text-white/60">
+                                    <strong className="text-[#0d80fa]">On-chain FeeDistributor:</strong> The 50/25/15/10 split is enforced by the{' '}
+                                    <code className="text-white/70">FeeDistributor</code> contract. Each vault forwards its performance fee to its
+                                    dedicated FeeDistributor instance — all verifiable on-chain at the addresses published in the contract registry.
                                 </div>
                                 <p className="text-xs text-white/50 border-t border-white/10 pt-4">
                                     <strong className="text-white/70">Why no dividend distributions to ZENT holders:</strong> ZENT is structured as a utility and
@@ -808,7 +817,8 @@ export default function WhitepaperPage() {
                                         { title: 'LP Locked in Contract', desc: 'Initial DEX liquidity is locked for a minimum of 2 years in a smart contract. LP cannot be removed unilaterally.' },
                                         { title: 'Multi-Audit Requirement', desc: 'All smart contracts undergo at least two independent security audits before mainnet deployment.' },
                                         { title: 'DAO-Governed Treasury', desc: 'Protocol treasury is controlled by ZENT governance. Funds are only accessible via approved on-chain proposals.' },
-                                        { title: 'Renounced Ownership', desc: 'Ownable contract functions are renounced at launch. No single admin key can pause, upgrade, or modify vault logic.' },
+                                        { title: 'Immutable Risk Parameters', desc: 'Vault risk parameters (max leverage, circuit breaker thresholds, position size limits) are immutable constants set at the constructor — no governance or admin can change them after deployment.' },
+                                        { title: 'Governed Access Control', desc: 'Vault uses OpenZeppelin AccessControl. The GOVERNOR_ROLE can adjust minStake and fee recipients via timelock governance — no single EOA can unilaterally drain vault funds.' },
                                     ].map((item, i) => (
                                         <div key={i} className="rounded-xl border border-white/[0.1] bg-black/40 backdrop-blur-sm p-4">
                                             <h4 className="text-white/90 font-semibold text-sm mb-1">{item.title}</h4>
