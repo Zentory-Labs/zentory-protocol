@@ -108,6 +108,9 @@ contract StrategyExecutorFuzzTest is Test {
 
     function test_fuzz_transferAdminWorks(address newAdmin) external {
         vm.assume(newAdmin != address(0));
+        // Transferring admin to self would immediately renounce and leave `newAdmin`
+        // without DEFAULT_ADMIN_ROLE, so exclude that edge case.
+        vm.assume(newAdmin != governor);
 
         vm.prank(governor);
         executor.transferAdmin(newAdmin);
