@@ -27,13 +27,13 @@ import {zSOLVault} from "../src/vaults/zSOLVault.sol";
 ///     --broadcast
 ///
 /// Required env vars:
-///   RPC           — HyperEVM testnet RPC URL
-///   DEPLOYER_KEY  — private key of the ZENT deployer (has all ZENT tokens)
-///   KEEPER_KEY    — private key with KEEPER_ROLE on vaults (for evaluateFees)
+///   RPC           - HyperEVM testnet RPC URL
+///   DEPLOYER_KEY  - private key of the ZENT deployer (has all ZENT tokens)
+///   KEEPER_KEY    - private key with KEEPER_ROLE on vaults (for evaluateFees)
 ///
 /// Optional env vars:
-///   WETH_ADDR     — defaults to live WETH on testnet
-///   WBTC_ADDR     — defaults to live WBTC on testnet
+///   WETH_ADDR     - defaults to live WETH on testnet
+///   WBTC_ADDR     - defaults to live WBTC on testnet
 
 contract SimulateEndToEnd is Script {
     // ─── Live on-chain addresses (verified on HyperEVM testnet) ───────────
@@ -73,7 +73,7 @@ contract SimulateEndToEnd is Script {
         // ── Verify deployer has ZENT ─────────────────────────────────────
         uint256 deployerZent = IERC20(ZENT).balanceOf(deployer);
         console2.log("Deployer ZENT balance:", deployerZent / 1e18, "ZENT");
-        require(deployerZent > 0, "Deployer has no ZENT — wrong key or not on HyperEVM testnet");
+        require(deployerZent > 0, "Deployer has no ZENT - wrong key or not on HyperEVM testnet");
 
         // ── Generate 5 test wallets ─────────────────────────────────────────
         address[5] memory users = [
@@ -86,7 +86,7 @@ contract SimulateEndToEnd is Script {
 
         // ── STEP 1: Transfer ZENT to test users ──────────────────────────────
         console2.log("");
-        console2.log("STEP 1 — Fund test users with ZENT");
+        console2.log("STEP 1 - Fund test users with ZENT");
         vm.startBroadcast(deployerKey);
 
         uint256 zentPerUser = 150e18; // 150 ZENT each (above 100 minStake)
@@ -103,9 +103,9 @@ contract SimulateEndToEnd is Script {
 
         // ── STEP 2: Users stake ZENT (unlocks vault access) ─────────────────
         console2.log("");
-        console2.log("STEP 2 — Users stake ZENT to unlock vault access");
+        console2.log("STEP 2 - Users stake ZENT to unlock vault access");
         for (uint i = 0; i < users.length; i++) {
-            vm.startBroadcast(deployerKey); // users have no ETH for gas — use deployer key
+            vm.startBroadcast(deployerKey); // users have no ETH for gas - use deployer key
 
             // Approve staking contract to pull ZENT
             ZENT.approve(ZENTStaking, zentPerUser);
@@ -115,7 +115,7 @@ contract SimulateEndToEnd is Script {
             bool hasAccess = ZENTStaking.hasAccess(users[i]);
             console2.log(
                 string.concat("  ", vm.toString(users[i])),
-                "staked — hasAccess:",
+                "staked - hasAccess:",
                 hasAccess
             );
             vm.stopBroadcast();
@@ -123,28 +123,28 @@ contract SimulateEndToEnd is Script {
 
         // ── STEP 3: Mint vault assets to users ─────────────────────────────
         console2.log("");
-        console2.log("STEP 3 — Mint vault assets to users (via deployer)");
+        console2.log("STEP 3 - Mint vault assets to users (via deployer)");
         vm.startBroadcast(deployerKey);
 
-        // WETH — mint 10 ETH per user
+        // WETH - mint 10 ETH per user
         for (uint i = 0; i < users.length; i++) {
             _mintERC20(WETH, users[i], MINT_WETH);
             console2.log("  Minted 10 WETH to", users[i]);
         }
 
-        // WBTC — mint 1 BTC per user
+        // WBTC - mint 1 BTC per user
         for (uint i = 0; i < users.length; i++) {
             _mintERC20(WBTC, users[i], MINT_WBTC);
             console2.log("  Minted 1 WBTC to", users[i]);
         }
 
-        // WSOL — mint 100 SOL per user
+        // WSOL - mint 100 SOL per user
         for (uint i = 0; i < users.length; i++) {
             _mintERC20(WSOL, users[i], MINT_WSOL);
             console2.log("  Minted 100 WSOL to", users[i]);
         }
 
-        // WXRP — mint 10,000 XRP per user
+        // WXRP - mint 10,000 XRP per user
         for (uint i = 0; i < users.length; i++) {
             _mintERC20(WXRP, users[i], MINT_WXRP);
             console2.log("  Minted 10,000 WXRP to", users[i]);
@@ -154,20 +154,20 @@ contract SimulateEndToEnd is Script {
 
         // ── STEP 4: Users approve vaults and deposit ───────────────────────
         console2.log("");
-        console2.log("STEP 4 — Users approve vaults and deposit assets");
+        console2.log("STEP 4 - Users approve vaults and deposit assets");
 
         for (uint i = 0; i < users.length; i++) {
             vm.startBroadcast(deployerKey); // reuse deployer key for gas
 
             address user = users[i];
 
-            // zETH — deposit 5 WETH each
+            // zETH - deposit 5 WETH each
             _approveAndDeposit(zETH, WETH, user, 5e18, "zETH");
-            // zBTC — deposit 0.5 WBTC each
+            // zBTC - deposit 0.5 WBTC each
             _approveAndDeposit(zBTC, WBTC, user, 5e7, "zBTC");
-            // zSOL — deposit 50 WSOL each
+            // zSOL - deposit 50 WSOL each
             _approveAndDeposit(zSOL, WSOL, user, 50e18, "zSOL");
-            // zXRP — deposit 5000 WXRP each
+            // zXRP - deposit 5000 WXRP each
             _approveAndDeposit(zXRP, WXRP, user, 5000e6, "zXRP");
 
             vm.stopBroadcast();
@@ -175,7 +175,7 @@ contract SimulateEndToEnd is Script {
 
         // ── STEP 5: Log final state ────────────────────────────────────────
         console2.log("");
-        console2.log("STEP 5 — Final on-chain state");
+        console2.log("STEP 5 - Final on-chain state");
         console2.log("ZENT Supply:     ", IERC20(ZENT).totalSupply() / 1e18, "ZENT");
         console2.log("ZENT Staked:    ", ZENTStaking.totalStaked() / 1e18, "ZENT");
         console2.log("ZENT Stakers:  ", ZENTStaking.totalVeSupply());
@@ -208,7 +208,7 @@ contract SimulateEndToEnd is Script {
         // Try standard ERC20 mint (works for MockERC20 testnet assets)
         (bool success, ) = token.call(abi.encodeWithSignature("mint(address,uint256)", to, amount));
         if (!success) {
-            console2.log("  [WARN] mint failed for token — may not be a mintable ERC20:", token);
+            console2.log("  [WARN] mint failed for token - may not be a mintable ERC20:", token);
         }
     }
 

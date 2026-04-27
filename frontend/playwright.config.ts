@@ -13,7 +13,9 @@ export default defineConfig({
   webServer: {
     command: process.env.CI ? "npm run build && npm run start -- --port 3000" : "npm run dev -- --port 3000",
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    // CI sometimes pre-starts the server in a separate step.
+    // Reuse if something is already listening at PLAYWRIGHT_BASE_URL.
+    reuseExistingServer: true,
     timeout: 120_000,
   },
   reporter: [["list"]],
