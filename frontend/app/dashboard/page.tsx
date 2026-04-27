@@ -24,8 +24,22 @@ import {
   vaultMeta,
 } from "@/lib/contracts";
 import { getProtocolStats, getVaultNavHistory, getVaultFlow, type VaultNavSnapshot, type VaultFlow } from "@/lib/vault-stats";
+import {
+  getRecentHlUserFills,
+  getRecentExecutionAttempts,
+  getVaultTradingAccounts,
+  type HlUserFillRow,
+  type ExecutionAttemptRow,
+  type VaultTradingAccountRow,
+} from "@/lib/execution-trace";
 
 const VAULTS = [addresses.zBTC, addresses.zETH, addresses.zSOL, addresses.zXRP] as const;
+
+function getAssetDecimals(asset: string): number {
+  if (asset === "BTC") return 8;
+  if (asset === "XRP") return 6;
+  return 18;
+}
 
 const CHART_COLORS = {
   zBTC: "#F7931A",
@@ -102,8 +116,10 @@ function MetricCard({
 
 // ─── NAV Chart ──────────────────────────────────────────────
 
-function NAVChart({ vaultSymbol }: { vaultSymbol: string }) {
+function NAVChart({ vault }: { vault: (typeof VAULTS)[number] }) {
   const [nav, setNav] = useState<VaultNavSnapshot[]>([]);
+  const meta = vaultMeta[vault];
+  const vaultSymbol = meta.symbol;
 
   useEffect(() => {
     getVaultNavHistory(vaultSymbol, 14).then(setNav);
@@ -113,8 +129,7 @@ function NAVChart({ vaultSymbol }: { vaultSymbol: string }) {
     return <div className="h-48 flex items-center justify-center text-sm" style={{ color: "#6a6f75" }}>Loading NAV history...</div>;
   }
 
-  const meta = vaultMeta[vaultSymbol as keyof typeof vaultMeta];
-  const assetDec = meta.asset === "BTC" || meta.asset === "XRP" ? 8 : 18;
+  const assetDec = getAssetDecimals(meta.asset);
   const assetUnit = 10 ** assetDec;
 
   const chartData = nav.map((n) => ({
@@ -161,8 +176,10 @@ function NAVChart({ vaultSymbol }: { vaultSymbol: string }) {
 
 // ─── Deposit Flow Chart ─────────────────────────────────────
 
-function FlowChart({ vaultSymbol }: { vaultSymbol: string }) {
+function FlowChart({ vault }: { vault: (typeof VAULTS)[number] }) {
   const [flow, setFlow] = useState<VaultFlow[]>([]);
+  const meta = vaultMeta[vault];
+  const vaultSymbol = meta.symbol;
 
   useEffect(() => {
     getVaultFlow(vaultSymbol, 14).then(setFlow);
@@ -172,8 +189,7 @@ function FlowChart({ vaultSymbol }: { vaultSymbol: string }) {
     return <div className="h-48 flex items-center justify-center text-sm" style={{ color: "#6a6f75" }}>Loading flow data...</div>;
   }
 
-  const meta = vaultMeta[vaultSymbol as keyof typeof vaultMeta];
-  const dec = meta.asset === "BTC" || meta.asset === "XRP" ? 8 : 18;
+  const dec = getAssetDecimals(meta.asset);
   const unit = 10 ** dec;
 
   const chartData = flow.map((f) => ({
@@ -209,7 +225,7 @@ function VaultSection({ vault }: { vault: (typeof VAULTS)[number] }) {
   const navPerShare = useReadContract({ address: vault, abi: VAULT_ABI, functionName: "getNavPerShare" } as any);
 
   const color = CHART_COLORS[meta.symbol as keyof typeof CHART_COLORS] ?? "#0d80fa";
-  const dec = meta.asset === "BTC" || meta.asset === "XRP" ? 8 : 18;
+  const dec = getAssetDecimals(meta.asset);
   const unit = 10 ** dec;
 
   const tvl = Number((totalAssets.data as bigint) ?? 0n) / unit;
@@ -262,7 +278,7 @@ function VaultSection({ vault }: { vault: (typeof VAULTS)[number] }) {
         <p className="text-xs uppercase tracking-widest mb-3" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
           NAV vs HODL (14d)
         </p>
-        <NAVChart vaultSymbol={meta.symbol} />
+        <NAVChart vault={vault} />
       </div>
 
       {/* Flow chart */}
@@ -270,7 +286,7 @@ function VaultSection({ vault }: { vault: (typeof VAULTS)[number] }) {
         <p className="text-xs uppercase tracking-widest mb-3" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
           Deposit / Withdrawal Flow (14d)
         </p>
-        <FlowChart vaultSymbol={meta.symbol} />
+        <FlowChart vault={vault} />
       </div>
     </div>
   );
@@ -425,6 +441,156 @@ function ProtocolTVLOverview() {
   );
 }
 
+// ─── Execution trace (on-chain attempts + venue fills) ─────────
+
+function ExecutionTraceSection() {
+  const [fills, setFills] = useState<HlUserFillRow[]>([]);
+  const [attempts, setAttempts] = useState<ExecutionAttemptRow[]>([]);
+  const [accounts, setAccounts] = useState<VaultTradingAccountRow[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      getRecentHlUserFills(40),
+      getRecentExecutionAttempts(25),
+      getVaultTradingAccounts(),
+    ]).then(([f, a, acc]) => {
+      setFills(f);
+      setAttempts(a);
+      setAccounts(acc);
+    });
+  }, []);
+
+  const hasTraceData = fills.length > 0 || attempts.length > 0 || accounts.length > 0;
+
+  return (
+    <div
+      className="rounded-2xl p-6 mb-8"
+      style={{ background: "#1c1c21", border: "1px solid #2a2f3a" }}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <div>
+          <h2 className="text-xl font-bold text-white" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+            Execution trace
+          </h2>
+          <p className="text-xs mt-1" style={{ color: "rgba(106,111,117,0.85)", fontFamily: "'Montserrat', sans-serif" }}>
+            On-chain <code className="text-[11px] px-1 rounded" style={{ background: "rgba(0,0,0,0.35)" }}>TradeSignalExecuted</code> rows and Hyperliquid{" "}
+            <code className="text-[11px] px-1 rounded" style={{ background: "rgba(0,0,0,0.35)" }}>userFills</code> (when ingested).
+          </p>
+        </div>
+        {!hasTraceData && (
+          <span className="text-xs px-3 py-1 rounded-full border" style={{ borderColor: "#2a2f3a", color: "#6a6f75", fontFamily: "'Montserrat', sans-serif" }}>
+            Run DB migration + indexer scripts to populate
+          </span>
+        )}
+      </div>
+
+      {accounts.length > 0 && (
+        <div className="mb-6 overflow-x-auto">
+          <p className="text-xs uppercase tracking-widest mb-2" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
+            Vault → Hyperliquid mapping
+          </p>
+          <table className="w-full text-sm" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+            <thead>
+              <tr style={{ color: "#6a6f75", textAlign: "left" }}>
+                <th className="pb-2 pr-4">Vault</th>
+                <th className="pb-2 pr-4">HL user</th>
+                <th className="pb-2">Asset</th>
+              </tr>
+            </thead>
+            <tbody style={{ color: "#eaeaea" }}>
+              {accounts.map((r) => (
+                <tr key={r.vault_address} style={{ borderTop: "1px solid #2a2f3a" }}>
+                  <td className="py-2 pr-4 font-mono text-xs">{r.vault_address.slice(0, 10)}…</td>
+                  <td className="py-2 pr-4 font-mono text-xs">{r.hl_user_address.slice(0, 10)}…</td>
+                  <td className="py-2">{r.asset}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="overflow-x-auto">
+          <p className="text-xs uppercase tracking-widest mb-2" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
+            Recent on-chain attempts
+          </p>
+          {attempts.length === 0 ? (
+            <p className="text-sm" style={{ color: "#6a6f75" }}>No rows yet — run <span className="font-mono text-xs">index_strategy_executor_events.py</span>.</p>
+          ) : (
+            <table className="w-full text-sm" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+              <thead>
+                <tr style={{ color: "#6a6f75", textAlign: "left" }}>
+                  <th className="pb-2 pr-3">Vault</th>
+                  <th className="pb-2 pr-3">Dir</th>
+                  <th className="pb-2 pr-3">Nonce</th>
+                  <th className="pb-2">Tx</th>
+                </tr>
+              </thead>
+              <tbody style={{ color: "#eaeaea" }}>
+                {attempts.map((a) => (
+                  <tr key={a.id} style={{ borderTop: "1px solid #2a2f3a" }}>
+                    <td className="py-2 pr-3 font-mono text-[11px]">{a.vault_address.slice(0, 8)}…</td>
+                    <td className="py-2 pr-3">{a.direction ?? "—"}</td>
+                    <td className="py-2 pr-3 font-mono text-[11px]">{a.nonce ?? "—"}</td>
+                    <td className="py-2">
+                      <a
+                        href={`https://hypurrscan.io/tx/${a.tx_hash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-[11px] underline"
+                        style={{ color: "#b08d57" }}
+                      >
+                        {a.tx_hash.slice(0, 10)}…
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <p className="text-xs uppercase tracking-widest mb-2" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
+            Recent venue fills (Hyperliquid)
+          </p>
+          {fills.length === 0 ? (
+            <p className="text-sm" style={{ color: "#6a6f75" }}>
+              No fills yet — fund HL test accounts and run <span className="font-mono text-xs">poll_hyperliquid_fills.py</span>.
+            </p>
+          ) : (
+            <table className="w-full text-sm" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+              <thead>
+                <tr style={{ color: "#6a6f75", textAlign: "left" }}>
+                  <th className="pb-2 pr-3">Coin</th>
+                  <th className="pb-2 pr-3">Px</th>
+                  <th className="pb-2 pr-3">Sz</th>
+                  <th className="pb-2 pr-3">PnL</th>
+                  <th className="pb-2">Time</th>
+                </tr>
+              </thead>
+              <tbody style={{ color: "#eaeaea" }}>
+                {fills.map((f) => (
+                  <tr key={`${f.fill_key}-${f.id}`} style={{ borderTop: "1px solid #2a2f3a" }}>
+                    <td className="py-2 pr-3">{f.coin ?? "—"}</td>
+                    <td className="py-2 pr-3 font-mono text-[11px]">{f.px ?? "—"}</td>
+                    <td className="py-2 pr-3 font-mono text-[11px]">{f.sz ?? "—"}</td>
+                    <td className="py-2 pr-3 font-mono text-[11px]">{f.closed_pnl ?? "—"}</td>
+                    <td className="py-2 text-[11px]" style={{ color: "#6a6f75" }}>
+                      {f.time_ms ? new Date(f.time_ms).toISOString().slice(0, 16).replace("T", " ") : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ─────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -467,6 +633,8 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      <ExecutionTraceSection />
 
       {/* Disclaimer */}
       <div className="text-center text-xs py-8" style={{ color: "rgba(106,111,117,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
