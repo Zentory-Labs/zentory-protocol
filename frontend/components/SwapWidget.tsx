@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useAccount } from "wagmi";
+import { useMemo, useState } from "react";
+import { useAccount, useBalance, useChainId, useReadContracts } from "wagmi";
+import { formatUnits, parseAbi } from "viem";
 import { TokenSelect } from "./TokenSelect";
+import { addresses, HYPEREVM_TESTNET } from "@/lib/contracts";
 
 const TOKENS = [
   { symbol: "ETH" as const, name: "Ethereum", price: 3450 },
@@ -14,6 +16,113 @@ const TOKENS = [
 const ZENT_PRICE = 0.08; // mock ZENT price in USD
 
 const PRESET_AMOUNTS = [100, 1000, 10000];
+
+const ERC20_ABI = parseAbi([
+  "function balanceOf(address account) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+]);
+
+const USDT_ADDRESS: `0x${string}` | null = null; // no mock USDT deployed in addresses.ts
+
+const WRAPPED_ASSET: Record<Exclude<(typeof TOKENS)[number]["symbol"], "USDT">, `0x${string}`> = {
+  ETH: addresses.WETH,
+  BTC: addresses.WBTC,
+  SOL: addresses.WSOL,
+};
+
+function formatPreset(n: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+}
+
+function trimDecimals(raw: string, maxFrac: number): string {
+  if (!raw.includes(".")) return raw;
+  const [w, f] = raw.split(".");
+  const ff = f.replace(/0+$/, "").slice(0, maxFrac);
+  return ff.length ? `${w}.${ff}` : w;
+}
+
+function formatUnitsTrim(value: bigint, decimals: number, maxFrac: number): string {
+  const full = formatUnits(value, decimals);
+  return trimDecimals(full, maxFrac);
+}
+
+function useSelectedBalanceLabel(symbol: "ZENT" | "ETH" | "BTC" | "USDT" | "SOL"): string {
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const onHyperEvm = isConnected && chainId === HYPEREVM_TESTNET.id;
+
+  const native = useBalance({
+    address,
+    chainId: HYPEREVM_TESTNET.id,
+    query: { enabled: onHyperEvm && !!address && symbol === "ETH" },
+  });
+
+  const tokenAddr =
+    symbol === "ZENT"
+      ? addresses.ZENT
+      : symbol === "USDT"
+        ? USDT_ADDRESS
+        : WRAPPED_ASSET[symbol];
+
+  const tokenRead = useReadContracts({
+    allowFailure: true,
+    contracts:
+      onHyperEvm && !!address && symbol !== "ETH"
+        ? [
+            {
+              chainId: HYPEREVM_TESTNET.id,
+              address: tokenAddr as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: "decimals",
+            },
+            {
+              chainId: HYPEREVM_TESTNET.id,
+              address: tokenAddr as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: "balanceOf",
+              args: [address],
+            },
+          ]
+        : [],
+    query: { enabled: onHyperEvm && !!address && symbol !== "ETH" && !!tokenAddr },
+  });
+
+  return useMemo(() => {
+    if (!isConnected) return "—";
+    if (!onHyperEvm) return "Switch to HyperEVM";
+
+    if (symbol === "USDT") {
+      return "n/a on testnet";
+    }
+
+    if (symbol === "ETH") {
+      if (native.isPending) return "…";
+      const v = native.data?.value;
+      return v === undefined ? "—" : formatUnitsTrim(v, 18, 6);
+    }
+
+    if (!tokenAddr) return "—";
+
+    if (tokenRead.isPending) return "…";
+
+    const dec = tokenRead.data?.[0]?.result as number | undefined;
+    const bal = tokenRead.data?.[1]?.result as bigint | undefined;
+
+    if (typeof dec !== "number" || bal === undefined) return "—";
+
+    const maxFrac = symbol === "BTC" ? 8 : 6;
+    return formatUnitsTrim(bal, dec, maxFrac);
+  }, [
+    isConnected,
+    onHyperEvm,
+    symbol,
+    native.data?.value,
+    native.isPending,
+    tokenAddr,
+    tokenRead.data,
+    tokenRead.isPending,
+  ]);
+}
 
 function PlusIcon() {
   return (
@@ -32,12 +141,16 @@ function MinusIcon() {
 }
 
 export function SwapWidget() {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
+  const chainId = useChainId();
+  const onHyperEvm = isConnected && chainId === HYPEREVM_TESTNET.id;
   const [fromToken, setFromToken] = useState<"ZENT" | "ETH" | "BTC" | "USDT" | "SOL">("ZENT");
   const [toToken, setToToken] = useState<"ZENT" | "ETH" | "BTC" | "USDT" | "SOL">("ETH");
   const [fromAmount, setFromAmount] = useState("");
   const [slippage, setSlippage] = useState(0.5);
-  const inputRef = useRef<HTMLInputElement>(null);
+
+  const fromBalance = useSelectedBalanceLabel(fromToken);
+  const toBalance = useSelectedBalanceLabel(toToken);
 
   const toTokenData = TOKENS.find((t) => t.symbol === toToken)!;
   const fromPrice = fromToken === "ZENT" ? ZENT_PRICE : TOKENS.find((t) => t.symbol === fromToken)?.price ?? 1;
@@ -48,13 +161,9 @@ export function SwapWidget() {
       : "0.000000";
 
   const handleSwap = () => {
-    if (!isConnected) return;
+    if (!isConnected || !onHyperEvm) return;
     // Mock swap — would connect to DEX contract in production
     alert(`Swap ${fromAmount} ${fromToken} → ${estimatedOutput} ${toToken}\n(Swap contract integration coming soon)`);
-  };
-
-  const handleBlur = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const adjustAmount = (delta: number) => {
@@ -112,7 +221,7 @@ export function SwapWidget() {
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs" style={{ color: "#6a6f75" }}>From</span>
           <span className="text-xs" style={{ color: "#6a6f75" }}>
-            Balance: 1,250.00
+            Balance: {fromBalance}
           </span>
         </div>
 
@@ -130,7 +239,7 @@ export function SwapWidget() {
                 fontFamily: "'Montserrat', sans-serif",
               }}
             >
-              {amt.toLocaleString()}
+              {formatPreset(amt)}
             </button>
           ))}
         </div>
@@ -146,14 +255,12 @@ export function SwapWidget() {
             <MinusIcon />
           </button>
           <input
-            ref={inputRef}
             type="text"
             inputMode="decimal"
             step="any"
             placeholder="0.00"
             value={fromAmount}
             onChange={(e) => setFromAmount(e.target.value)}
-            onBlur={handleBlur}
             className="flex-1 min-w-0 bg-transparent text-white text-2xl font-mono outline-none placeholder-white/20 text-right"
             style={{ fontFamily: "'Montserrat', sans-serif" }}
           />
@@ -203,7 +310,7 @@ export function SwapWidget() {
       >
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs" style={{ color: "#6a6f75" }}>To</span>
-          <span className="text-xs" style={{ color: "#6a6f75" }}>Balance: —
+          <span className="text-xs" style={{ color: "#6a6f75" }}>Balance: {toBalance}
           </span>
         </div>
         <div className="flex items-center gap-3 min-w-0">
@@ -238,7 +345,7 @@ export function SwapWidget() {
       {/* CTA */}
       <button
         onClick={handleSwap}
-        disabled={!isConnected || !fromAmount || parseFloat(fromAmount) <= 0}
+        disabled={!isConnected || !onHyperEvm || !fromAmount || parseFloat(fromAmount) <= 0}
         className="w-full rounded-xl font-semibold py-3.5 text-sm transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
         style={{
           background: isConnected ? "#8b1e2d" : "#8b1e2d",
@@ -251,6 +358,8 @@ export function SwapWidget() {
       >
         {!isConnected
           ? "Connect Wallet"
+          : !onHyperEvm
+          ? "Switch to HyperEVM"
           : !fromAmount || parseFloat(fromAmount) <= 0
           ? "Enter Amount"
           : `Swap ${fromToken} → ${toToken}`}

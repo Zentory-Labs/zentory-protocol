@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { createPublicClient, http, parseAbi } from "viem";
+import { createPublicClient, formatUnits, http, parseAbi } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { VideoHero } from "@/components/VideoHero";
 import { SwapWidget } from "@/components/SwapWidget";
@@ -24,28 +24,33 @@ function getAssetDecimals(asset: string): number {
   return 18;
 }
 
+function fmtUnitsTrim(value: bigint, decimals: number, fractionDigits: number): string {
+  const s = formatUnits(value, decimals);
+  const n = Number(s);
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: fractionDigits,
+  });
+}
+
 function fmt(value: bigint, decimals = 18, digits = 2): string {
   if (value === 0n) return "0";
-  const div = 10n ** BigInt(decimals);
-  return (Number(value / div)).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: digits,
-  });
+  return fmtUnitsTrim(value, decimals, digits);
 }
 
 function fmtUsd(value: bigint, decimals = 18, digits = 2): string {
   if (value === 0n) return "$0";
-  const div = 10n ** BigInt(decimals);
   // NOTE: We don't have oracle pricing here; this is "units formatted with $".
   // It's still useful for showing non-zero TVL and comparing deltas in UI.
-  return `$${Number(value) / Number(div)}`.replace(
-    /\$(.*)/,
-    (_, n) =>
-      `$${Number(n).toLocaleString(undefined, {
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-      })}`
-  );
+  const n = Number(formatUnits(value, decimals));
+  if (!Number.isFinite(n)) return "$—";
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
 }
 
 // ─── Token Logo ─────────────────────────────────────────────────────────────
