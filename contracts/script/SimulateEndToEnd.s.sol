@@ -40,9 +40,10 @@ contract SimulateEndToEnd is Script {
     address constant ZENT           = 0x271cd48c1297CacCD810c7B1BCD904f459df7117;
     address constant WETH           = 0x80F727AF3f7932718fEb25FC28818Ad103040BD2;
     address constant WBTC           = 0x08890A5B7D6D157Da65C04C19150fF7d124eaE40;
-    address constant WXRP           = 0xe1Fe75622Bd5D962c72c1D0A621E5fa6656a4371;
+    // Must be valid checksummed address literal for Solidity 0.8.28+
+    address constant WXRP           = 0xe1Fe75622Bd5D962c72c1D0A621e5fa6656a4371;
     address constant WSOL           = 0x2b9d5bBD8C5FEfc71E985d993C13db2770469972;
-    address constant ZENTStaking   = 0x4E2e7Fd3C85c05697b24743e580B03abCD6d0c65;
+    address constant ZENT_STAKING  = 0x4E2e7Fd3C85c05697b24743e580B03abCD6d0c65;
     address constant zETH           = 0xbe8a9d22560A1b126554b70Aaca2D763B2E70C4e;
     address constant zBTC           = 0x93669daC07321FF397cf5734Ae8364EA24addF45;
     address constant zXRP           = 0x8B15204D88a9Bb155bE6798522983A3B5F7d7cB0;
@@ -91,7 +92,7 @@ contract SimulateEndToEnd is Script {
 
         uint256 zentPerUser = 150e18; // 150 ZENT each (above 100 minStake)
         for (uint i = 0; i < users.length; i++) {
-            ZENT.transfer(users[i], zentPerUser);
+            IERC20(ZENT).transfer(users[i], zentPerUser);
             console2.log(
                 string.concat("  ", vm.toString(users[i])),
                 "received",
@@ -108,11 +109,11 @@ contract SimulateEndToEnd is Script {
             vm.startBroadcast(deployerKey); // users have no ETH for gas - use deployer key
 
             // Approve staking contract to pull ZENT
-            ZENT.approve(ZENTStaking, zentPerUser);
-            ZENTStaking.stake(zentPerUser, LOCK_7_DAYS);
+            IERC20(ZENT).approve(ZENT_STAKING, zentPerUser);
+            ZENTStaking(ZENT_STAKING).stake(zentPerUser, LOCK_7_DAYS);
 
             // Verify access granted
-            bool hasAccess = ZENTStaking.hasAccess(users[i]);
+            bool hasAccess = ZENTStaking(ZENT_STAKING).hasAccess(users[i]);
             console2.log(
                 string.concat("  ", vm.toString(users[i])),
                 "staked - hasAccess:",
@@ -177,8 +178,8 @@ contract SimulateEndToEnd is Script {
         console2.log("");
         console2.log("STEP 5 - Final on-chain state");
         console2.log("ZENT Supply:     ", IERC20(ZENT).totalSupply() / 1e18, "ZENT");
-        console2.log("ZENT Staked:    ", ZENTStaking.totalStaked() / 1e18, "ZENT");
-        console2.log("ZENT Stakers:  ", ZENTStaking.totalVeSupply());
+        console2.log("ZENT Staked:    ", ZENTStaking(ZENT_STAKING).totalStaked() / 1e18, "ZENT");
+        console2.log("ZENT Stakers:  ", ZENTStaking(ZENT_STAKING).totalVeSupply());
         console2.log("");
         _logVault("zETH", zETH, WETH);
         _logVault("zBTC", zBTC, WBTC);
