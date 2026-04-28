@@ -35,6 +35,11 @@ export const addresses = {
   // Keeper
   HyperCoreAdapter: "0xfFc1Da47f780973e935Bb9F5a9d455aE7A5f7eac",
   StrategyExecutor: "0x427c94150f3f700Dc2EDf7bCc97155A467E41F21",
+
+  // ─── Signal Network (deployed 2026-04-28 via deploy_signal_network.s.sol) ────────
+  SignalRegistry:    "0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c",
+  EpochScoring:     "0xC9F7345574e8734247556Ed4e30B11851E285bA4",
+  SubscriptionVault: "0xd7d346f6d1F2CEcc3E67d9749B5121549F3dd80d",
 } as const;
 
 // ─── ABIs ───────────────────────────────────────────────────────────────────
@@ -127,6 +132,103 @@ export const HYPERCORE_ADAPTER_ABI = [
   "function sendLimitOrder(uint8,bool,uint64,uint64,bool,uint8,uint128)",
   "function vaultRegistry(address) view returns (uint8)",
   "function lastTradePrice(uint8) view returns (uint256)",
+] as const;
+
+// ─── Signal Network ABIs ──────────────────────────────────────────────────────
+
+export const SIGNAL_REGISTRY_ABI = [
+  // Core submit
+  "function submitSignal(address provider, uint8 assetClass, bytes32 assetId, int256 direction, uint256 confidence, uint256 expiresAt, bytes calldata signature) returns (bytes32 signalId)",
+  "function submitSignalBatch(tuple(bytes32 signalId, address provider, uint8 assetClass, bytes32 assetId, int256 direction, uint256 confidence, uint256 submittedAt, uint256 expiresAt, bytes signature, uint8 status)[] calldata batch) returns (bytes32[] ids)",
+  // Views
+  "function getSignal(bytes32 signalId) view returns (tuple(bytes32 signalId, address provider, uint8 assetClass, bytes32 assetId, int256 direction, uint256 confidence, uint256 submittedAt, uint256 expiresAt, bytes signature, uint8 status))",
+  "function providerNonce(address) view returns (uint256)",
+  "function signalExists(bytes32) view returns (bool)",
+  "function currentEpochId() view returns (uint256)",
+  "function epochDuration() view returns (uint256)",
+  "function stakingContract() view returns (address)",
+  // Scoring
+  "function resolveSignals(bytes32[] calldata signalIds, uint256[] calldata accuraciesBps)",
+  // Access
+  "function hasAccess(address subscriber, uint8 assetClass) view returns (bool)",
+  // EIP-712
+  "function DOMAIN_SEPARATOR() view returns (bytes32)",
+  // Events
+  "event SignalSubmitted(bytes32 indexed signalId, address indexed provider, uint8 assetClass, bytes32 assetId, int256 direction, uint256 confidence, uint256 expiresAt)",
+  "event SignalScored(bytes32 indexed signalId, address indexed provider, uint256 accuracyBps, int256 payout)",
+] as const;
+
+export const EPOCH_SCORING_ABI = [
+  "function checkUpkeep(bytes calldata) view returns (bool upkeepNeeded, bytes memory performData)",
+  "function performUpkeep(bytes calldata performData)",
+  "function settleEpoch()",
+  "function setAccuracy(bytes32 signalId, uint256 accuracyBps)",
+  "function setAccuracyBatch(bytes32[] calldata signalIds, uint256[] calldata accuraciesBps)",
+  "function applyPayout(bytes32 signalId) returns (int256 payout)",
+  "function currentEpochId() view returns (uint256)",
+  "function lastEpochStart() view returns (uint256)",
+  "function epochDuration() view returns (uint256)",
+  "function priceFeeds(bytes32) view returns (address)",
+  "function setPriceFeed(bytes32 assetId, address feed)",
+  "function accuracyCache(bytes32) view returns (uint256)",
+  "function epochStates(uint256) view returns (uint256 totalSignals, uint256 settledSignals, bool settled)",
+  "function getPrice(bytes32 assetId) view returns (int256 price, uint8 decimals)",
+  "event EpochStarted(uint256 indexed epochId, uint256 startTime, uint256 endTime)",
+  "event EpochSettled(uint256 indexed epochId, uint256 totalSignals, uint256 settledSignals)",
+  "event PayoutApplied(bytes32 indexed signalId, address indexed provider, int256 payout)",
+  "event KeeperCallExecuted(uint256 upkeepId, bytes performData)",
+] as const;
+
+export const SUBSCRIPTION_VAULT_ABI = [
+  // Subscribe
+  "function subscribe(uint256 tierId, uint32 months) returns (uint256 tokenId)",
+  "function renewSubscription(uint256 tokenId, uint32 months) returns (uint32 newExpiration)",
+  "function cancelSubscription(uint256 tokenId) returns (uint256 refundZENT)",
+  // Access check
+  "function hasAccess(address subscriber, uint8 assetClass) view returns (bool hasAccess)",
+  "function getActiveSubscriptions(address subscriber) view returns (uint256[] tokenIds)",
+  // Views
+  "function subscriptionInfo(uint256) view returns (address subscriber, bytes assetClass, uint32 duration, uint32 expiration, uint96 pricePaid)",
+  "function tiers(uint256) view returns (uint256 monthlyPriceZENT, bytes assetClassBitmap, uint32 minDuration)",
+  "function nextTokenId() view returns (uint256)",
+  "function subscriberTokens(address) view returns (uint256[])",
+  "function zentToken() view returns (address)",
+  "function treasury() view returns (address)",
+  // ERC-721 stubs
+  "function name() pure returns (string)",
+  "function symbol() pure returns (string)",
+  "function tokenURI(uint256) pure returns (string)",
+  // Events
+  "event Subscribed(address indexed subscriber, uint256 indexed tokenId, uint256 tierId, uint32 duration, uint256 zentPaid)",
+  "event RenewalPaid(uint256 indexed tokenId, uint256 zentPaid, uint32 newExpiration)",
+  "event Cancelled(uint256 indexed tokenId, uint256 refundZENT, uint32 refundSeconds)",
+] as const;
+
+// ─── Subscription Tiers ───────────────────────────────────────────────────────
+
+export const SUBSCRIPTION_TIERS = [
+  {
+    id: 0,
+    name: "BASIC",
+    monthlyPriceZENT: 100,
+    assetClasses: ["CRYPTO_SPOT", "CRYPTO_PERP"],
+    description: "Access crypto signals for Bitcoin, Ethereum, and major altcoins.",
+  },
+  {
+    id: 1,
+    name: "PRO",
+    monthlyPriceZENT: 500,
+    assetClasses: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY"],
+    description: "Crypto + equity signals including AAPL, TSLA, NVDA, and S&P 500.",
+    popular: true,
+  },
+  {
+    id: 2,
+    name: "ELITE",
+    monthlyPriceZENT: 2000,
+    assetClasses: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY", "FOREX", "COMMODITY"],
+    description: "Full multi-asset access: crypto, equities, forex, and commodities.",
+  },
 ] as const;
 
 // ─── Chain config ────────────────────────────────────────────────────────────

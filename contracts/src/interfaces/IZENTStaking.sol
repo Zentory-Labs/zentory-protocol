@@ -9,6 +9,8 @@ interface IZENTStaking {
     event Extended(address indexed user, uint64 oldLockEnd, uint64 newLockEnd);
     event Withdrawn(address indexed user, uint256 amount);
     event MinStakeUpdated(uint256 oldValue, uint256 newValue);
+    event ProviderSlashed(address indexed provider, uint256 amount, address indexed reason);
+    event ProviderRewarded(address indexed provider, uint256 amount);
 
     /// @notice Lock ZENT for `lockDuration` seconds. Reverts if the caller already has a position.
     /// @return lockEnd timestamp at which the lock expires
@@ -39,4 +41,19 @@ interface IZENTStaking {
 
     /// @notice Governor-adjustable vault-access threshold.
     function setMinStake(uint256 newMinStake) external;
+
+    /// @notice Raw staked amount for a provider (used for stake-weighted signal scoring).
+    /// @dev    Differs from stakedBalance in that it returns the raw amount regardless of
+    ///         lock expiry — a locked-but-expired position still has slashable stake.
+    function getProviderStake(address provider) external view returns (uint256 stake);
+
+    /// @notice Slash a provider's stake. Called by EpochScoring when a signal is penalized.
+    /// @param provider Address of the signal provider to slash
+    /// @param amount   Absolute amount of ZENT to slash from provider's position
+    function slash(address provider, uint256 amount) external;
+
+    /// @notice Reward a provider's stake. Called by EpochScoring when a signal is correct.
+    /// @param provider Address of the signal provider to reward
+    /// @param amount  Amount of ZENT to add to provider's stake
+    function reward(address provider, uint256 amount) external;
 }

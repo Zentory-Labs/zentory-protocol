@@ -371,22 +371,17 @@ export default function Home() {
               className="text-base md:text-lg xl:text-xl mb-6 font-light leading-relaxed"
               style={{ color: "rgba(234, 234, 234, 0.75)" }}
             >
-              AI-powered algorithmic trading vaults.
+              The multi-asset quant signal network.
               <br />
-              Alpha generation through systematic strategies.
-            </p>
-
-            <p
-              className="text-sm mb-8"
-              style={{ color: "#6a6f75" }}
-            >
-              Stake ZENT · Earn yield · Govern the protocol
+              Systematic traders submit signals. Subscribers follow and execute.
+              <br />
+              All on-chain, all transparent.
             </p>
 
             {/* CTA buttons */}
             <div className="flex flex-col sm:flex-row gap-3 justify-start items-start mb-10">
               <a
-                href="/stake"
+                href="/markets"
                 className="px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03]"
                 style={{
                   background: "#8b1e2d",
@@ -403,11 +398,11 @@ export default function Home() {
                   (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 0 40px rgba(139, 30, 45, 0.35)";
                 }}
               >
-                Stake ZENT
+                Browse Markets
               </a>
 
               <a
-                href="/govern"
+                href="/subscribe"
                 className="px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03] border"
                 style={{
                   background: "transparent",
@@ -424,7 +419,7 @@ export default function Home() {
                   (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(176, 141, 87, 0.4)";
                 }}
               >
-                Governance
+                Subscribe
               </a>
 
               <a
@@ -489,8 +484,11 @@ export default function Home() {
             className="flex items-center gap-2 text-sm font-semibold"
             style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}
           >
-            <span>⬡</span> Layer-1 Vaults
+            <span>⬡</span> Crypto Signal Vaults
           </div>
+          <p className="text-xs text-center" style={{ color: "rgba(234,234,234,0.35)" }}>
+            Powered by Hyperliquid · On-chain execution · ERC-4626 vaults
+          </p>
           <div className="h-px flex-1" style={{ background: "linear-gradient(to right, transparent, #2a2f3a, transparent)" }} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

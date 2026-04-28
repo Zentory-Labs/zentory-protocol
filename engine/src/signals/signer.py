@@ -149,3 +149,49 @@ EXECUTOR_ABI = [
     },
 ]
 
+
+def sign_signal(
+    signal: "TradingSignal",
+    chain_id: int,
+    executor_address: str,
+    private_key: str,
+) -> str:
+    """
+    Sign a TradingSignal for submission to StrategyExecutor via EIP-712.
+
+    This is a convenience wrapper around ``SignalSigner.sign_hex`` that accepts
+    a ``TradingSignal`` dataclass directly.
+
+    Parameters
+    ----------
+    signal:
+        The TradingSignal to sign (from signals.interface).
+    chain_id:
+        EVM chain ID — 998 for HyperEVM testnet, 1 for mainnet.
+    executor_address:
+        StrategyExecutor contract address as a 0x-hex string.
+    private_key:
+        Wallet private key as a 0x-hex string.
+
+    Returns
+    -------
+    str
+        0x-prefixed ECDSA signature hex string.
+    """
+    from eth_account import Account
+    from eth_hash.auto import keccak
+
+    signer = SignalSigner(private_key=private_key)
+
+    sig_hex = signer.sign_hex(
+        vault=signal.vault,
+        direction=int(signal.direction),
+        size=signal.size,
+        price=signal.price,
+        nonce=0,  # Caller should fetch real nonce from StrategyExecutor.nonces(vault)
+        expiry=int(__import__("time").time()) + 3600,
+        chain_id=chain_id,
+        executor_address=executor_address,
+    )
+    return sig_hex
+

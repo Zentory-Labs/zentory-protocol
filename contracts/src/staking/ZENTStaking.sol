@@ -173,4 +173,46 @@ contract ZENTStaking is AccessControl, IZENTStaking {
         minStake = newMinStake;
         emit MinStakeUpdated(old, newMinStake);
     }
+
+    /// @inheritdoc IZENTStaking
+    function getProviderStake(address provider) external view returns (uint256 stakeAmount) {
+        Position memory pos = _positions[provider];
+        return pos.amount;
+    }
+
+    /// @inheritdoc IZENTStaking
+    function slash(address provider, uint256 amount) external onlyRole(GOVERNOR_ROLE) {
+        if (amount == 0) return;
+        Position storage pos = _positions[provider];
+        require(pos.amount >= amount, "ZENTStaking: slash exceeds stake");
+
+        uint128 newAmount = pos.amount - uint128(amount);
+        uint256 oldVe = _veAt(pos.amount, pos.lockEnd, uint64(block.timestamp));
+        uint256 newVe = _veAt(newAmount, pos.lockEnd, uint64(block.timestamp));
+
+        pos.amount = newAmount;
+        totalStaked -= amount;
+        totalVeSupply = totalVeSupply - oldVe + newVe;
+
+        emit ProviderSlashed(provider, amount, msg.sender);
+        zent.safeTransfer(msg.sender, amount);
+    }
+
+    /// @inheritdoc IZENTStaking
+    function reward(address provider, uint256 amount) external onlyRole(GOVERNOR_ROLE) {
+        if (amount == 0) return;
+        Position storage pos = _positions[provider];
+        require(pos.amount > 0, "ZENTStaking: no position to reward");
+
+        uint256 oldVe = _veAt(pos.amount, pos.lockEnd, uint64(block.timestamp));
+        uint128 newAmount = pos.amount + uint128(amount);
+        uint256 newVe = _veAt(newAmount, pos.lockEnd, uint64(block.timestamp));
+
+        pos.amount = newAmount;
+        totalStaked += amount;
+        totalVeSupply = totalVeSupply - oldVe + newVe;
+
+        emit ProviderRewarded(provider, amount);
+        zent.safeTransferFrom(msg.sender, address(this), amount);
+    }
 }
