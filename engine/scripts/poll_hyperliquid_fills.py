@@ -24,12 +24,20 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from collections import defaultdict
 from typing import Any
 
 import httpx
+
+# Exactly 42 chars: 0x + 40 hex (HyperEVM / HL user addresses).
+_EVM_ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
+
+
+def _is_valid_evm_address(s: str) -> bool:
+    return bool(_EVM_ADDR_RE.match(s.strip()))
 
 # Ensure `src/` is importable when executed as a script file.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -41,10 +49,16 @@ def _normalize_vault_map(mapping: dict[Any, Any]) -> dict[str, str]:
     out: dict[str, str] = {}
     for k, v in mapping.items():
         ks, vs = str(k).strip(), str(v).strip()
-        if not ks.startswith("0x") or len(ks) != 42:
-            raise SystemExit(f"Invalid vault address key: {ks!r}")
-        if not vs.startswith("0x") or len(vs) != 42:
-            raise SystemExit(f"Invalid HL user address for vault {ks[:10]}...: {vs!r}")
+        if not _is_valid_evm_address(ks):
+            raise SystemExit(
+                f"Invalid vault address key: {ks!r}. "
+                "Must be exactly 0x followed by 40 hexadecimal characters (deployed vault contract)."
+            )
+        if not _is_valid_evm_address(vs):
+            raise SystemExit(
+                f"Invalid HL user address for vault {ks[:10]}...: {vs!r}. "
+                "Must be exactly 0x followed by 40 hexadecimal characters."
+            )
         out[ks.lower()] = vs.lower()
     return out
 
@@ -71,16 +85,32 @@ def _fetch_map_from_supabase(supabase_url: str, service_role_key: str) -> dict[s
             continue
         va = str(row.get("vault_address", "")).strip()
         hu = str(row.get("hl_user_address", "")).strip()
-        if va and hu:
-            d[va] = hu
+        if not va and not hu:
+            continue
+        if not _is_valid_evm_address(va):
+            print(
+                "[vault_trading_accounts] skipping row: vault_address must be full contract hex "
+                f"(got {va!r}). Put labels in `notes`, not vault_address.",
+                file=sys.stderr,
+            )
+            continue
+        if not _is_valid_evm_address(hu):
+            print(
+                "[vault_trading_accounts] skipping row: hl_user_address must be full HL user hex "
+                f"(vault {va[:10]}..., got {hu!r}).",
+                file=sys.stderr,
+            )
+            continue
+        d[va.lower()] = hu.lower()
 
     if not d:
         raise SystemExit(
-            "vault_trading_accounts has no rows. Apply migration 2026_04_27_007_seed_vault_trading_accounts.sql "
-            "or insert rows in the Supabase SQL editor; or use --map-file / VAULT_TRADING_MAP."
+            "vault_trading_accounts has no usable rows (need valid vault_address and hl_user_address: "
+            "0x + 40 hex chars each). Remove placeholders like '0x…zBTC…'; use real addresses from "
+            "frontend/lib/contracts.ts for vaults. Or use --map-file / VAULT_TRADING_MAP."
         )
 
-    return _normalize_vault_map(d)
+    return d
 
 
 def _load_vault_trading_map(
@@ -154,6 +184,15 @@ def _fill_key(fill: dict[str, Any]) -> str:
     return key[:512]
 
 
+def _dedupe_fill_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per (vault_address, fill_key); last wins (same batch may repeat)."""
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        vk = (str(row["vault_address"]), str(row["fill_key"]))
+        merged[vk] = row
+    return list(merged.values())
+
+
 def upsert_rows(
     supabase_url: str,
     service_role_key: str,
@@ -162,16 +201,26 @@ def upsert_rows(
     if not rows:
         return
 
+    rows = _dedupe_fill_rows(rows)
+
     headers = {
         "apikey": service_role_key,
         "Authorization": f"Bearer {service_role_key}",
         "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates",
+        # Upsert on logical identity, not bigserial id (otherwise 409 on re-run).
+        "Prefer": "resolution=merge-duplicates,return=minimal",
     }
 
+    base = f"{supabase_url.rstrip('/')}/rest/v1/hl_user_fills"
+    url = f"{base}?on_conflict=vault_address,fill_key"
+
     with httpx.Client(timeout=60.0) as client:
-        r = client.post(f"{supabase_url.rstrip('/')}/rest/v1/hl_user_fills", headers=headers, json=rows)
-        r.raise_for_status()
+        r = client.post(url, headers=headers, json=rows)
+        try:
+            r.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            detail = (e.response.text or "")[:800]
+            raise RuntimeError(f"hl_user_fills upsert failed {e.response.status_code}: {detail}") from e
 
 
 def poll_once(map_file: str | None = None, *, map_from_supabase: bool = False) -> int:
