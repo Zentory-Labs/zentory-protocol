@@ -332,9 +332,9 @@ function HowItWorks() {
     },
     {
       num: "02",
-      title: "Pay in ZENT or Card",
-      desc: "Subscribe via credit/debit card or ZENT tokens. Both activate full access.",
-      icon: "💳",
+      title: "Pay with ZENT",
+      desc: "Subscribe in ZENT tokens. Your payment goes directly to signal providers and stakers.",
+      icon: "💎",
     },
     {
       num: "03",
