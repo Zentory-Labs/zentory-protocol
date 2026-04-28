@@ -31,6 +31,9 @@ contract SignalRegistry is EIP712, ISignalRegistry {
     /// @notice Per-provider nonce for replay protection.
     mapping(address => uint256) public providerNonce;
 
+    /// @notice Ordered list of signal IDs per provider (for getProviderSignals).
+    mapping(address => bytes32[]) public providerSignalIds;
+
     /// @notice Gas-efficient existence check.
     mapping(bytes32 => bool) public signalExists;
 
@@ -39,6 +42,12 @@ contract SignalRegistry is EIP712, ISignalRegistry {
 
     /// @notice Configurable epoch duration (governance-adjustable).
     uint256 public epochDuration = 4 hours;
+
+    /// @notice Maximum batch size for submitSignalBatch to prevent unbounded gas.
+    uint256 public constant MAX_BATCH_SIZE = 100;
+
+    /// @notice Maximum allowed expiry timestamp (7 days from now).
+    uint256 public constant MAX_EXPIRY = 7 days;
 
     /// @notice Authorized staking contract — reads provider stakes for weight.
     address public stakingContract;
@@ -51,6 +60,8 @@ contract SignalRegistry is EIP712, ISignalRegistry {
     error ZeroConfidence();
     error StakingContractNotSet();
     error ArraysLengthMismatch();
+    error BatchSizeExceeded(uint256 size, uint256 max);
+    error ExpiryTooFar(uint256 expiresAt, uint256 maxExpiry);
 
     // ─── Constructor ─────────────────────────────────────────
     constructor(address _stakingContract) EIP712("ZentorySignalRegistry", VERSION) {
@@ -90,6 +101,7 @@ contract SignalRegistry is EIP712, ISignalRegistry {
         });
         signalExists[signalId] = true;
         providerNonce[provider] = nonce + 1;
+        providerSignalIds[provider].push(signalId);
 
         emit SignalTypes.SignalSubmitted(
             signalId, provider, assetClass, assetId, direction, confidence, expiresAt
@@ -118,9 +130,12 @@ contract SignalRegistry is EIP712, ISignalRegistry {
     {
         if (confidence == 0) revert ZeroConfidence();
         if (block.timestamp > expiresAt) revert SignatureExpired(expiresAt, block.timestamp);
+        if (expiresAt > block.timestamp + MAX_EXPIRY) revert ExpiryTooFar(expiresAt, block.timestamp + MAX_EXPIRY);
 
         // Verify EIP-712 signature
         uint256 nonce = providerNonce[provider];
+        // Front-running protection: use nonce in digest before verification so a
+        // mempool front-runner cannot steal the nonce slot and cause revert.
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
@@ -148,14 +163,21 @@ contract SignalRegistry is EIP712, ISignalRegistry {
         external
         returns (bytes32[] memory ids)
     {
+        if (batch.length > MAX_BATCH_SIZE) revert BatchSizeExceeded(batch.length, MAX_BATCH_SIZE);
+
         ids = new bytes32[](batch.length);
         for (uint256 i = 0; i < batch.length; i++) {
             SignalTypes.Signal calldata s = batch[i];
             // Re-validate each signal before internal submission
             if (s.confidence == 0) revert ZeroConfidence();
             if (block.timestamp > s.expiresAt) revert SignatureExpired(s.expiresAt, block.timestamp);
+            if (s.expiresAt > block.timestamp + MAX_EXPIRY) revert ExpiryTooFar(s.expiresAt, block.timestamp + MAX_EXPIRY);
 
-            uint256 nonce = providerNonce[s.provider];
+            // Front-running protection: pre-check nonce BEFORE verifying signature.
+            // Without this, an attacker monitoring the mempool could see a signed signal
+            // with nonce N, then submit a conflicting signal with nonce N first, causing
+            // the honest provider's transaction to revert after the attacker's succeeds.
+            uint256 currentNonce = providerNonce[s.provider];
             bytes32 digest = _hashTypedDataV4(
                 keccak256(
                     abi.encode(
@@ -165,7 +187,7 @@ contract SignalRegistry is EIP712, ISignalRegistry {
                         s.assetId,
                         s.direction,
                         s.confidence,
-                        nonce,
+                        currentNonce,
                         s.expiresAt
                     )
                 )
@@ -219,12 +241,10 @@ contract SignalRegistry is EIP712, ISignalRegistry {
 
     /// @notice Returns paginated signal IDs and statuses for a provider.
     /// @param  provider The signal provider address
-    /// @param  from     Starting nonce (inclusive)
-    /// @param  to       Ending nonce (inclusive)
-    /// @return ids      Reconstructed signal IDs for the given nonce range
+    /// @param  from     Starting index (inclusive)
+    /// @param  to       Ending index (inclusive)
+    /// @return ids      Signal IDs in the given range
     /// @return statuses Respective signal statuses
-    /// @dev    This is a simplified view — production should use a Subgraph indexer
-    ///         for efficient range queries as nonce history grows.
     function getProviderSignals(
         address provider,
         uint256 from,
@@ -232,18 +252,18 @@ contract SignalRegistry is EIP712, ISignalRegistry {
     )
         external view returns (bytes32[] memory ids, SignalTypes.SignalStatus[] memory statuses)
     {
-        uint256 start = from > to ? 0 : from;
-        uint256 end   = to > from ? to : providerNonce[provider];
-        uint256 len   = end > start ? end - start : 0;
+        uint256 len = from <= to && from < providerSignalIds[provider].length
+            ? to - from + 1
+            : 0;
 
         ids     = new bytes32[](len);
         statuses = new SignalTypes.SignalStatus[](len);
 
         uint256 idx = 0;
-        for (uint256 n = start; n < end; n++) {
-            // Reconstruct signal IDs from provider's nonce history
-            ids[idx]     = bytes32(0); // simplified — use Subgraph for full reconstruction
-            statuses[idx] = SignalTypes.SignalStatus.Submitted;
+        for (uint256 i = from; i <= to && i < providerSignalIds[provider].length; i++) {
+            bytes32 id = providerSignalIds[provider][i];
+            ids[idx]     = id;
+            statuses[idx] = signals[id].status;
             idx++;
         }
     }

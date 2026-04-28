@@ -17,6 +17,7 @@ const NAV_LINKS = [
   { href: "/subscribe", label: "Subscribe" },
   { href: "/stake", label: "Stake" },
   { href: "/govern", label: "Govern" },
+  { href: "/provider-portal", label: "Provider" },
 ];
 
 export default function Nav() {

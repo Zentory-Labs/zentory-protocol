@@ -1,8 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { formatUnits, erc20Abi } from "viem";
+import {
+  useAccount,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useChainId,
+  useSwitchChain,
+} from "wagmi";
+import { erc20Abi } from "viem";
 import { addresses, SUBSCRIPTION_VAULT_ABI } from "@/lib/contracts";
 
 // ─── Tier definitions ─────────────────────────────────────────────────────────
@@ -13,7 +19,8 @@ interface Tier {
   id: number;
   name: string;
   priceZent: number;
-  priceUsd: number;
+  priceUsd: number;     // estimated USD at ZENT price
+  fiatPrice: number;     // Stripe/card price in USD
   emoji: string;
   assets: string[];
   assetKeys: string[];
@@ -30,6 +37,7 @@ const TIERS: Tier[] = [
     name: "BASIC",
     priceZent: 100,
     priceUsd: 8,
+    fiatPrice: 29,
     emoji: "🔐",
     assets: ["Crypto Spot", "Crypto Perp"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP"],
@@ -44,6 +52,7 @@ const TIERS: Tier[] = [
     name: "PRO",
     priceZent: 500,
     priceUsd: 40,
+    fiatPrice: 99,
     emoji: "⚡",
     assets: ["Crypto Spot", "Crypto Perp", "Equity"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY"],
@@ -58,6 +67,7 @@ const TIERS: Tier[] = [
     name: "ELITE",
     priceZent: 2000,
     priceUsd: 160,
+    fiatPrice: 299,
     emoji: "👑",
     assets: ["Crypto Spot", "Crypto Perp", "Equity", "Forex", "Commodities"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY", "FOREX", "COMMODITIES"],
@@ -80,7 +90,7 @@ const ASSET_CLASS_TABLE = [
 const FAQ_ITEMS = [
   {
     q: "How does billing work?",
-    a: "Subscriptions are billed monthly in ZENT tokens. The tokens are transferred directly to signal providers when you subscribe.",
+    a: "Subscriptions are billed monthly in ZENT tokens or via credit/debit card. ZENT tokens go directly to signal providers; card payments are processed by Stripe.",
   },
   {
     q: "Can I cancel my subscription?",
@@ -92,7 +102,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Do I need a minimum ZENT balance?",
-    a: "You need enough ZENT to cover the subscription cost for the period. The approval flow guides you through token approval first.",
+    a: "Only if paying with ZENT tokens. For card payments, no crypto balance is required.",
   },
   {
     q: "Are signals financial advice?",
@@ -100,26 +110,124 @@ const FAQ_ITEMS = [
   },
 ];
 
-// ─── SubscribeButton ─────────────────────────────────────────────────────────
+// ─── Card Subscribe Button ────────────────────────────────────────────────────
+
+type CardButtonState = "idle" | "loading" | "redirecting" | "done" | "error";
+
+function CardSubscribeButton({ tier }: { tier: Tier }) {
+  const { address: walletAddress } = useAccount();
+  const [cardState, setCardState] = useState<CardButtonState>("idle");
+  const [cardError, setCardError] = useState<string | null>(null);
+
+  const stripeConfigured =
+    typeof process !== "undefined" &&
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+
+  async function handleCardSubscribe() {
+    setCardError(null);
+    setCardState("loading");
+
+    try {
+      const res = await fetch("/api/subscribe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tierId: tier.id,
+          walletAddress: walletAddress ?? undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to create checkout session");
+      }
+
+      setCardState("redirecting");
+      window.location.href = data.checkoutUrl;
+    } catch (e: unknown) {
+      setCardState("error");
+      setCardError(e instanceof Error ? e.message : "Something went wrong");
+    }
+  }
+
+  if (!stripeConfigured) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={handleCardSubscribe}
+        disabled={cardState === "loading" || cardState === "redirecting"}
+        className="w-full py-3 px-6 rounded-xl font-semibold text-sm transition-all duration-200 hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
+        style={{
+          background:
+            cardState === "loading" || cardState === "redirecting"
+              ? undefined
+              : "rgba(139,30,45,0.15)",
+          border: "1px solid rgba(139,30,45,0.35)",
+          color: "#c2353f",
+          fontFamily: "'Montserrat', sans-serif",
+        }}
+      >
+        {cardState === "loading"
+          ? "Preparing checkout…"
+          : cardState === "redirecting"
+          ? "Redirecting to Stripe…"
+          : `💳 Card – $${tier.fiatPrice}/mo`}
+      </button>
+
+      {cardState === "error" && cardError && (
+        <p
+          className="text-xs text-center"
+          style={{ color: "#ef4444", fontFamily: "'Montserrat', sans-serif" }}
+        >
+          {cardError}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Crypto Subscribe Button ───────────────────────────────────────────────────
 // Proper 2-step flow: approve ZENT → wait → subscribe to vault
 
 type SubscribeState = "idle" | "approving" | "subscribing" | "done" | "error";
 
-function SubscribeButton({ tier }: { tier: Tier }) {
+const HYPER_EVM_CHAIN_ID = 998;
+
+function CryptoSubscribeButton({ tier }: { tier: Tier }) {
   const { isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
   const [state, setState] = useState<SubscribeState>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const { writeContract, data: approveHash, isPending: isApproving } = useWriteContract();
-  const { isLoading: isApproveConfirming } = useWaitForTransactionReceipt({ hash: approveHash ?? undefined });
+  const wrongNetwork = isConnected && chainId && chainId !== HYPER_EVM_CHAIN_ID;
 
-  const { writeContract: writeSubscribe, data: subscribeHash, isPending: isSubscribing } = useWriteContract();
-  const { isLoading: isSubscribeConfirming, isSuccess: isSubscribed } = useWaitForTransactionReceipt({ hash: subscribeHash ?? undefined });
+  const { writeContract, data: approveHash, isPending: isApproving } =
+    useWriteContract();
+  const { isLoading: isApproveConfirming } = useWaitForTransactionReceipt({
+    hash: approveHash ?? undefined,
+  });
+
+  const {
+    writeContract: writeSubscribe,
+    data: subscribeHash,
+    isPending: isSubscribing,
+  } = useWriteContract();
+  const { isLoading: isSubscribeConfirming, isSuccess: isSubscribed } =
+    useWaitForTransactionReceipt({ hash: subscribeHash ?? undefined });
 
   // Once approve is confirmed, automatically trigger subscribe
   useEffect(() => {
-    if (state === "approving" && isApproveConfirming === false && approveHash && !isApproving) {
-      // Approval confirmed — now subscribe
+    if (
+      state === "approving" &&
+      isApproveConfirming === false &&
+      approveHash &&
+      !isApproving
+    ) {
       const amountWei = BigInt(tier.priceZent) * 10n ** 18n;
       setState("subscribing");
       writeSubscribe({
@@ -129,7 +237,7 @@ function SubscribeButton({ tier }: { tier: Tier }) {
         args: [BigInt(tier.id), BigInt(1)],
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isApproveConfirming, approveHash, isApproving]);
 
   // Track subscription success
@@ -149,7 +257,6 @@ function SubscribeButton({ tier }: { tier: Tier }) {
       const amountWei = BigInt(tier.priceZent) * 10n ** 18n;
       setState("approving");
 
-      // Step 1: Approve ZENT for SubscriptionVault
       writeContract({
         address: addresses.ZENT as `0x${string}`,
         abi: erc20Abi,
@@ -166,18 +273,56 @@ function SubscribeButton({ tier }: { tier: Tier }) {
 
   if (!isConnected) {
     return (
-      <button
-        onClick={() => window.dispatchEvent(new Event("open-wallet-modal"))}
-        className="w-full py-3 px-6 rounded-xl font-semibold text-sm transition-all duration-200"
-        style={{
-          background: "rgba(139,30,45,0.12)",
-          border: "1px solid rgba(139,30,45,0.35)",
-          color: "#c2353f",
-          fontFamily: "'Montserrat', sans-serif",
-        }}
-      >
-        Connect Wallet
-      </button>
+      <div className="space-y-2">
+        {wrongNetwork && (
+          <div
+            className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg"
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+            }}
+          >
+            <div
+              className="h-2 w-2 rounded-full"
+              style={{
+                background: "#ef4444",
+                boxShadow: "0 0 6px #ef4444",
+              }}
+            />
+            <span
+              className="text-xs"
+              style={{
+                color: "#ef4444",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+            >
+              Wrong network
+            </span>
+            <button
+              onClick={() => switchChain?.({ chainId: HYPER_EVM_CHAIN_ID })}
+              className="text-xs font-semibold underline"
+              style={{
+                color: "#ef4444",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+            >
+              Switch
+            </button>
+          </div>
+        )}
+        <button
+          onClick={() => window.dispatchEvent(new Event("open-wallet-modal"))}
+          className="w-full py-3 px-6 rounded-xl font-semibold text-sm transition-all duration-200"
+          style={{
+            background: "rgba(139,30,45,0.12)",
+            border: "1px solid rgba(139,30,45,0.35)",
+            color: "#c2353f",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+        >
+          Connect Wallet
+        </button>
+      </div>
     );
   }
 
@@ -204,9 +349,18 @@ function SubscribeButton({ tier }: { tier: Tier }) {
         disabled={isWorking}
         className="w-full py-3 px-6 rounded-xl font-semibold text-sm transition-all duration-200 hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
         style={{
-          background: isWorking ? undefined : tier.color === "#eaeaea" ? "rgba(234,234,234,0.1)" : tier.color,
+          background: isWorking
+            ? undefined
+            : tier.color === "#eaeaea"
+            ? "rgba(234,234,234,0.1)"
+            : tier.color,
           border: `1px solid ${tier.badgeBorder}`,
-          color: tier.color === "#eaeaea" ? "#eaeaea" : tier.color === "#b08d57" ? "#0b0b0d" : "#eaeaea",
+          color:
+            tier.color === "#eaeaea"
+              ? "#eaeaea"
+              : tier.color === "#b08d57"
+              ? "#0b0b0d"
+              : "#eaeaea",
           fontFamily: "'Montserrat', sans-serif",
           boxShadow: isWorking ? undefined : `0 0 24px ${tier.badge}`,
         }}
@@ -219,11 +373,14 @@ function SubscribeButton({ tier }: { tier: Tier }) {
           ? isSubscribing
             ? "Waiting for wallet…"
             : "Confirming subscription…"
-          : "Subscribe"}
+          : `💎 ZENT – ${tier.priceZent.toLocaleString()}/mo`}
       </button>
 
       {state === "error" && error && (
-        <p className="text-xs text-center" style={{ color: "#ef4444", fontFamily: "'Montserrat', sans-serif" }}>
+        <p
+          className="text-xs text-center"
+          style={{ color: "#ef4444", fontFamily: "'Montserrat', sans-serif" }}
+        >
           {error}
         </p>
       )}
@@ -255,9 +412,9 @@ function HowItWorks() {
     },
     {
       num: "02",
-      title: "Pay in ZENT",
-      desc: "Approve ZENT tokens and subscribe. Tokens go directly to providers.",
-      icon: "💎",
+      title: "Pay in ZENT or Card",
+      desc: "Subscribe via credit/debit card or ZENT tokens. Both activate full access.",
+      icon: "💳",
     },
     {
       num: "03",
@@ -270,10 +427,22 @@ function HowItWorks() {
   return (
     <section className="max-w-5xl mx-auto">
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold tracking-tight mb-3" style={{ fontFamily: "'Montserrat', sans-serif", color: "#eaeaea" }}>
+        <h2
+          className="text-3xl font-bold tracking-tight mb-3"
+          style={{
+            fontFamily: "'Montserrat', sans-serif",
+            color: "#eaeaea",
+          }}
+        >
           How It Works
         </h2>
-        <p className="text-sm" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
+        <p
+          className="text-sm"
+          style={{
+            color: "rgba(234,234,234,0.5)",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+        >
           Three steps to access the full signal network
         </p>
       </div>
@@ -291,10 +460,22 @@ function HowItWorks() {
             >
               {s.num}
             </div>
-            <h3 className="text-base font-semibold mb-2" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>
+            <h3
+              className="text-base font-semibold mb-2"
+              style={{
+                color: "#eaeaea",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+            >
               {s.title}
             </h3>
-            <p className="text-sm" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
+            <p
+              className="text-sm"
+              style={{
+                color: "rgba(234,234,234,0.5)",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+            >
               {s.desc}
             </p>
           </div>
@@ -312,7 +493,13 @@ function FAQ() {
   return (
     <section className="max-w-3xl mx-auto">
       <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold tracking-tight mb-3" style={{ fontFamily: "'Montserrat', sans-serif", color: "#eaeaea" }}>
+        <h2
+          className="text-3xl font-bold tracking-tight mb-3"
+          style={{
+            fontFamily: "'Montserrat', sans-serif",
+            color: "#eaeaea",
+          }}
+        >
           Frequently Asked Questions
         </h2>
       </div>
@@ -329,25 +516,31 @@ function FAQ() {
             >
               <span
                 className="font-medium text-sm"
-                style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
+                style={{
+                  color: "#eaeaea",
+                  fontFamily: "'Montserrat', sans-serif",
+                }}
               >
                 {item.q}
               </span>
               <span
                 className="text-lg transition-transform duration-200"
-                style={{ color: "#b08d57", transform: openIndex === i ? "rotate(45deg)" : "none" }}
+                style={{
+                  color: "#b08d57",
+                  transform: openIndex === i ? "rotate(45deg)" : "none",
+                }}
               >
                 +
               </span>
             </button>
             {openIndex === i && (
-              <div
-                className="px-6 pb-4"
-                style={{ borderTop: "1px solid #2a2f3a" }}
-              >
+              <div style={{ borderTop: "1px solid #2a2f3a" }}>
                 <p
-                  className="pt-4 text-sm leading-relaxed"
-                  style={{ color: "rgba(234,234,234,0.55)", fontFamily: "'Montserrat', sans-serif" }}
+                  className="pt-4 pb-4 px-6 text-sm leading-relaxed"
+                  style={{
+                    color: "rgba(234,234,234,0.55)",
+                    fontFamily: "'Montserrat', sans-serif",
+                  }}
                 >
                   {item.a}
                 </p>
@@ -366,22 +559,55 @@ function AssetClassTable() {
   return (
     <section className="max-w-3xl mx-auto">
       <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold tracking-tight mb-3" style={{ fontFamily: "'Montserrat', sans-serif", color: "#eaeaea" }}>
+        <h2
+          className="text-3xl font-bold tracking-tight mb-3"
+          style={{
+            fontFamily: "'Montserrat', sans-serif",
+            color: "#eaeaea",
+          }}
+        >
           Asset Class Coverage
         </h2>
-        <p className="text-sm" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
+        <p
+          className="text-sm"
+          style={{
+            color: "rgba(234,234,234,0.5)",
+            fontFamily: "'Montserrat', sans-serif",
+          }}
+        >
           Each tier unlocks different asset classes
         </p>
       </div>
-      <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid #2a2f3a" }}>
+      <div
+        className="rounded-2xl overflow-hidden"
+        style={{ border: "1px solid #2a2f3a" }}
+      >
         <table className="w-full text-sm">
           <thead>
-            <tr style={{ background: "rgba(255,255,255,0.03)", borderBottom: "1px solid #2a2f3a" }}>
-              <th className="px-6 py-4 text-left font-semibold uppercase tracking-wider" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
+            <tr
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                borderBottom: "1px solid #2a2f3a",
+              }}
+            >
+              <th
+                className="px-6 py-4 text-left font-semibold uppercase tracking-wider"
+                style={{
+                  color: "rgba(234,234,234,0.5)",
+                  fontFamily: "'Montserrat', sans-serif",
+                }}
+              >
                 Asset Class
               </th>
               {["BASIC", "PRO", "ELITE"].map((t) => (
-                <th key={t} className="px-6 py-4 text-center font-semibold uppercase tracking-wider" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
+                <th
+                  key={t}
+                  className="px-6 py-4 text-center font-semibold uppercase tracking-wider"
+                  style={{
+                    color: "rgba(234,234,234,0.5)",
+                    fontFamily: "'Montserrat', sans-serif",
+                  }}
+                >
                   {t}
                 </th>
               ))}
@@ -391,9 +617,20 @@ function AssetClassTable() {
             {ASSET_CLASS_TABLE.map((row, i) => (
               <tr
                 key={row.label}
-                style={{ borderBottom: i < ASSET_CLASS_TABLE.length - 1 ? "1px solid #2a2f3a" : undefined }}
+                style={{
+                  borderBottom:
+                    i < ASSET_CLASS_TABLE.length - 1
+                      ? "1px solid #2a2f3a"
+                      : undefined,
+                }}
               >
-                <td className="px-6 py-4 font-medium" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>
+                <td
+                  className="px-6 py-4 font-medium"
+                  style={{
+                    color: "#eaeaea",
+                    fontFamily: "'Montserrat', sans-serif",
+                  }}
+                >
                   {row.label}
                 </td>
                 {[row.basic, row.pro, row.elite].map((val, j) => (
@@ -418,13 +655,15 @@ function AssetClassTable() {
 
 export default function SubscriptionVaultPage() {
   return (
-    <div className="w-full overflow-x-hidden" style={{ background: "#0b0b0d", fontFamily: "'Montserrat', sans-serif" }}>
+    <div
+      className="w-full overflow-x-hidden"
+      style={{ background: "#0b0b0d", fontFamily: "'Montserrat', sans-serif" }}
+    >
       {/* Ambient glows */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8b1e2d]/5 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#b08d57]/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <main className="mx-auto max-w-7xl px-6 py-28 space-y-24">
-
         {/* ── Hero ── */}
         <section className="text-center max-w-3xl mx-auto space-y-4">
           <div
@@ -435,36 +674,71 @@ export default function SubscriptionVaultPage() {
               color: "#c2353f",
             }}
           >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#c2353f", boxShadow: "0 0 8px #c2353f" }} />
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: "#c2353f",
+                boxShadow: "0 0 8px #c2353f",
+              }}
+            />
             Multi-Asset Signal Network
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight" style={{ color: "#eaeaea" }}>
+          <h1
+            className="text-4xl sm:text-5xl font-bold tracking-tight"
+            style={{ color: "#eaeaea" }}
+          >
             Access the Full Signal Network
           </h1>
-          <p className="text-base leading-relaxed max-w-xl mx-auto" style={{ color: "rgba(234,234,234,0.6)" }}>
-            Subscribe to quant signal providers across crypto, equities, forex, and commodities.
-            Execute on your own wallet — fully transparent, all on-chain.
+          <p
+            className="text-base leading-relaxed max-w-xl mx-auto"
+            style={{ color: "rgba(234,234,234,0.6)" }}
+          >
+            Subscribe to quant signal providers across crypto, equities, forex,
+            and commodities. Execute on your own wallet — fully transparent, all
+            on-chain.
           </p>
         </section>
 
-        {/* ── Tier Cards ── */}
+        {/* ── Pay with Card section ── */}
         <section>
+          <div className="text-center mb-8">
+            <h2
+              className="text-2xl font-bold tracking-tight mb-2"
+              style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
+            >
+              Pay with Card
+            </h2>
+            <p
+              className="text-sm"
+              style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}
+            >
+              Instant access via credit or debit card — no crypto required
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {TIERS.map((tier) => (
               <div
-                key={tier.name}
+                key={`card-${tier.name}`}
                 className="rounded-2xl overflow-hidden flex flex-col"
                 style={{
                   background: "#1c1c21",
-                  border: `1px solid ${tier.popular ? tier.badgeBorder : "#2a2f3a"}`,
-                  boxShadow: tier.popular ? `0 0 60px ${tier.badge}` : undefined,
+                  border: `1px solid ${
+                    tier.popular ? tier.badgeBorder : "#2a2f3a"
+                  }`,
+                  boxShadow: tier.popular
+                    ? `0 0 60px ${tier.badge}`
+                    : undefined,
                 }}
               >
-                {/* Popular badge */}
                 {tier.popular && (
                   <div
                     className="py-1.5 text-center text-xs font-bold uppercase tracking-widest"
-                    style={{ background: tier.color, color: "#0b0b0d", fontFamily: "'Montserrat', sans-serif" }}
+                    style={{
+                      background: tier.color,
+                      color: "#0b0b0d",
+                      fontFamily: "'Montserrat', sans-serif",
+                    }}
                   >
                     Most Popular
                   </div>
@@ -475,29 +749,62 @@ export default function SubscriptionVaultPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="text-2xl mb-1">{tier.emoji}</div>
-                      <h3 className="text-xl font-bold" style={{ color: tier.color, fontFamily: "'Montserrat', sans-serif" }}>
+                      <h3
+                        className="text-xl font-bold"
+                        style={{
+                          color: tier.color,
+                          fontFamily: "'Montserrat', sans-serif",
+                        }}
+                      >
                         {tier.name}
                       </h3>
                     </div>
+                    <span
+                      className="px-2 py-1 rounded-full text-xs font-semibold border"
+                      style={{
+                        background: "rgba(139,30,45,0.12)",
+                        borderColor: "rgba(139,30,45,0.3)",
+                        color: "#c2353f",
+                        fontFamily: "'Montserrat', sans-serif",
+                      }}
+                    >
+                      💳 Card
+                    </span>
                   </div>
 
-                  {/* Price */}
+                  {/* Card Price */}
                   <div>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-3xl font-bold" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>
-                        {tier.priceZent.toLocaleString()}
+                      <span
+                        className="text-3xl font-bold"
+                        style={{
+                          color: "#eaeaea",
+                          fontFamily: "'Montserrat', sans-serif",
+                        }}
+                      >
+                        ${tier.fiatPrice}
                       </span>
-                      <span className="text-sm font-medium" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>
-                        ZENT/mo
+                      <span
+                        className="text-sm font-medium"
+                        style={{
+                          color: "rgba(234,234,234,0.5)",
+                          fontFamily: "'Montserrat', sans-serif",
+                        }}
+                      >
+                        /month
                       </span>
                     </div>
                     <div className="text-xs mt-0.5" style={{ color: "rgba(234,234,234,0.4)" }}>
-                      ≈ ${tier.priceUsd}/month at ZENT ~${ZENT_USD}
+                      or {tier.priceZent.toLocaleString()} ZENT/mo (≈ $
+                      {tier.priceUsd})
                     </div>
                   </div>
 
                   {/* Description */}
-                  <p className="text-sm leading-relaxed" style={{ color: "rgba(234,234,234,0.55)" }}>
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: "rgba(234,234,234,0.55)" }}
+                  >
                     {tier.description}
                   </p>
 
@@ -521,7 +828,162 @@ export default function SubscriptionVaultPage() {
 
                   {/* CTA */}
                   <div className="mt-auto pt-2">
-                    <SubscribeButton tier={tier} />
+                    <CardSubscribeButton tier={tier} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── Divider ── */}
+        <div className="max-w-5xl mx-auto flex items-center gap-4">
+          <div className="flex-1 h-px" style={{ background: "#2a2f3a" }} />
+          <span
+            className="text-xs font-semibold uppercase tracking-widest"
+            style={{ color: "rgba(234,234,234,0.3)", fontFamily: "'Montserrat', sans-serif" }}
+          >
+            or pay with crypto
+          </span>
+          <div className="flex-1 h-px" style={{ background: "#2a2f3a" }} />
+        </div>
+
+        {/* ── Existing Tier Cards (Crypto) ── */}
+        <section>
+          <div className="text-center mb-8">
+            <h2
+              className="text-2xl font-bold tracking-tight mb-2"
+              style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
+            >
+              Pay with Crypto
+            </h2>
+            <p
+              className="text-sm"
+              style={{
+                color: "rgba(234,234,234,0.5)",
+                fontFamily: "'Montserrat', sans-serif",
+              }}
+            >
+              Pay monthly in ZENT tokens — no credit card needed
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {TIERS.map((tier) => (
+              <div
+                key={`crypto-${tier.name}`}
+                className="rounded-2xl overflow-hidden flex flex-col"
+                style={{
+                  background: "#1c1c21",
+                  border: `1px solid ${
+                    tier.popular ? tier.badgeBorder : "#2a2f3a"
+                  }`,
+                  boxShadow: tier.popular
+                    ? `0 0 60px ${tier.badge}`
+                    : undefined,
+                }}
+              >
+                {tier.popular && (
+                  <div
+                    className="py-1.5 text-center text-xs font-bold uppercase tracking-widest"
+                    style={{
+                      background: tier.color,
+                      color: "#0b0b0d",
+                      fontFamily: "'Montserrat', sans-serif",
+                    }}
+                  >
+                    Most Popular
+                  </div>
+                )}
+
+                <div className="p-6 flex flex-col flex-1 space-y-5">
+                  {/* Header */}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-2xl mb-1">{tier.emoji}</div>
+                      <h3
+                        className="text-xl font-bold"
+                        style={{
+                          color: tier.color,
+                          fontFamily: "'Montserrat', sans-serif",
+                        }}
+                      >
+                        {tier.name}
+                      </h3>
+                    </div>
+                    <span
+                      className="px-2 py-1 rounded-full text-xs font-semibold border"
+                      style={{
+                        background: "rgba(176,141,87,0.1)",
+                        borderColor: "rgba(176,141,87,0.25)",
+                        color: "#b08d57",
+                        fontFamily: "'Montserrat', sans-serif",
+                      }}
+                    >
+                      💎 ZENT
+                    </span>
+                  </div>
+
+                  {/* Crypto Price */}
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span
+                        className="text-3xl font-bold"
+                        style={{
+                          color: "#eaeaea",
+                          fontFamily: "'Montserrat', sans-serif",
+                        }}
+                      >
+                        {tier.priceZent.toLocaleString()}
+                      </span>
+                      <span
+                        className="text-sm font-medium"
+                        style={{
+                          color: "#b08d57",
+                          fontFamily: "'Montserrat', sans-serif",
+                        }}
+                      >
+                        ZENT/mo
+                      </span>
+                    </div>
+                    <div
+                      className="text-xs mt-0.5"
+                      style={{ color: "rgba(234,234,234,0.4)" }}
+                    >
+                      ≈ ${tier.priceUsd}/month at ZENT ~${ZENT_USD} or $
+                      {tier.fiatPrice}/mo via card
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <p
+                    className="text-sm leading-relaxed"
+                    style={{ color: "rgba(234,234,234,0.55)" }}
+                  >
+                    {tier.description}
+                  </p>
+
+                  {/* Asset classes */}
+                  <div className="flex flex-wrap gap-2">
+                    {tier.assets.map((asset) => (
+                      <span
+                        key={asset}
+                        className="px-2.5 py-1 rounded-full text-xs font-semibold border"
+                        style={{
+                          background: tier.badge,
+                          borderColor: tier.badgeBorder,
+                          color: tier.color,
+                          fontFamily: "'Montserrat', sans-serif",
+                        }}
+                      >
+                        {asset}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* CTA */}
+                  <div className="mt-auto pt-2">
+                    <CryptoSubscribeButton tier={tier} />
                   </div>
                 </div>
               </div>
@@ -537,7 +999,6 @@ export default function SubscriptionVaultPage() {
 
         {/* ── FAQ ── */}
         <FAQ />
-
       </main>
     </div>
   );

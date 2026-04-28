@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title SubscriptionVault
 /// @notice ERC-721 subscription NFT for ZENT signal network access.
@@ -18,7 +19,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 ///         - BASIC  (0): 100 ZENT/month  — crypto signals only
 ///         - PRO    (1): 500 ZENT/month  — crypto + equity signals
 ///         - ELITE  (2): 2000 ZENT/month — all asset classes + priority feed
-contract SubscriptionVault {
+contract SubscriptionVault is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // ─── ERC-721 Metadata ─────────────────────────────────────
@@ -50,6 +51,9 @@ contract SubscriptionVault {
 
     /// @notice All token IDs ever minted per subscriber (for enumeration).
     mapping(address => uint256[]) public subscriberTokens;
+
+    /// @notice Cached latest expiration per subscriber for O(1) hasAccess() lookups.
+    mapping(address => uint32) public latestExpiration;
 
     // ERC-721 state
     uint256 public nextTokenId;
@@ -114,6 +118,7 @@ contract SubscriptionVault {
     /// @return tokenId The minted ERC-721 token ID representing this subscription
     function subscribe(uint256 tierId, uint32 months)
         external
+        nonReentrant
         returns (uint256 tokenId)
     {
         Tier storage tier = tiers[tierId];
@@ -122,9 +127,6 @@ contract SubscriptionVault {
         uint256 totalCost = tier.monthlyPriceZENT * months;
         if (zentToken.balanceOf(msg.sender) < totalCost)
             revert InsufficientZENT(totalCost, zentToken.balanceOf(msg.sender));
-
-        // Transfer ZENT to treasury (operational revenue — not burned)
-        zentToken.safeTransferFrom(msg.sender, treasury, totalCost);
 
         tokenId = nextTokenId++;
         uint32 duration = uint32(MONTH) * months;
@@ -139,10 +141,18 @@ contract SubscriptionVault {
             tierId:           tierId
         });
 
-        _mint(msg.sender, tokenId);
+        // CEI: update state before external call
         subscriberTokens[msg.sender].push(tokenId);
+        if (expiration > latestExpiration[msg.sender]) {
+            latestExpiration[msg.sender] = expiration;
+        }
 
         emit Subscribed(msg.sender, tokenId, tierId, duration, totalCost);
+
+        // External call last
+        zentToken.safeTransferFrom(msg.sender, treasury, totalCost);
+
+        _mint(msg.sender, tokenId);
     }
 
     // ─── Renew ─────────────────────────────────────────────
@@ -153,6 +163,7 @@ contract SubscriptionVault {
     /// @return newExpiration Updated expiration timestamp
     function renewSubscription(uint256 tokenId, uint32 months)
         external
+        nonReentrant
         returns (uint32 newExpiration)
     {
         SubscriptionInfo storage sub = subscriptionInfo[tokenId];
@@ -162,8 +173,6 @@ contract SubscriptionVault {
         Tier memory tier = _getTierForBitmap(sub.assetClassBitmap);
         uint256 cost = tier.monthlyPriceZENT * months;
 
-        zentToken.safeTransferFrom(msg.sender, treasury, cost);
-
         // Extend from current expiry (or now if already expired) for continuity
         uint32 baseExpiry = sub.expiration < uint32(block.timestamp)
             ? uint32(block.timestamp)
@@ -172,7 +181,14 @@ contract SubscriptionVault {
         sub.expiration = newExpiration;
         sub.duration  += uint32(MONTH) * months;
 
+        // CEI: update cache before external call
+        if (newExpiration > latestExpiration[msg.sender]) {
+            latestExpiration[msg.sender] = newExpiration;
+        }
+
         emit RenewalPaid(tokenId, cost, newExpiration);
+
+        zentToken.safeTransferFrom(msg.sender, treasury, cost);
     }
 
     // ─── Cancel ─────────────────────────────────────────────
@@ -180,7 +196,11 @@ contract SubscriptionVault {
     /// @param tokenId Subscription NFT to cancel
     /// @return refundZENT ZENT refunded to subscriber
     /// @dev Refund = (remaining seconds / total seconds) × pricePaid
-    function cancelSubscription(uint256 tokenId) external returns (uint256 refundZENT) {
+    function cancelSubscription(uint256 tokenId)
+        external
+        nonReentrant
+        returns (uint256 refundZENT)
+    {
         SubscriptionInfo storage sub = subscriptionInfo[tokenId];
         if (sub.subscriber != msg.sender) revert NotOwnerOfToken(tokenId);
 
@@ -193,12 +213,16 @@ contract SubscriptionVault {
             }
         }
 
+        // CEI: clear state before external call
+        delete subscriptionInfo[tokenId];
+        _burn(tokenId);
+
+        // Recompute latestExpiration from remaining tokens
+        _recomputeLatestExpiration(msg.sender);
+
         if (refundZENT > 0) {
             zentToken.safeTransfer(sub.subscriber, refundZENT);
         }
-
-        delete subscriptionInfo[tokenId];
-        _burn(tokenId);
 
         emit Cancelled(tokenId, refundZENT, remainingSeconds);
     }
@@ -214,13 +238,17 @@ contract SubscriptionVault {
     function hasAccess(address subscriber, uint8 assetClass)
         external view returns (bool hasAccess_)
     {
-        uint256[] storage tokens = subscriberTokens[subscriber];
-        uint256 bit = uint256(1) << assetClass;
+        // O(1) check: if latest expiration has passed, no active subscription exists
+        if (latestExpiration[subscriber] < uint32(block.timestamp)) return false;
 
+        uint256 bit = uint256(1) << assetClass;
+        uint256[] storage tokens = subscriberTokens[subscriber];
+
+        // Iterate only over subscriber's tokens to find one with matching asset class
         for (uint256 i = 0; i < tokens.length; i++) {
             SubscriptionInfo storage sub = subscriptionInfo[tokens[i]];
-            if (sub.expiration > uint32(block.timestamp)) {
-                if (_bitmapHas(sub.assetClassBitmap, bit)) return true;
+            if (sub.expiration > uint32(block.timestamp) && _bitmapHas(sub.assetClassBitmap, bit)) {
+                return true;
             }
         }
         return false;
@@ -274,6 +302,18 @@ contract SubscriptionVault {
     }
 
     // ─── Internal ───────────────────────────────────────────
+    /// @notice Recompute latestExpiration by scanning all remaining tokens.
+    ///         Called after cancelSubscription burns a token.
+    function _recomputeLatestExpiration(address subscriber) internal {
+        uint256[] storage tokens = subscriberTokens[subscriber];
+        uint32 maxExp = 0;
+        for (uint256 i = 0; i < tokens.length; i++) {
+            uint32 exp = subscriptionInfo[tokens[i]].expiration;
+            if (exp > maxExp) maxExp = exp;
+        }
+        latestExpiration[subscriber] = maxExp;
+    }
+
     /// @notice Check whether a bitmap includes a given bit.
     function _bitmapHas(uint8 bitmap, uint256 bit) internal pure returns (bool) {
         return (bitmap & uint8(bit)) != 0;

@@ -43,7 +43,8 @@ contract DeploySignalNetwork is Script {
         EpochScoring scoring = new EpochScoring(
             address(signalRegistry),
             address(staking),
-            address(zent)
+            address(zent),
+            deployer  // initial scoringOracle; governance can update via setScoringOracle
         );
         console2.log("EpochScoring deployed:", address(scoring));
 

@@ -1,0 +1,25 @@
+{
+  "name": "@zentory/keeper",
+  "version": "1.0.0",
+  "description": "ZENT Protocol epoch scoring keeper",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "viem": "^2.21.0",
+    "dotenv": "^16.4.5",
+    "axios": "^1.7.0",
+    "yargs": "^17.7.2",
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/yargs": "^17.0.0",
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.2"
+  }
+}

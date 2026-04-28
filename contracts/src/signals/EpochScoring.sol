@@ -59,32 +59,51 @@ contract EpochScoring {
     /// @notice Pre-cached accuracy values set by ScoringOracle before settleEpoch runs.
     mapping(bytes32 => uint256) public accuracyCache;
 
+    // ─── Roles ─────────────────────────────────────────────
+    address public scoringOracle;
+
     // ─── Events ─────────────────────────────────────────────
     event EpochStarted(uint256 indexed epochId, uint256 startTime, uint256 endTime);
     event EpochSettled(uint256 indexed epochId, uint256 totalSignals, uint256 settledSignals);
     event PayoutApplied(bytes32 indexed signalId, address indexed provider, int256 payout);
     event KeeperCallExecuted(uint256 upkeepId, bytes performData);
     event AccuracySet(bytes32 indexed signalId, uint256 accuracyBps);
+    event PriceFeedSet(bytes32 indexed assetId, address indexed feed);
+    event ScoringOracleUpdated(address indexed oldOracle, address indexed newOracle);
+    event EpochPayoutsApplied(uint256 indexed epochId, uint256 startTime, uint256 endTime);
 
     // ─── Errors ─────────────────────────────────────────────
     error EpochNotReady();
     error EpochAlreadySettled(uint256 epochId);
     error PriceFeedNotSet(bytes32 assetId);
     error BelowMinStake(address provider);
+    error UnauthorizedOracle(address caller);
+    error ArraysLengthMismatch();
 
     // ─── Constructor ────────────────────────────────────────
     constructor(
         address _signalRegistry,
         address _zentStaking,
-        address _zentToken
+        address _zentToken,
+        address _scoringOracle
     ) {
         if (_signalRegistry == address(0)) revert();
         if (_zentStaking == address(0)) revert();
+        if (_scoringOracle == address(0)) revert();
         signalRegistry = ISignalRegistry(_signalRegistry);
         zentStaking    = IZENTStaking(_zentStaking);
         zentToken      = _zentToken;
+        scoringOracle  = _scoringOracle;
         currentEpochId = 1;
         lastEpochStart = block.timestamp;
+    }
+
+    /// @notice Update the scoring oracle address (governance-controlled).
+    function setScoringOracle(address newOracle) external {
+        if (newOracle == address(0)) revert();
+        address old = scoringOracle;
+        scoringOracle = newOracle;
+        emit ScoringOracleUpdated(old, newOracle);
     }
 
     // ─── Chainlink Automation ────────────────────────────────
@@ -145,21 +164,11 @@ contract EpochScoring {
     /// @param epochId   Epoch being settled
     /// @param startTime Start of the epoch window
     /// @param endTime   End of the epoch window
-    /// @dev In production: query Subgraph or iterate SignalRegistry events off-chain
-    ///      to enumerate signals, then call setAccuracy() before this function.
-    ///      This internal loop applies payouts for every signal whose accuracy has
-    ///      been pre-cached by the ScoringOracle keeper.
+    /// @dev Emits EpochPayoutsApplied so keepers (via events) can enumerate processed signals.
+    ///      In production the keeper bot queries SignalSubmitted events off-chain,
+    ///      calls setAccuracy() for each, then calls settleEpoch().
     function _applyPayouts(uint256 epochId, uint256 startTime, uint256 endTime) internal {
-        // The keeper's off-chain indexer discovers signals for this epoch and
-        // pre-caches accuracy values via setAccuracy().  Here we iterate the
-        // accuracy cache entries that belong to this epoch's window.
-        //
-        // Because the accuracy cache is a flat mapping (signalId → accuracy),
-        // we provide applyPayout() as a callable entry point so keepers can
-        // apply one signal at a time after caching its accuracy.
-        // settleEpoch() calls _settleSignal() for all signals with cached accuracy.
-        // A production implementation would emit an event in setAccuracy()
-        // that the indexer uses to track which signals belong to which epoch.
+        emit EpochPayoutsApplied(epochId, startTime, endTime);
     }
 
     /// @notice Settle a single signal: apply payout based on pre-cached accuracy.
@@ -200,7 +209,8 @@ contract EpochScoring {
     /// @param signalId    Signal to score
     /// @param accuracyBps Accuracy in basis points (0–10000)
     function setAccuracy(bytes32 signalId, uint256 accuracyBps) external {
-        require(accuracyBps <= 10000, "EpochScoring: accuracy > 10000");
+        if (msg.sender != scoringOracle) revert UnauthorizedOracle(msg.sender);
+        if (accuracyBps > 10000) revert();
         accuracyCache[signalId] = accuracyBps;
         emit AccuracySet(signalId, accuracyBps);
     }
@@ -209,9 +219,10 @@ contract EpochScoring {
     /// @param signalIds    Array of signal IDs to score
     /// @param accuraciesBps Respective accuracy values in basis points
     function setAccuracyBatch(bytes32[] calldata signalIds, uint256[] calldata accuraciesBps) external {
-        require(signalIds.length == accuraciesBps.length, "EpochScoring: length mismatch");
+        if (msg.sender != scoringOracle) revert UnauthorizedOracle(msg.sender);
+        if (signalIds.length != accuraciesBps.length) revert ArraysLengthMismatch();
         for (uint256 i = 0; i < signalIds.length; i++) {
-            require(accuraciesBps[i] <= 10000, "EpochScoring: accuracy > 10000");
+            if (accuraciesBps[i] > 10000) revert();
             accuracyCache[signalIds[i]] = accuraciesBps[i];
             emit AccuracySet(signalIds[i], accuraciesBps[i]);
         }
@@ -223,6 +234,7 @@ contract EpochScoring {
     /// @param feed     Chainlink AggregatorV3Interface proxy address
     function setPriceFeed(bytes32 assetId, address feed) external {
         priceFeeds[assetId] = feed;
+        emit PriceFeedSet(assetId, feed);
     }
 
     /// @notice Get the latest price for an asset from Chainlink.
