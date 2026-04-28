@@ -20,7 +20,7 @@ interface Tier {
   name: string;
   priceZent: number;
   priceUsd: number;     // estimated USD at ZENT price
-  fiatPrice: number;     // Stripe/card price in USD
+  fiatPrice: number;     // fiat equivalent price in USD
   emoji: string;
   assets: string[];
   assetKeys: string[];
@@ -90,7 +90,7 @@ const ASSET_CLASS_TABLE = [
 const FAQ_ITEMS = [
   {
     q: "How does billing work?",
-    a: "Subscriptions are billed monthly in ZENT tokens or via credit/debit card. ZENT tokens go directly to signal providers; card payments are processed by Stripe.",
+    a: "Subscriptions are billed monthly in ZENT tokens. ZENT tokens go directly to signal providers and stakers within the protocol.",
   },
   {
     q: "Can I cancel my subscription?",
@@ -102,7 +102,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Do I need a minimum ZENT balance?",
-    a: "Only if paying with ZENT tokens. For card payments, no crypto balance is required.",
+    a: "Yes. You need sufficient ZENT tokens in your wallet to pay for your chosen subscription tier.",
   },
   {
     q: "Are signals financial advice?",
@@ -110,87 +110,7 @@ const FAQ_ITEMS = [
   },
 ];
 
-// ─── Card Subscribe Button ────────────────────────────────────────────────────
-
-type CardButtonState = "idle" | "loading" | "redirecting" | "done" | "error";
-
-function CardSubscribeButton({ tier }: { tier: Tier }) {
-  const { address: walletAddress } = useAccount();
-  const [cardState, setCardState] = useState<CardButtonState>("idle");
-  const [cardError, setCardError] = useState<string | null>(null);
-
-  const stripeConfigured =
-    typeof process !== "undefined" &&
-    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-
-  async function handleCardSubscribe() {
-    setCardError(null);
-    setCardState("loading");
-
-    try {
-      const res = await fetch("/api/subscribe/create-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tierId: tier.id,
-          walletAddress: walletAddress ?? undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error ?? "Failed to create checkout session");
-      }
-
-      setCardState("redirecting");
-      window.location.href = data.checkoutUrl;
-    } catch (e: unknown) {
-      setCardState("error");
-      setCardError(e instanceof Error ? e.message : "Something went wrong");
-    }
-  }
-
-  if (!stripeConfigured) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-2">
-      <button
-        onClick={handleCardSubscribe}
-        disabled={cardState === "loading" || cardState === "redirecting"}
-        className="w-full py-3 px-6 rounded-xl font-semibold text-sm transition-all duration-200 hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-        style={{
-          background:
-            cardState === "loading" || cardState === "redirecting"
-              ? undefined
-              : "rgba(139,30,45,0.15)",
-          border: "1px solid rgba(139,30,45,0.35)",
-          color: "#c2353f",
-          fontFamily: "'Montserrat', sans-serif",
-        }}
-      >
-        {cardState === "loading"
-          ? "Preparing checkout…"
-          : cardState === "redirecting"
-          ? "Redirecting to Stripe…"
-          : `💳 Card – $${tier.fiatPrice}/mo`}
-      </button>
-
-      {cardState === "error" && cardError && (
-        <p
-          className="text-xs text-center"
-          style={{ color: "#ef4444", fontFamily: "'Montserrat', sans-serif" }}
-        >
-          {cardError}
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ─── Crypto Subscribe Button ───────────────────────────────────────────────────
+// ─── Subscribe Button ───────────────────────────────────────────────────
 // Proper 2-step flow: approve ZENT → wait → subscribe to vault
 
 type SubscribeState = "idle" | "approving" | "subscribing" | "done" | "error";
@@ -699,163 +619,14 @@ export default function SubscriptionVaultPage() {
           </p>
         </section>
 
-        {/* ── Pay with Card section ── */}
+        {/* ── Tier Cards ── */}
         <section>
           <div className="text-center mb-8">
             <h2
               className="text-2xl font-bold tracking-tight mb-2"
               style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
             >
-              Pay with Card
-            </h2>
-            <p
-              className="text-sm"
-              style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}
-            >
-              Instant access via credit or debit card — no crypto required
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {TIERS.map((tier) => (
-              <div
-                key={`card-${tier.name}`}
-                className="rounded-2xl overflow-hidden flex flex-col"
-                style={{
-                  background: "#1c1c21",
-                  border: `1px solid ${
-                    tier.popular ? tier.badgeBorder : "#2a2f3a"
-                  }`,
-                  boxShadow: tier.popular
-                    ? `0 0 60px ${tier.badge}`
-                    : undefined,
-                }}
-              >
-                {tier.popular && (
-                  <div
-                    className="py-1.5 text-center text-xs font-bold uppercase tracking-widest"
-                    style={{
-                      background: tier.color,
-                      color: "#0b0b0d",
-                      fontFamily: "'Montserrat', sans-serif",
-                    }}
-                  >
-                    Most Popular
-                  </div>
-                )}
-
-                <div className="p-6 flex flex-col flex-1 space-y-5">
-                  {/* Header */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-2xl mb-1">{tier.emoji}</div>
-                      <h3
-                        className="text-xl font-bold"
-                        style={{
-                          color: tier.color,
-                          fontFamily: "'Montserrat', sans-serif",
-                        }}
-                      >
-                        {tier.name}
-                      </h3>
-                    </div>
-                    <span
-                      className="px-2 py-1 rounded-full text-xs font-semibold border"
-                      style={{
-                        background: "rgba(139,30,45,0.12)",
-                        borderColor: "rgba(139,30,45,0.3)",
-                        color: "#c2353f",
-                        fontFamily: "'Montserrat', sans-serif",
-                      }}
-                    >
-                      💳 Card
-                    </span>
-                  </div>
-
-                  {/* Card Price */}
-                  <div>
-                    <div className="flex items-baseline gap-2">
-                      <span
-                        className="text-3xl font-bold"
-                        style={{
-                          color: "#eaeaea",
-                          fontFamily: "'Montserrat', sans-serif",
-                        }}
-                      >
-                        ${tier.fiatPrice}
-                      </span>
-                      <span
-                        className="text-sm font-medium"
-                        style={{
-                          color: "rgba(234,234,234,0.5)",
-                          fontFamily: "'Montserrat', sans-serif",
-                        }}
-                      >
-                        /month
-                      </span>
-                    </div>
-                    <div className="text-xs mt-0.5" style={{ color: "rgba(234,234,234,0.4)" }}>
-                      or {tier.priceZent.toLocaleString()} ZENT/mo (≈ $
-                      {tier.priceUsd})
-                    </div>
-                  </div>
-
-                  {/* Description */}
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: "rgba(234,234,234,0.55)" }}
-                  >
-                    {tier.description}
-                  </p>
-
-                  {/* Asset classes */}
-                  <div className="flex flex-wrap gap-2">
-                    {tier.assets.map((asset) => (
-                      <span
-                        key={asset}
-                        className="px-2.5 py-1 rounded-full text-xs font-semibold border"
-                        style={{
-                          background: tier.badge,
-                          borderColor: tier.badgeBorder,
-                          color: tier.color,
-                          fontFamily: "'Montserrat', sans-serif",
-                        }}
-                      >
-                        {asset}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* CTA */}
-                  <div className="mt-auto pt-2">
-                    <CardSubscribeButton tier={tier} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Divider ── */}
-        <div className="max-w-5xl mx-auto flex items-center gap-4">
-          <div className="flex-1 h-px" style={{ background: "#2a2f3a" }} />
-          <span
-            className="text-xs font-semibold uppercase tracking-widest"
-            style={{ color: "rgba(234,234,234,0.3)", fontFamily: "'Montserrat', sans-serif" }}
-          >
-            or pay with crypto
-          </span>
-          <div className="flex-1 h-px" style={{ background: "#2a2f3a" }} />
-        </div>
-
-        {/* ── Existing Tier Cards (Crypto) ── */}
-        <section>
-          <div className="text-center mb-8">
-            <h2
-              className="text-2xl font-bold tracking-tight mb-2"
-              style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
-            >
-              Pay with Crypto
+              Subscribe with ZENT
             </h2>
             <p
               className="text-sm"
@@ -864,7 +635,7 @@ export default function SubscriptionVaultPage() {
                 fontFamily: "'Montserrat', sans-serif",
               }}
             >
-              Pay monthly in ZENT tokens — no credit card needed
+              Pay monthly in ZENT tokens — stake, subscribe, and access the full signal network
             </p>
           </div>
 
