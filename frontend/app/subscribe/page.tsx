@@ -257,7 +257,7 @@ function CryptoSubscribeButton({ tier }: { tier: Tier }) {
           fontFamily: "'Montserrat', sans-serif",
         }}
       >
-        ✓ Subscription Active
+        Subscription Active
       </div>
     );
   }
@@ -556,7 +556,7 @@ function AssetClassTable() {
                 {[row.basic, row.pro, row.elite].map((val, j) => (
                   <td key={j} className="px-6 py-4 text-center text-lg">
                     {val ? (
-                      <span style={{ color: "#22c55e" }}>✓</span>
+                      <span style={{ color: "#22c55e" }}>Yes</span>
                     ) : (
                       <span style={{ color: "rgba(234,234,234,0.2)" }}>—</span>
                     )}

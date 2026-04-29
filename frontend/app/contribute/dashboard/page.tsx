@@ -307,7 +307,7 @@ function PublishResearchForm({ apiKey, onSuccess }: { apiKey: string; onSuccess:
               fontFamily: "'Montserrat', sans-serif",
             }}
           >
-            ▲ LONG
+            + LONG
           </button>
           <button
             type="button"
@@ -320,7 +320,7 @@ function PublishResearchForm({ apiKey, onSuccess }: { apiKey: string; onSuccess:
               fontFamily: "'Montserrat', sans-serif",
             }}
           >
-            ▼ SHORT
+            - SHORT
           </button>
         </div>
       </div>

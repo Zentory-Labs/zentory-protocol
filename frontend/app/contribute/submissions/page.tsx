@@ -92,7 +92,7 @@ function ResearchTable({ research }: { research: Research[] }) {
                 <td className="py-3 pr-4 font-semibold whitespace-nowrap">{s.asset_id}</td>
                 <td className="py-3 pr-4 text-xs whitespace-nowrap" style={{ color: "rgba(106,111,117,0.6)" }}>{s.asset_class}</td>
                 <td className="py-3 pr-4 font-semibold whitespace-nowrap" style={{ color: isLong ? "#22c55e" : "#ef4444" }}>
-                  {isLong ? "▲ LONG" : "▼ SHORT"}
+                  {isLong ? "+ LONG" : "- SHORT"}
                 </td>
                 <td className="py-3 pr-4 text-xs whitespace-nowrap">{Math.round((s.confidence / 10000) * 100)}%</td>
                 <td className="py-3 pr-4 text-xs whitespace-nowrap" style={{ color: payoutColor ?? "inherit" }}>

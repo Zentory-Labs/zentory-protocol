@@ -390,7 +390,7 @@ function SignalsTable({ signals }: { signals: RecentSignal[] }) {
   if (signals.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 text-sm" style={{ color: "rgba(234,234,234,0.4)" }}>
-        No signals yet — signals will appear after the first epoch settles
+        No research yet — research will appear after the first epoch settles
       </div>
     );
   }

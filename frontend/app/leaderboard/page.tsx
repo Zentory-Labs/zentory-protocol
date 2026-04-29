@@ -345,7 +345,7 @@ function YourPosition({ address, providers }: { address: string; providers: Lead
             Your Position
           </div>
           <div className="text-xs" style={{ color: "rgba(234,234,234,0.4)", fontFamily: "'Montserrat', sans-serif" }}>
-            Not ranked yet — stake ZENT and submit signals to appear here
+            Not ranked yet — stake ZENT and publish research to appear here
           </div>
         </div>
         <div
