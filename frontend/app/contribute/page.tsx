@@ -45,7 +45,7 @@ export default function ContributePage() {
         }}
       >
         <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#b08d57", boxShadow: "0 0 8px #b08d57" }} />
-        Research Contributor Portal
+        Quant Research Network
       </div>
 
       {/* Heading */}
@@ -53,14 +53,13 @@ export default function ContributePage() {
         className="text-4xl sm:text-5xl font-bold tracking-tight mb-4"
         style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
       >
-        Contributor Portal
+        Contribute Research
       </h1>
       <p
         className="text-base leading-relaxed max-w-lg mb-10"
         style={{ color: "rgba(234,234,234,0.55)", fontFamily: "'Montserrat', sans-serif" }}
       >
-        Connect your wallet to access your contributor dashboard. Manage API keys, publish research,
-        and track your performance across the ZENT research network.
+        Build a publicly verifiable on-chain track record. Stake ZENT on your accuracy. Earn rewards when your research contributes to the ZENT Alpha Vault.
       </p>
 
       {/* connect button */}

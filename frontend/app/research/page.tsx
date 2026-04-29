@@ -139,7 +139,7 @@ function ContributorBreakdown({ research }: { research: Research[] }) {
   return (
     <div className="glass-card p-6">
       <p className="text-xs uppercase tracking-widest mb-4" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
-        Contributor Breakdown
+        Research Contributors
       </p>
       <div className="space-y-3">
         {contributorDefs.map(({ name, label, count, winRate }) => (
@@ -216,7 +216,7 @@ export default function ResearchPage() {
               <span className="gradient-text-gold">Research Dashboard</span>
             </h1>
             <p className="mt-1 text-sm text-white/40">
-              Auto-refreshes every 30s · stored on-chain via StrategyExecutor
+              Multi-asset market structure analysis. Published research from the ZENT network. Not investment advice.
             </p>
           </div>
           {isConnected && address && (

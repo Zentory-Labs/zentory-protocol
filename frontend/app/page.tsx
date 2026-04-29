@@ -361,9 +361,7 @@ export default function Home() {
               className="text-5xl sm:text-6xl md:text-7xl lg:text-6xl xl:text-8xl font-bold mb-6 tracking-tight leading-none"
               style={{ fontFamily: "'Montserrat', sans-serif" }}
             >
-              <span className="gradient-text-gold">Zentory</span>
-              <br />
-              <span style={{ color: "#eaeaea" }}>Protocol</span>
+              <span className="gradient-text-gold">The Multi-Asset Alpha Vault</span>
             </h1>
 
             {/* Subtitle */}
@@ -371,11 +369,9 @@ export default function Home() {
               className="text-base md:text-lg xl:text-xl mb-6 font-light leading-relaxed"
               style={{ color: "rgba(234, 234, 234, 0.75)" }}
             >
-              The multi-asset quant research network.
+              Stake BTC, SOL, ETH, XRP or HYPE. Earn systematic yield from proprietary algorithms.
               <br />
-              Systematic traders publish research. Subscribers follow and execute.
-              <br />
-              All on-chain, all transparent.
+              Your keys, your crypto — always.
             </p>
 
             {/* CTA buttons */}
@@ -483,7 +479,7 @@ export default function Home() {
             className="flex items-center gap-2 text-sm font-semibold"
             style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}
           >
-            <span>⬡</span> Crypto Research Vaults
+            <span>⬡</span> Alpha Vaults
           </div>
           <p className="text-xs text-center" style={{ color: "rgba(234,234,234,0.35)" }}>
             Powered by Hyperliquid · On-chain execution · ERC-4626 vaults
