@@ -340,7 +340,7 @@ function HowItWorks() {
       num: "03",
       title: "Follow Research",
       desc: "Access research in your dashboard and execute trades on your own wallet.",
-      icon: "Signal",
+      icon: "Research",
     },
   ];
 

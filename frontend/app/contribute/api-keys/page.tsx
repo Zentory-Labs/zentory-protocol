@@ -27,14 +27,14 @@ function fmtRelative(ts: number | null): string {
 }
 
 async function fetchApiKeys(apiKey: string): Promise<ApiKeyInfo[]> {
-  const res = await fetch("/api/provider/api-keys", { headers: { "x-api-key": apiKey } });
+  const res = await fetch("/api/contribute/api-keys", { headers: { "x-api-key": apiKey } });
   if (!res.ok) return [];
   const data = await res.json();
   return data.keys ?? [];
 }
 
 async function createApiKey(apiKey: string, label: string): Promise<{ key: string; id: number; message?: string } | null> {
-  const res = await fetch("/api/provider/api-keys", {
+  const res = await fetch("/api/contribute/api-keys", {
     method: "POST",
     headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ label }),
@@ -44,7 +44,7 @@ async function createApiKey(apiKey: string, label: string): Promise<{ key: strin
 }
 
 async function revokeApiKey(apiKey: string, keyId: number): Promise<boolean> {
-  const res = await fetch("/api/provider/api-keys", {
+  const res = await fetch("/api/contribute/api-keys", {
     method: "DELETE",
     headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ keyId }),
