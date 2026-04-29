@@ -432,7 +432,7 @@ function ResearchTable({ research }: { research: Research[] }) {
                 <td className="py-3 pr-4 font-semibold">{s.asset_id}</td>
                 <td className="py-3 pr-4 text-xs" style={{ color: "rgba(106,111,117,0.7)" }}>{s.asset_class}</td>
                 <td className="py-3 pr-4 font-semibold" style={{ color: isLong ? "#22c55e" : "#ef4444" }}>
-                  {isLong ? "▲ LONG" : "▼ SHORT"}
+                  {isLong ? "+ LONG" : "- SHORT"}
                 </td>
                 <td className="py-3 pr-4 text-xs">{Math.round((s.confidence / 10000) * 100)}%</td>
                 <td className="py-3 pr-4 text-xs" style={{ color: "rgba(106,111,117,0.7)" }}>
