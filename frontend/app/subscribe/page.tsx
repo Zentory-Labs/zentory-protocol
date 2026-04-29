@@ -19,8 +19,7 @@ interface Tier {
   id: number;
   name: string;
   priceZent: number;
-  priceUsd: number;     // estimated USD at ZENT price
-  fiatPrice: number;     // fiat equivalent price in USD
+  priceUsd: number; // estimated USD equivalent at current ZENT price
   emoji: string;
   assets: string[];
   assetKeys: string[];
@@ -37,7 +36,6 @@ const TIERS: Tier[] = [
     name: "BASIC",
     priceZent: 100,
     priceUsd: 8,
-    fiatPrice: 29,
     emoji: "Lock",
     assets: ["Crypto Spot", "Crypto Perp"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP"],
@@ -52,7 +50,6 @@ const TIERS: Tier[] = [
     name: "PRO",
     priceZent: 500,
     priceUsd: 40,
-    fiatPrice: 99,
     emoji: "Bolt",
     assets: ["Crypto Spot", "Crypto Perp", "Equity"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY"],
@@ -67,7 +64,6 @@ const TIERS: Tier[] = [
     name: "ELITE",
     priceZent: 2000,
     priceUsd: 160,
-    fiatPrice: 299,
     emoji: "Crown",
     assets: ["Crypto Spot", "Crypto Perp", "Equity", "Forex", "Commodities"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY", "FOREX", "COMMODITIES"],
@@ -729,8 +725,7 @@ export default function SubscriptionVaultPage() {
                       className="text-xs mt-0.5"
                       style={{ color: "rgba(234,234,234,0.4)" }}
                     >
-                      ≈ ${tier.priceUsd}/month at ZENT ~${ZENT_USD} or $
-                      {tier.fiatPrice}/mo via card
+                      ≈ ${tier.priceUsd}/month at ZENT ~${ZENT_USD}
                     </div>
                   </div>
 

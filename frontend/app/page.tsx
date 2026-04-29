@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { createPublicClient, formatUnits, http, parseAbi } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { VideoHero } from "@/components/VideoHero";
-import { SwapWidget } from "@/components/SwapWidget";
 import { addresses, ZENT_ABI, VAULT_ABI, STAKING_ABI, vaultMeta, HYPEREVM_TESTNET } from "@/lib/contracts";
 
 const VAULTS = [addresses.zBTC, addresses.zETH, addresses.zSOL, addresses.zXRP] as const;
@@ -377,7 +376,7 @@ export default function Home() {
             {/* CTA buttons */}
             <div className="flex flex-col sm:flex-row gap-3 justify-start items-start mb-10">
               <a
-                href="/markets"
+                href="/"
                 className="px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03]"
                 style={{
                   background: "#8b1e2d",
@@ -394,7 +393,7 @@ export default function Home() {
                   (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 0 40px rgba(139, 30, 45, 0.35)";
                 }}
               >
-                Browse Markets
+                Enter Vault
               </a>
 
               <a
@@ -444,9 +443,58 @@ export default function Home() {
             <ChainStats />
           </div>
 
-          {/* ── Right: swap widget ── */}
+          {/* ── Right: vault stats panel ── */}
           <div className="w-full max-w-sm flex-shrink-0">
-            <SwapWidget />
+            <div
+              className="rounded-2xl border p-6"
+              style={{
+                background: "rgba(11,11,13,0.85)",
+                borderColor: "rgba(139,30,45,0.3)",
+              }}
+            >
+              <div className="text-xs font-semibold uppercase tracking-widest mb-5" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>
+                Alpha Vault Stats
+              </div>
+              <div className="space-y-4">
+                {[
+                  { label: "Total Value Locked", value: "$0", sub: "Pre-mainnet" },
+                  { label: "Vault APY", value: "—", sub: "Live after launch" },
+                  { label: "Supported Assets", value: "BTC · ETH · SOL", sub: "XRP · HYPE coming" },
+                  { label: "Strategy", value: "Premium/Discount", sub: "Non-directional alpha" },
+                ].map(({ label, value, sub }) => (
+                  <div key={label} className="flex flex-col gap-0.5">
+                    <span className="text-xs" style={{ color: "rgba(234,234,234,0.4)" }}>{label}</span>
+                    <span className="text-sm font-semibold" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>{value}</span>
+                    <span className="text-xs" style={{ color: "rgba(234,234,234,0.25)" }}>{sub}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 pt-5 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                <a
+                  href="/"
+                  className="block w-full py-3 rounded-xl text-center text-xs font-semibold uppercase tracking-widest transition-all hover:scale-[1.02]"
+                  style={{
+                    background: "#8b1e2d",
+                    color: "#eaeaea",
+                    fontFamily: "'Montserrat', sans-serif",
+                  }}
+                >
+                  Enter Vault
+                </a>
+                <a
+                  href="/research"
+                  className="block w-full py-2.5 mt-2 rounded-xl text-center text-xs font-semibold uppercase tracking-widest transition-all hover:scale-[1.02] border"
+                  style={{
+                    background: "transparent",
+                    color: "#b08d57",
+                    borderColor: "rgba(176,141,87,0.3)",
+                    fontFamily: "'Montserrat', sans-serif",
+                  }}
+                >
+                  View Research
+                </a>
+              </div>
+            </div>
           </div>
 
         </div>
