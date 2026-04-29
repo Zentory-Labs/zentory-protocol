@@ -164,7 +164,7 @@ const TROPHY_COLORS = ["#FFD700", "#C0C0C0", "#CD7F32"];
 const TROPHY_BG = ["rgba(255,215,0,0.08)", "rgba(192,192,192,0.06)", "rgba(205,127,50,0.06)"];
 
 function Top3Card({ provider, index }: { provider: LeaderboardProvider; index: number }) {
-  const trophy = ["🥇", "🥈", "🥉"][index];
+  const trophyLabels = ["1st", "2nd", "3rd"];
   const color = TROPHY_COLORS[index];
 
   return (
@@ -179,7 +179,7 @@ function Top3Card({ provider, index }: { provider: LeaderboardProvider; index: n
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-2xl">{trophy}</span>
+          <span className="text-xs font-bold uppercase tracking-wider" style={{ color }}>{trophyLabels[index]}</span>
           <span
             className="text-2xl font-black"
             style={{ color, fontFamily: "'Montserrat', sans-serif" }}
@@ -507,7 +507,7 @@ export default function LeaderboardPage() {
   }, [lastUpdated]);
 
   return (
-    <div className="w-full overflow-x-hidden" style={{ background: "#0b0b0d", fontFamily: "'Montserrat', sans-serif" }}>
+    <div className="w-full overflow-x-hidden" style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Ambient glows */}
       <div className="absolute top-0 left-1/3 w-96 h-96 bg-[#8b1e2d]/5 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-[#b08d57]/5 rounded-full blur-3xl pointer-events-none -z-10" />
@@ -529,10 +529,10 @@ export default function LeaderboardPage() {
               Live Leaderboard
             </div>
             <h1 className="text-4xl font-bold tracking-tight" style={{ color: "#eaeaea" }}>
-              Signal Provider Leaderboard
+              Research Contributor Leaderboard
             </h1>
             <p className="text-sm mt-1" style={{ color: "rgba(234,234,234,0.5)" }}>
-              Top quant providers ranked by accuracy and ZENT earned across all asset classes
+              Top quant contributors ranked by accuracy and ZENT earned across all asset classes
             </p>
           </div>
           <div className="flex items-center gap-3">

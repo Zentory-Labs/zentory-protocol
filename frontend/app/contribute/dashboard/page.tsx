@@ -57,7 +57,7 @@ interface ApiKeyInfo {
   isActive: boolean;
 }
 
-interface Signal {
+interface Research {
   id: number;
   asset_class: string;
   asset_id: string;
@@ -71,8 +71,8 @@ interface Signal {
 }
 
 interface Analytics {
-  totalSignals: number;
-  resolvedSignals: number;
+  totalResearch: number;
+  resolvedResearch: number;
   avgAccuracy: number;
   totalPayout: number;
   currentRank: number | null;
@@ -98,7 +98,7 @@ function fmtRelative(ts: number | null): string {
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
 async function fetchApiKeys(apiKey: string): Promise<ApiKeyInfo[]> {
-  const res = await fetch("/api/provider/api-keys", {
+  const res = await fetch("/api/contribute/api-keys", {
     headers: { "x-api-key": apiKey },
   });
   if (!res.ok) return [];
@@ -107,7 +107,7 @@ async function fetchApiKeys(apiKey: string): Promise<ApiKeyInfo[]> {
 }
 
 async function createApiKey(apiKey: string, label: string): Promise<{ key: string; id: number } | null> {
-  const res = await fetch("/api/provider/api-keys", {
+  const res = await fetch("/api/contribute/api-keys", {
     method: "POST",
     headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ label }),
@@ -117,7 +117,7 @@ async function createApiKey(apiKey: string, label: string): Promise<{ key: strin
 }
 
 async function revokeApiKey(apiKey: string, keyId: number): Promise<boolean> {
-  const res = await fetch("/api/provider/api-keys", {
+  const res = await fetch("/api/contribute/api-keys", {
     method: "DELETE",
     headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify({ keyId }),
@@ -126,26 +126,26 @@ async function revokeApiKey(apiKey: string, keyId: number): Promise<boolean> {
 }
 
 async function fetchAnalytics(apiKey: string, epochs = 20): Promise<Analytics | null> {
-  const res = await fetch(`/api/provider/analytics?epochs=${epochs}`, {
+  const res = await fetch(`/api/contribute/analytics?epochs=${epochs}`, {
     headers: { "x-api-key": apiKey },
   });
   if (!res.ok) return null;
   return res.json();
 }
 
-async function fetchRecentSignals(apiKey: string): Promise<Signal[]> {
-  const res = await fetch("/api/provider/signals?limit=10", {
+async function fetchRecentResearch(apiKey: string): Promise<Research[]> {
+  const res = await fetch("/api/contribute/research?limit=10", {
     headers: { "x-api-key": apiKey },
   });
   if (!res.ok) return [];
   return res.json();
 }
 
-async function submitSignal(
+async function submitResearch(
   apiKey: string,
   payload: { assetClass: string; assetId: string; direction: number; confidence: number; expiresAt: number }
-): Promise<{ signalId: string; dbId: number } | null> {
-  const res = await fetch("/api/provider", {
+): Promise<{ researchId: string; dbId: number } | null> {
+  const res = await fetch("/api/contribute", {
     method: "POST",
     headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -215,9 +215,9 @@ function MetricCard({ label, value, accent, pill }: { label: string; value: stri
   );
 }
 
-// ─── SubmitSignalForm ─────────────────────────────────────────────────────────
+// ─── PublishResearchForm ─────────────────────────────────────────────────────────
 
-function SubmitSignalForm({ apiKey, onSuccess }: { apiKey: string; onSuccess: () => void }) {
+function PublishResearchForm({ apiKey, onSuccess }: { apiKey: string; onSuccess: () => void }) {
   const [assetClass, setAssetClass] = useState<string>("CRYPTO_PERP");
   const [assetId, setAssetId] = useState<string>("BTC");
   const [direction, setDirection] = useState<number>(10000);
@@ -242,7 +242,7 @@ function SubmitSignalForm({ apiKey, onSuccess }: { apiKey: string; onSuccess: ()
       const now = Math.floor(Date.now() / 1000);
       const expiresAt = now + EXPIRY_OPTIONS[expiryIdx].seconds;
       const confidenceBps = Math.round(confidence * 100);
-      const result = await submitSignal(apiKey, { assetClass, assetId, direction, confidence: confidenceBps, expiresAt });
+      const result = await submitResearch(apiKey, { assetClass, assetId, direction, confidence: confidenceBps, expiresAt });
       if (!result) {
         setError("Submission failed. Check your API key or try again.");
       } else {
@@ -376,7 +376,7 @@ function SubmitSignalForm({ apiKey, onSuccess }: { apiKey: string; onSuccess: ()
       )}
       {success && (
         <p className="text-xs rounded-lg px-3 py-2" style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", color: "#22c55e", fontFamily: "'Montserrat', sans-serif" }}>
-          Signal submitted successfully
+          Research published successfully
         </p>
       )}
 
@@ -391,20 +391,20 @@ function SubmitSignalForm({ apiKey, onSuccess }: { apiKey: string; onSuccess: ()
           boxShadow: "0 0 30px rgba(176,141,87,0.2)",
         }}
       >
-        {loading ? "Submitting…" : "Submit Signal"}
+        {loading ? "Publishing…" : "Publish Research"}
       </button>
     </form>
   );
 }
 
-// ─── SignalsTable ─────────────────────────────────────────────────────────────
+// ─── ResearchTable ─────────────────────────────────────────────────────────────
 
-function SignalsTable({ signals }: { signals: Signal[] }) {
-  if (signals.length === 0) {
+function ResearchTable({ research }: { research: Research[] }) {
+  if (research.length === 0) {
     return (
       <div className="text-center py-10">
         <p className="text-sm" style={{ color: "rgba(106,111,117,0.6)", fontFamily: "'Montserrat', sans-serif" }}>
-          No signals submitted yet
+          No research published yet
         </p>
       </div>
     );
@@ -421,7 +421,7 @@ function SignalsTable({ signals }: { signals: Signal[] }) {
           </tr>
         </thead>
         <tbody>
-          {signals.map((s) => {
+          {research.map((s) => {
             const isLong = s.direction > 0;
             const statusColor = s.status === "Active" ? "#22c55e" : s.status === "Resolved" ? "#b08d57" : "#6a6f75";
             return (
@@ -457,7 +457,7 @@ function SignalsTable({ signals }: { signals: Signal[] }) {
 function DashboardContent({ apiKey }: { apiKey: string }) {
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [signals, setSignals] = useState<Signal[]>([]);
+  const [research, setResearch] = useState<Research[]>([]);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [loadingKeys, setLoadingKeys] = useState(true);
   const [loadingAnalytics, setLoadingAnalytics] = useState(true);
@@ -469,11 +469,11 @@ function DashboardContent({ apiKey }: { apiKey: string }) {
     const [k, a, s] = await Promise.all([
       fetchApiKeys(apiKey).catch(() => []),
       fetchAnalytics(apiKey).catch(() => null),
-      fetchRecentSignals(apiKey).catch(() => []),
+      fetchRecentResearch(apiKey).catch(() => []),
     ]);
     setKeys(k);
     setAnalytics(a);
-    setSignals(s);
+    setResearch(s);
     setLoadingKeys(false);
     setLoadingAnalytics(false);
   }, [apiKey]);
@@ -503,14 +503,14 @@ function DashboardContent({ apiKey }: { apiKey: string }) {
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full" style={{ background: "#b08d57", boxShadow: "0 0 8px #b08d57" }} />
           <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>
-            Signal Provider
+            Research Contributor
           </span>
         </div>
         <h1 className="text-3xl font-bold text-white" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-          Provider Dashboard
+          Contributor Dashboard
         </h1>
         <p className="text-sm mt-1" style={{ color: "rgba(106,111,117,0.8)", fontFamily: "'Montserrat', sans-serif" }}>
-          Manage your API keys, submit signals, and monitor performance
+          Manage your API keys, publish research, and monitor performance
         </p>
       </div>
 
@@ -522,11 +522,11 @@ function DashboardContent({ apiKey }: { apiKey: string }) {
               Your API Keys
             </h2>
             <p className="text-xs mt-0.5" style={{ color: "rgba(106,111,117,0.6)", fontFamily: "'Montserrat', sans-serif" }}>
-              Use your API key to authenticate signal submissions from your trading bot
+              Use your API key to authenticate research submissions from your trading bot
             </p>
           </div>
           <a
-            href="/provider-portal/api-keys"
+            href="/contribute/api-keys"
             className="text-xs font-semibold underline transition-colors"
             style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}
           >
@@ -573,7 +573,7 @@ function DashboardContent({ apiKey }: { apiKey: string }) {
         ) : keys.length === 0 && !generatedKey ? (
           <div className="text-center py-8">
             <p className="text-sm mb-4" style={{ color: "rgba(106,111,117,0.6)", fontFamily: "'Montserrat', sans-serif" }}>
-              No API keys yet. Generate one to start submitting signals.
+              No API keys yet. Generate one to start publishing research.
             </p>
           </div>
         ) : (
@@ -630,37 +630,37 @@ function DashboardContent({ apiKey }: { apiKey: string }) {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard label="Total Signals" value={loadingAnalytics ? "—" : String(analytics?.totalSignals ?? 0)} accent="#eaeaea" />
+        <MetricCard label="Total Research" value={loadingAnalytics ? "—" : String(analytics?.totalResearch ?? 0)} accent="#eaeaea" />
         <MetricCard label="Avg Accuracy" value={loadingAnalytics ? "—" : `${(analytics?.avgAccuracy ?? 0).toFixed(1)}%`} accent="#b08d57" />
         <MetricCard label="ZENT Earned" value={loadingAnalytics ? "—" : String(analytics?.totalPayout ?? 0)} accent={(analytics?.totalPayout ?? 0) >= 0 ? "#22c55e" : "#ef4444"} pill={loadingAnalytics ? undefined : `${(analytics?.totalPayout ?? 0) >= 0 ? "+" : ""}${analytics?.totalPayout ?? 0}`} />
         <MetricCard label="Rank" value={loadingAnalytics ? "—" : `#${analytics?.currentRank ?? "—"}`} accent="#b08d57" />
       </div>
 
-      {/* Submit Signal + Recent Signals */}
+      {/* Publish Research + Recent Research */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Submit form */}
+        {/* Publish form */}
         <div className="rounded-2xl p-6" style={{ background: "#1c1c21", border: "1px solid #2a2f3a" }}>
           <h2 className="text-base font-bold mb-5" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>
-            Submit Signal
+            Publish Research
           </h2>
-          <SubmitSignalForm apiKey={apiKey} onSuccess={() => setRefreshCounter((c) => c + 1)} />
+          <PublishResearchForm apiKey={apiKey} onSuccess={() => setRefreshCounter((c) => c + 1)} />
         </div>
 
-        {/* Recent signals */}
+        {/* Recent research */}
         <div className="rounded-2xl p-6" style={{ background: "#1c1c21", border: "1px solid #2a2f3a" }}>
           <div className="flex items-center justify-between mb-5">
             <h2 className="text-base font-bold" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>
-              Recent Signals
+              Recent Research
             </h2>
             <a
-              href="/provider-portal/submissions"
+              href="/contribute/submissions"
               className="text-xs font-semibold underline transition-colors"
               style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}
             >
               View all →
             </a>
           </div>
-          <SignalsTable signals={signals} />
+          <ResearchTable research={research} />
         </div>
       </div>
     </div>
@@ -669,20 +669,20 @@ function DashboardContent({ apiKey }: { apiKey: string }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ProviderDashboardPage() {
+export default function ContributeDashboardPage() {
   const { address, isConnected } = useAccount();
   const [apiKey, setApiKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("zent_provider_api_key");
+      const stored = localStorage.getItem("zent_contributor_api_key");
       if (stored) setApiKey(stored);
     }
   }, []);
 
   useEffect(() => {
     if (apiKey && typeof window !== "undefined") {
-      localStorage.setItem("zent_provider_api_key", apiKey);
+      localStorage.setItem("zent_contributor_api_key", apiKey);
     }
   }, [apiKey]);
 
@@ -700,7 +700,7 @@ export default function ProviderDashboardPage() {
           Connect your wallet
         </h1>
         <p className="text-sm mb-8 max-w-sm" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
-          Connect your wallet to access the provider dashboard and manage your signals.
+          Connect your wallet to access the contributor dashboard and manage your research.
         </p>
         <button
           onClick={() => window.dispatchEvent(new Event("open-wallet-modal"))}
@@ -733,10 +733,10 @@ export default function ProviderDashboardPage() {
             No API key found
           </h1>
           <p className="text-sm mb-8 max-w-sm" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>
-            Generate an API key from the dashboard to start submitting signals.
+            Generate an API key from the dashboard to start publishing research.
           </p>
           <a
-            href="/provider-portal/api-keys"
+            href="/contribute/api-keys"
             className="px-8 py-3 rounded-2xl font-bold text-sm transition-all hover:scale-[1.03]"
             style={{
               background: "linear-gradient(135deg, #b08d57 0%, #8b6635 100%)",

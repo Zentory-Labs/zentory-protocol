@@ -1,12 +1,12 @@
 import { createClient } from "@/utils/supabase/client";
-import type { Asset, Direction, SignalProvider } from "@/lib/signals";
+import type { Asset, Direction, ResearchContributor } from "@/lib/research";
 
 // ─── Database types ─────────────────────────────────────────────────────────────
 
-export interface DbSignal {
+export interface DbResearch {
   id: string;
   created_at: string;
-  provider: SignalProvider;
+  provider: ResearchContributor;
   asset: Asset;
   direction: Direction;
   size: number;
@@ -27,10 +27,10 @@ export interface DbKeeperAudit {
   created_at: string;
 }
 
-// ─── Signal helpers (browser/client-side) ──────────────────────────────────────
+// ─── Research helpers (browser/client-side) ──────────────────────────────────────
 
-/** Fetch signals from Supabase */
-export async function getSignals(limit = 100) {
+/** Fetch research from Supabase */
+export async function getResearch(limit = 100) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("signals")
@@ -38,31 +38,31 @@ export async function getSignals(limit = 100) {
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {
-    console.error("[supabase] getSignals:", error.message);
+    console.error("[supabase] getResearch:", error.message);
     return [];
   }
-  return (data as DbSignal[]) ?? [];
+  return (data as DbResearch[]) ?? [];
 }
 
-/** Insert a new signal */
-export async function insertSignal(
-  signal: Omit<DbSignal, "id" | "created_at">
+/** Insert a new research entry */
+export async function insertResearch(
+  research: Omit<DbResearch, "id" | "created_at">
 ) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("signals")
-    .insert(signal)
+    .insert(research)
     .select()
     .single();
   if (error) {
-    console.error("[supabase] insertSignal:", error.message);
+    console.error("[supabase] insertResearch:", error.message);
     return null;
   }
-  return data as DbSignal;
+  return data as DbResearch;
 }
 
-/** Update signal status after execution */
-export async function updateSignalStatus(
+/** Update research status after execution */
+export async function updateResearchStatus(
   id: string,
   status: "pending" | "executed" | "failed",
   txHash?: string,
@@ -79,7 +79,7 @@ export async function updateSignalStatus(
       executor_address: executorAddress ?? null,
     })
     .eq("id", id);
-  if (error) console.error("[supabase] updateSignalStatus:", error.message);
+  if (error) console.error("[supabase] updateResearchStatus:", error.message);
 }
 
 // ─── Keeper audit helpers ──────────────────────────────────────────────────────

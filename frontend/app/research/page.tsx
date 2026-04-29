@@ -2,16 +2,16 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useAccount } from "wagmi";
-import { getSignals } from "@/lib/signals";
-import type { Signal, Asset } from "@/lib/signals";
-import SignalTable from "@/components/SignalTable";
+import { getResearch } from "@/lib/research";
+import type { Research, Asset } from "@/lib/research";
+import ResearchTable from "@/components/ResearchTable";
 import TradeLoggerForm from "./TradeLoggerForm";
 
 // ─── Performance Metrics ─────────────────────────────────────
 
-function SignalPerformanceBar({ signals }: { signals: Signal[] }) {
+function ResearchPerformanceBar({ research }: { research: Research[] }) {
   const stats = useMemo(() => {
-    const executed = signals.filter((s) => s.status === "executed");
+    const executed = research.filter((s) => s.status === "executed");
     if (executed.length === 0) return null;
 
     // Simulate P&L based on direction and price movement
@@ -31,8 +31,8 @@ function SignalPerformanceBar({ signals }: { signals: Signal[] }) {
     const winRate = (wins / returns.length) * 100;
     const bestTrade = Math.max(...returns) * 100;
     const worstTrade = Math.min(...returns) * 100;
-    const bestSignal = executed[returns.indexOf(Math.max(...returns))];
-    const worstSignal = executed[returns.indexOf(Math.min(...returns))];
+    const bestResearch = executed[returns.indexOf(Math.max(...returns))];
+    const worstResearch = executed[returns.indexOf(Math.min(...returns))];
 
     return {
       totalTrades: executed.length,
@@ -41,13 +41,13 @@ function SignalPerformanceBar({ signals }: { signals: Signal[] }) {
       totalPnl: totalReturn * 100,
       bestTrade,
       worstTrade,
-      bestSignal,
-      worstSignal,
+      bestResearch,
+      worstResearch,
       longs: executed.filter((s) => s.direction === "LONG").length,
       shorts: executed.filter((s) => s.direction === "SHORT").length,
       closes: executed.filter((s) => s.direction === "CLOSE").length,
     };
-  }, [signals]);
+  }, [research]);
 
   if (!stats) return null;
 
@@ -79,13 +79,13 @@ function SignalPerformanceBar({ signals }: { signals: Signal[] }) {
     {
       label: "Best Trade",
       value: `+${stats.bestTrade.toFixed(2)}%`,
-      sub: `${stats.bestSignal?.asset} ${stats.bestSignal?.direction}`,
+      sub: `${stats.bestResearch?.asset} ${stats.bestResearch?.direction}`,
       accent: "#22c55e",
     },
     {
       label: "Worst Trade",
       value: `${stats.worstTrade.toFixed(2)}%`,
-      sub: `${stats.worstSignal?.asset} ${stats.worstSignal?.direction}`,
+      sub: `${stats.worstResearch?.asset} ${stats.worstResearch?.direction}`,
       accent: "#ef4444",
     },
   ];
@@ -112,25 +112,25 @@ function SignalPerformanceBar({ signals }: { signals: Signal[] }) {
   );
 }
 
-// ─── Provider Breakdown ─────────────────────────────────────
+// ─── Contributor Breakdown ─────────────────────────────────────
 
-function ProviderBreakdown({ signals }: { signals: Signal[] }) {
-  const providerDefs = useMemo(() => {
-    const executed = signals.filter((s) => s.status === "executed");
-    const allProviders = ["gp", "lumibot", "manual"] as const;
-    return allProviders.map((p) => {
-      const pSignals = executed.filter((s) => s.provider === p);
-      const wins = pSignals.filter(() => Math.random() > 0.45).length;
+function ContributorBreakdown({ research }: { research: Research[] }) {
+  const contributorDefs = useMemo(() => {
+    const executed = research.filter((s) => s.status === "executed");
+    const allContributors = ["gp", "lumibot", "manual"] as const;
+    return allContributors.map((p) => {
+      const pResearch = executed.filter((s) => s.provider === p);
+      const wins = pResearch.filter(() => Math.random() > 0.45).length;
       return {
         name: p,
         label: p === "gp" ? "Genesis Pulse" : p === "lumibot" ? "Lumibot" : "Manual",
-        count: pSignals.length,
-        winRate: pSignals.length ? (wins / pSignals.length) * 100 : 0,
+        count: pResearch.length,
+        winRate: pResearch.length ? (wins / pResearch.length) * 100 : 0,
       };
     });
-  }, [signals]);
+  }, [research]);
 
-  const providerColors: Record<string, string> = {
+  const contributorColors: Record<string, string> = {
     gp: "#0d80fa",
     lumibot: "#9945FF",
     manual: "#b08d57",
@@ -139,16 +139,16 @@ function ProviderBreakdown({ signals }: { signals: Signal[] }) {
   return (
     <div className="glass-card p-6">
       <p className="text-xs uppercase tracking-widest mb-4" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
-        Provider Breakdown
+        Contributor Breakdown
       </p>
       <div className="space-y-3">
-        {providerDefs.map(({ name, label, count, winRate }) => (
+        {contributorDefs.map(({ name, label, count, winRate }) => (
           <div key={name} className="flex items-center gap-3">
             <div className="w-20 text-xs" style={{ color: "rgba(106,111,117,0.8)", fontFamily: "'Montserrat', sans-serif" }}>{label}</div>
             <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
               <div
                 className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${Math.min(winRate, 100)}%`, background: providerColors[name] ?? "#0d80fa" }}
+                style={{ width: `${Math.min(winRate, 100)}%`, background: contributorColors[name] ?? "#0d80fa" }}
               />
             </div>
             <div className="w-16 text-right text-xs font-mono" style={{ color: "rgba(106,111,117,0.8)", fontFamily: "'Montserrat', sans-serif" }}>
@@ -166,29 +166,29 @@ function ProviderBreakdown({ signals }: { signals: Signal[] }) {
 
 // ─── Main Page ─────────────────────────────────────────────
 
-export default function SignalsPage() {
+export default function ResearchPage() {
   const { address, isConnected } = useAccount();
-  const [signals, setSignals] = useState<Signal[]>([]);
+  const [research, setResearch] = useState<Research[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSignals = useCallback(async () => {
+  const fetchResearch = useCallback(async () => {
     try {
-      const data = await getSignals();
-      setSignals(data);
+      const data = await getResearch();
+      setResearch(data);
       setError(null);
     } catch {
-      setError("Failed to load signals.");
+      setError("Failed to load research.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchSignals();
-    const interval = setInterval(fetchSignals, 30_000);
+    fetchResearch();
+    const interval = setInterval(fetchResearch, 30_000);
     return () => clearInterval(interval);
-  }, [fetchSignals]);
+  }, [fetchResearch]);
 
   return (
     <div className="min-h-screen relative" style={{ background: "#0b0b0d" }}>
@@ -213,7 +213,7 @@ export default function SignalsPage() {
               LIVE
             </div>
             <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: "'Montserrat', sans-serif" }}>
-              <span className="gradient-text-gold">Signal Dashboard</span>
+              <span className="gradient-text-gold">Research Dashboard</span>
             </h1>
             <p className="mt-1 text-sm text-white/40">
               Auto-refreshes every 30s · stored on-chain via StrategyExecutor
@@ -228,10 +228,10 @@ export default function SignalsPage() {
         </div>
 
         {/* Performance metrics */}
-        {!loading && signals.length > 0 && (
+        {!loading && research.length > 0 && (
           <>
-            <SignalPerformanceBar signals={signals} />
-            <ProviderBreakdown signals={signals} />
+            <ResearchPerformanceBar research={research} />
+            <ContributorBreakdown research={research} />
           </>
         )}
 
@@ -241,7 +241,7 @@ export default function SignalsPage() {
           </div>
         )}
 
-        {/* Signal table — public */}
+        {/* Research table — public */}
         <section>
           {loading ? (
             <div className="flex items-center justify-center py-24">
@@ -249,7 +249,7 @@ export default function SignalsPage() {
             </div>
           ) : (
             <div className="glass-card overflow-hidden">
-              <SignalTable signals={signals} />
+              <ResearchTable research={research} />
             </div>
           )}
         </section>
@@ -279,7 +279,7 @@ export default function SignalsPage() {
             </div>
             <h3 className="text-lg font-semibold text-white mb-2">Keeper Access Required</h3>
             <p className="text-sm text-white/50 max-w-sm mx-auto">
-              Connect your wallet to log signals and execute trades on-chain.
+              Connect your wallet to publish research and execute trades on-chain.
               Only the keeper wallet can execute transactions.
             </p>
           </div>

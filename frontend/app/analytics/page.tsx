@@ -564,8 +564,8 @@ export default function AnalyticsPage() {
   }, [signals, timeRange]);
 
   return (
-    <div className="w-full overflow-x-hidden" style={{ background: "#0b0b0d", fontFamily: "'Montserrat', sans-serif" }}>
-      {/* Ambient glows */}
+    <div className="w-full overflow-x-hidden" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+      {/* Ambient glow — gold accent on analytics */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#b08d57]/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <main className="mx-auto max-w-7xl px-6 py-28 space-y-8">
@@ -585,10 +585,10 @@ export default function AnalyticsPage() {
               Performance Analytics
             </div>
             <h1 className="text-4xl font-bold tracking-tight" style={{ color: "#eaeaea" }}>
-              Signal Analytics
+              Research Analytics
             </h1>
             <p className="text-sm mt-1" style={{ color: "rgba(234,234,234,0.5)" }}>
-              Comprehensive performance metrics and signal distribution across all epochs
+              Comprehensive performance metrics and research distribution across all epochs
             </p>
           </div>
 

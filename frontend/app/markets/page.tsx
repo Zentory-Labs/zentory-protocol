@@ -35,11 +35,11 @@ interface RecentSignal {
   assetClass: AssetClass;
 }
 
-interface TopProvider {
+interface TopContributor {
   rank: number;
   address: string;
   accuracy: number;
-  signals: number;
+  research: number;
   zentStaked: number;
 }
 
@@ -50,12 +50,12 @@ const MOCK_MARKETS: Market[] = [
   { id: "eth-perp", name: "Ethereum Perpetual", symbol: "ETH-PERP", assetClass: "CRYPTO_PERP", exchange: "Hyperliquid", providerCount: 9, avgAccuracy: 61, sharpe: 1.2, emoji: "Ξ" },
   { id: "sol-perp", name: "Solana Perpetual", symbol: "SOL-PERP", assetClass: "CRYPTO_PERP", exchange: "Hyperliquid", providerCount: 7, avgAccuracy: 58, sharpe: 0.9, emoji: "◎" },
   { id: "xrp-perp", name: "XRP Perpetual", symbol: "XRP-PERP", assetClass: "CRYPTO_PERP", exchange: "Hyperliquid", providerCount: 5, avgAccuracy: 54, sharpe: 0.7, emoji: "✕" },
-  { id: "aapl", name: "Apple Inc.", symbol: "AAPL", assetClass: "EQUITY", exchange: "Ondo/Synthetix", providerCount: 4, avgAccuracy: 55, sharpe: 0.9, emoji: "🍎" },
+  { id: "aapl", name: "Apple Inc.", symbol: "AAPL", assetClass: "EQUITY", exchange: "Ondo/Synthetix", providerCount: 4, avgAccuracy: 55, sharpe: 0.9, emoji: "" },
   { id: "msft", name: "Microsoft Corp.", symbol: "MSFT", assetClass: "EQUITY", exchange: "Ondo/Synthetix", providerCount: 3, avgAccuracy: 52, sharpe: 0.8, emoji: "Ⓜ" },
-  { id: "eur-usd", name: "Euro / US Dollar", symbol: "EUR/USD", assetClass: "FOREX", exchange: "Chainlink", providerCount: 3, avgAccuracy: 58, sharpe: 1.1, emoji: "💶" },
-  { id: "gbp-usd", name: "British Pound / USD", symbol: "GBP/USD", assetClass: "FOREX", exchange: "Chainlink", providerCount: 2, avgAccuracy: 56, sharpe: 1.0, emoji: "💷" },
-  { id: "gold", name: "Gold / US Dollar", symbol: "XAU/USD", assetClass: "COMMODITY", exchange: "Chainlink", providerCount: 2, avgAccuracy: 52, sharpe: 0.8, emoji: "🥇" },
-  { id: "silver", name: "Silver / US Dollar", symbol: "XAG/USD", assetClass: "COMMODITY", exchange: "Chainlink", providerCount: 1, avgAccuracy: 49, sharpe: 0.6, emoji: "🥈" },
+  { id: "eur-usd", name: "Euro / US Dollar", symbol: "EUR/USD", assetClass: "FOREX", exchange: "Chainlink", providerCount: 3, avgAccuracy: 58, sharpe: 1.1, emoji: "" },
+  { id: "gbp-usd", name: "British Pound / USD", symbol: "GBP/USD", assetClass: "FOREX", exchange: "Chainlink", providerCount: 2, avgAccuracy: 56, sharpe: 1.0, emoji: "" },
+  { id: "gold", name: "Gold / US Dollar", symbol: "XAU/USD", assetClass: "COMMODITY", exchange: "Chainlink", providerCount: 2, avgAccuracy: 52, sharpe: 0.8, emoji: "" },
+  { id: "silver", name: "Silver / US Dollar", symbol: "XAG/USD", assetClass: "COMMODITY", exchange: "Chainlink", providerCount: 1, avgAccuracy: 49, sharpe: 0.6, emoji: "" },
 ];
 
 const ASSET_CLASS_COLORS: Record<AssetClass, string> = {
@@ -162,21 +162,21 @@ function useRecentSignals() {
   return { signals, loading };
 }
 
-function useTopProviders() {
-  const [providers, setProviders] = useState<TopProvider[]>([]);
+function useTopContributors() {
+  const [contributors, setContributors] = useState<TopContributor[]>([]);
 
   useEffect(() => {
-    // Mock top providers — in production, read from provider_stats table
-    setProviders([
-      { rank: 1, address: "0x3F07...a390a", accuracy: 78, signals: 24, zentStaked: 12000 },
-      { rank: 2, address: "0x71B2...f4E21", accuracy: 71, signals: 18, zentStaked: 8500 },
-      { rank: 3, address: "0xA129...3Cb7d", accuracy: 65, signals: 31, zentStaked: 6200 },
-      { rank: 4, address: "0xdE81...9AaBc", accuracy: 59, signals: 15, zentStaked: 4100 },
-      { rank: 5, address: "0xf123...5CdEf", accuracy: 54, signals: 9, zentStaked: 2800 },
+    // Mock top contributors — in production, read from provider_stats table
+    setContributors([
+      { rank: 1, address: "0x3F07...a390a", accuracy: 78, research: 24, zentStaked: 12000 },
+      { rank: 2, address: "0x71B2...f4E21", accuracy: 71, research: 18, zentStaked: 8500 },
+      { rank: 3, address: "0xA129...3Cb7d", accuracy: 65, research: 31, zentStaked: 6200 },
+      { rank: 4, address: "0xdE81...9AaBc", accuracy: 59, research: 15, zentStaked: 4100 },
+      { rank: 5, address: "0xf123...5CdEf", accuracy: 54, research: 9, zentStaked: 2800 },
     ]);
   }, []);
 
-  return providers;
+  return contributors;
 }
 
 // ─── Accuracy badge ───────────────────────────────────────────────────────────
@@ -220,7 +220,7 @@ function EpochTimer() {
 
 // ─── MarketCard ───────────────────────────────────────────────────────────────
 
-function MarketCard({ market, onViewSignals }: { market: Market; onViewSignals: (symbol: string) => void }) {
+function MarketCard({ market, onViewResearch }: { market: Market; onViewResearch: (symbol: string) => void }) {
   const color = ASSET_CLASS_COLORS[market.assetClass];
 
   return (
@@ -298,7 +298,7 @@ function MarketCard({ market, onViewSignals }: { market: Market; onViewSignals: 
 
       {/* CTA */}
       <button
-        onClick={() => onViewSignals(market.symbol)}
+        onClick={() => onViewResearch(market.symbol)}
         className="w-full py-2 rounded-xl text-xs font-semibold transition-all duration-200 hover:scale-[1.02]"
         style={{
           background: color + "15",
@@ -307,7 +307,7 @@ function MarketCard({ market, onViewSignals }: { market: Market; onViewSignals: 
           fontFamily: "'Montserrat', sans-serif",
         }}
       >
-        View Signals
+        View Research
       </button>
     </div>
   );
@@ -331,14 +331,14 @@ function StatCard({ label, value, accent = "#eaeaea" }: { label: string; value: 
   );
 }
 
-// ─── TopProviders ─────────────────────────────────────────────────────────────
+// ─── TopContributors ─────────────────────────────────────────────────────────────
 
-function TopProviders({ providers }: { providers: TopProvider[] }) {
+function TopContributors({ contributors }: { contributors: TopContributor[] }) {
   return (
     <section>
       <div className="flex items-center gap-2 mb-4">
         <h2 className="text-lg font-bold" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>
-          Top Providers This Epoch
+          Top Contributors This Epoch
         </h2>
       </div>
       <div
@@ -348,7 +348,7 @@ function TopProviders({ providers }: { providers: TopProvider[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr style={{ background: "rgba(255,255,255,0.03)", borderBottom: "1px solid #2a2f3a" }}>
-              {["Rank", "Provider", "Accuracy", "Signals", "ZENT Staked"].map((h) => (
+              {["Rank", "Contributor", "Accuracy", "Research", "ZENT Staked"].map((h) => (
                 <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "rgba(234,234,234,0.4)", fontFamily: "'Montserrat', sans-serif" }}>
                   {h}
                 </th>
@@ -356,10 +356,10 @@ function TopProviders({ providers }: { providers: TopProvider[] }) {
             </tr>
           </thead>
           <tbody>
-            {providers.map((p, i) => (
+            {contributors.map((p, i) => (
               <tr
                 key={p.rank}
-                style={{ borderBottom: i < providers.length - 1 ? "1px solid #2a2f3a" : undefined }}
+                style={{ borderBottom: i < contributors.length - 1 ? "1px solid #2a2f3a" : undefined }}
               >
                 <td className="px-5 py-3.5">
                   <span
@@ -380,7 +380,7 @@ function TopProviders({ providers }: { providers: TopProvider[] }) {
                   <AccuracyBadge value={p.accuracy} />
                 </td>
                 <td className="px-5 py-3.5 text-sm font-mono" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>
-                  {p.signals}
+                  {p.research}
                 </td>
                 <td className="px-5 py-3.5 text-sm font-mono" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>
                   {p.zentStaked.toLocaleString()}
@@ -403,7 +403,7 @@ const MarketsPage: NextPage = () => {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState("All");
   const { signals } = useRecentSignals();
-  const providers = useTopProviders();
+  const contributors = useTopContributors();
 
   const filters = ["All", "Crypto", "Equity", "Forex", "Commodity"];
 
@@ -418,15 +418,15 @@ const MarketsPage: NextPage = () => {
     });
   }, [activeFilter]);
 
-  function handleViewSignals(symbol: string) {
-    router.push(`/signals?market=${encodeURIComponent(symbol)}`);
+  function handleViewResearch(symbol: string) {
+    router.push(`/research?market=${encodeURIComponent(symbol)}`);
   }
 
   const totalProviders = MOCK_MARKETS.reduce((sum, m) => sum + m.providerCount, 0);
   const avgAccuracy = Math.round(MOCK_MARKETS.reduce((sum, m) => sum + m.avgAccuracy, 0) / MOCK_MARKETS.length);
 
   return (
-    <div className="w-full overflow-x-hidden" style={{ background: "#0b0b0d", fontFamily: "'Montserrat', sans-serif" }}>
+    <div className="w-full overflow-x-hidden" style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Ambient glows */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8b1e2d]/5 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#b08d57]/5 rounded-full blur-3xl pointer-events-none -z-10" />
@@ -448,10 +448,10 @@ const MarketsPage: NextPage = () => {
               Multi-Asset
             </div>
             <h1 className="text-4xl font-bold tracking-tight" style={{ color: "#eaeaea" }}>
-              Signal Markets
+              Research Markets
             </h1>
             <p className="text-sm mt-1" style={{ color: "rgba(234,234,234,0.5)" }}>
-              Browse quant signals across crypto, equities, forex, and commodities
+              Browse quant research across crypto, equities, forex, and commodities
             </p>
           </div>
           <EpochTimer />
@@ -459,7 +459,7 @@ const MarketsPage: NextPage = () => {
 
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Active Providers" value={totalProviders} accent="#b08d57" />
+          <StatCard label="Active Contributors" value={totalProviders} accent="#b08d57" />
           <StatCard label="Markets Covered" value={MOCK_MARKETS.length} accent="#eaeaea" />
           <StatCard label="Avg Accuracy" value={`${avgAccuracy}%`} accent={avgAccuracy >= 60 ? "#22c55e" : "#f59e0b"} />
           <StatCard label="Asset Classes" value={4} accent="#627EEA" />
@@ -490,7 +490,7 @@ const MarketsPage: NextPage = () => {
         {/* ── Markets grid ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredMarkets.map((market) => (
-            <MarketCard key={market.id} market={market} onViewSignals={handleViewSignals} />
+            <MarketCard key={market.id} market={market} onViewResearch={handleViewResearch} />
           ))}
         </div>
 
@@ -498,7 +498,7 @@ const MarketsPage: NextPage = () => {
         <LiveSignalFeedNoSSR signals={signals} />
 
         {/* ── Top providers ── */}
-        <TopProviders providers={providers} />
+        <TopContributors contributors={contributors} />
 
       </main>
     </div>

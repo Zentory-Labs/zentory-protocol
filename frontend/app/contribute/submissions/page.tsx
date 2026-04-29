@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 
-interface Signal {
+interface Research {
   id: number;
-  signal_id?: string;
+  research_id?: string;
   asset_class: string;
   asset_id: string;
   direction: number;
@@ -39,28 +39,28 @@ function fmtTs(ts: number | null): string {
   return new Date(ts * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-async function fetchSignals(apiKey: string, params: { assetClass?: string; status?: string; limit?: number; offset?: number }): Promise<{ signals: Signal[]; total: number }> {
+async function fetchResearch(apiKey: string, params: { assetClass?: string; status?: string; limit?: number; offset?: number }): Promise<{ research: Research[]; total: number }> {
   const sp = new URLSearchParams();
   if (params.assetClass) sp.set("assetClass", params.assetClass);
   if (params.status) sp.set("status", params.status);
   if (params.limit) sp.set("limit", String(params.limit));
   if (params.offset) sp.set("offset", String(params.offset));
 
-  const res = await fetch(`/api/provider/signals?${sp.toString()}`, {
+  const res = await fetch(`/api/contribute/research?${sp.toString()}`, {
     headers: { "x-api-key": apiKey },
   });
-  if (!res.ok) return { signals: [], total: 0 };
+  if (!res.ok) return { research: [], total: 0 };
   return res.json();
 }
 
-function SignalsTable({ signals }: { signals: Signal[] }) {
-  if (signals.length === 0) {
+function ResearchTable({ research }: { research: Research[] }) {
+  if (research.length === 0) {
     return (
       <div className="text-center py-12">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(106,111,117,0.3)" strokeWidth="1.5" className="mx-auto mb-3">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
         </svg>
-        <p className="text-sm" style={{ color: "rgba(106,111,117,0.5)", fontFamily: "'Montserrat', sans-serif" }}>No signals found</p>
+        <p className="text-sm" style={{ color: "rgba(106,111,117,0.5)", fontFamily: "'Montserrat', sans-serif" }}>No research found</p>
       </div>
     );
   }
@@ -76,7 +76,7 @@ function SignalsTable({ signals }: { signals: Signal[] }) {
           </tr>
         </thead>
         <tbody>
-          {signals.map((s) => {
+          {research.map((s) => {
             const isLong = s.direction > 0;
             const statusColor = s.status === "Active" ? "#22c55e" : s.status === "Resolved" ? "#b08d57" : "#6a6f75";
             const accuracyPct = s.accuracy != null ? `${(s.accuracy / 100).toFixed(1)}%` : "—";
@@ -120,7 +120,7 @@ function SignalsTable({ signals }: { signals: Signal[] }) {
 
 export default function SubmissionsPage() {
   const { isConnected } = useAccount();
-  const [signals, setSignals] = useState<Signal[]>([]);
+  const [research, setResearch] = useState<Research[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -128,27 +128,27 @@ export default function SubmissionsPage() {
   const [status, setStatus] = useState("");
   const PAGE_SIZE = 20;
 
-  const loadSignals = useCallback(async () => {
+  const loadResearch = useCallback(async () => {
     const apiKey = localStorage.getItem("zent_provider_api_key");
     if (!apiKey) { setLoading(false); return; }
     setLoading(true);
-    const result = await fetchSignals(apiKey, {
+    const result = await fetchResearch(apiKey, {
       assetClass: assetClass || undefined,
       status: status || undefined,
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
     });
-    setSignals(result.signals);
+    setResearch(result.research);
     setTotal(result.total);
     setLoading(false);
   }, [page, assetClass, status]);
 
-  useEffect(() => { loadSignals(); }, [loadSignals]);
+  useEffect(() => { loadResearch(); }, [loadResearch]);
 
   function exportCsv() {
-    if (signals.length === 0) return;
+    if (research.length === 0) return;
     const headers = ["Time", "Epoch", "Asset", "Class", "Direction", "Confidence", "Accuracy", "Payout", "Expires", "Status"];
-    const rows = signals.map((s) => [
+    const rows = research.map((s) => [
       s.submitted_at ? fmtTs(s.submitted_at) : "",
       s.epoch ?? "",
       s.asset_id,
@@ -165,7 +165,7 @@ export default function SubmissionsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `provider-signals-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `research-submissions-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -174,7 +174,7 @@ export default function SubmissionsPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
         <h1 className="text-2xl font-bold mb-3" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>Connect your wallet</h1>
-        <p className="text-sm" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>Connect your wallet to view your signal submissions.</p>
+        <p className="text-sm" style={{ color: "rgba(234,234,234,0.5)", fontFamily: "'Montserrat', sans-serif" }}>Connect your wallet to view your research submissions.</p>
       </div>
     );
   }
@@ -187,11 +187,11 @@ export default function SubmissionsPage() {
       <div>
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full" style={{ background: "#b08d57", boxShadow: "0 0 8px #b08d57" }} />
-          <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>Signal Provider</span>
+          <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>Research Contributor</span>
         </div>
-        <h1 className="text-3xl font-bold" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>Signal Submissions</h1>
+        <h1 className="text-3xl font-bold" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>Research Submissions</h1>
         <p className="text-sm mt-1" style={{ color: "rgba(106,111,117,0.8)", fontFamily: "'Montserrat', sans-serif" }}>
-          Full history of your submitted signals across all epochs
+          Full history of your submitted research across all epochs
         </p>
       </div>
 
@@ -201,7 +201,7 @@ export default function SubmissionsPage() {
           <div className="flex items-center gap-3 text-xs" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
             <span className="uppercase tracking-widest font-semibold">Filters</span>
             <span>·</span>
-            <span>{total} total signals</span>
+            <span>{total} total research</span>
           </div>
           <div className="flex items-center gap-3 flex-1 flex-wrap">
             <select
@@ -223,7 +223,7 @@ export default function SubmissionsPage() {
           </div>
           <button
             onClick={exportCsv}
-            disabled={signals.length === 0}
+            disabled={research.length === 0}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all hover:scale-[1.03] disabled:opacity-40"
             style={{ background: "rgba(176,141,87,0.1)", border: "1px solid rgba(176,141,87,0.3)", color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}
           >
@@ -243,7 +243,7 @@ export default function SubmissionsPage() {
           </div>
         ) : (
           <div className="p-6">
-            <SignalsTable signals={signals} />
+            <ResearchTable research={research} />
           </div>
         )}
       </div>

@@ -371,9 +371,9 @@ export default function Home() {
               className="text-base md:text-lg xl:text-xl mb-6 font-light leading-relaxed"
               style={{ color: "rgba(234, 234, 234, 0.75)" }}
             >
-              The multi-asset quant signal network.
+              The multi-asset quant research network.
               <br />
-              Systematic traders submit signals. Subscribers follow and execute.
+              Systematic traders publish research. Subscribers follow and execute.
               <br />
               All on-chain, all transparent.
             </p>
@@ -423,7 +423,7 @@ export default function Home() {
               </a>
 
               <a
-                href="/signals"
+                href="/research"
                 className="px-8 py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 hover:scale-[1.03]"
                 style={{
                   background: "rgba(139, 30, 45, 0.2)",
@@ -440,7 +440,7 @@ export default function Home() {
                   (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(139, 30, 45, 0.4)";
                 }}
               >
-                Signals
+                Research
               </a>
             </div>
 
@@ -476,7 +476,6 @@ export default function Home() {
       {/* ── Vaults ── */}
       <section
         className="max-w-7xl mx-auto px-6 py-20 space-y-8"
-        style={{ background: "#0b0b0d" }}
       >
         <div className="flex items-center gap-3 mb-2">
           <div className="h-px flex-1" style={{ background: "linear-gradient(to right, transparent, #2a2f3a, transparent)" }} />
@@ -484,7 +483,7 @@ export default function Home() {
             className="flex items-center gap-2 text-sm font-semibold"
             style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}
           >
-            <span>⬡</span> Crypto Signal Vaults
+            <span>⬡</span> Crypto Research Vaults
           </div>
           <p className="text-xs text-center" style={{ color: "rgba(234,234,234,0.35)" }}>
             Powered by Hyperliquid · On-chain execution · ERC-4626 vaults

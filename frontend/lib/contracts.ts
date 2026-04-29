@@ -36,7 +36,7 @@ export const addresses = {
   HyperCoreAdapter: "0xfFc1Da47f780973e935Bb9F5a9d455aE7A5f7eac",
   StrategyExecutor: "0x427c94150f3f700Dc2EDf7bCc97155A467E41F21",
 
-  // ─── Signal Network (deployed 2026-04-28 via deploy_signal_network.s.sol) ────────
+  // ─── Research Network (deployed 2026-04-28 via deploy_signal_network.s.sol) ────────
   SignalRegistry:    "0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c",
   EpochScoring:     "0xC9F7345574e8734247556Ed4e30B11851E285bA4",
   SubscriptionVault: "0xd7d346f6d1F2CEcc3E67d9749B5121549F3dd80d",
@@ -212,14 +212,14 @@ export const SUBSCRIPTION_TIERS = [
     name: "BASIC",
     monthlyPriceZENT: 100,
     assetClasses: ["CRYPTO_SPOT", "CRYPTO_PERP"],
-    description: "Access crypto signals for Bitcoin, Ethereum, and major altcoins.",
+    description: "Access quant research for Bitcoin, Ethereum, and major altcoins.",
   },
   {
     id: 1,
     name: "PRO",
     monthlyPriceZENT: 500,
     assetClasses: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY"],
-    description: "Crypto + equity signals including AAPL, TSLA, NVDA, and S&P 500.",
+    description: "Crypto + equity research including AAPL, TSLA, NVDA, and S&P 500.",
     popular: true,
   },
   {

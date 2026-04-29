@@ -90,12 +90,12 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (signalError) {
-      console.error("[POST /api/provider] signal insert error:", signalError.message);
-      return NextResponse.json({ error: "Failed to store signal" }, { status: 500 });
+      console.error("[POST /api/contribute] research insert error:", signalError.message);
+      return NextResponse.json({ error: "Failed to store research" }, { status: 500 });
     }
 
     return NextResponse.json(
-      { signalId, dbId: signalData.id, message: "Signal submitted successfully — keeper will submit to chain" },
+      { researchId: signalId, dbId: signalData.id, message: "Research submitted successfully — keeper will submit to chain" },
       { status: 201 }
     );
   } catch (err) {

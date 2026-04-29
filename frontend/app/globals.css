@@ -129,11 +129,49 @@
 .glow-sm-red { box-shadow: 0 0 20px rgba(139, 30, 45, 0.25); }
 
 body {
-  background: #0b0b0d;
+  background-color: #0b0b0d;
   color: var(--foreground);
   font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Dot grid — fine graph-paper pattern */
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    /* Subtle horizontal scan lines — trading terminal aesthetic */
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 255, 255, 0.012) 3px,
+      rgba(255, 255, 255, 0.012) 4px
+    );
+  background-size: 40px 40px, 100% 4px;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* Ambient corner glows — gold top-left, crimson bottom-right */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+body::before {
+  top: -20%;
+  left: -10%;
+  width: 55%;
+  height: 55%;
+  background: radial-gradient(ellipse at center, rgba(176, 141, 87, 0.055) 0%, transparent 70%);
+}
+body::after {
+  bottom: -20%;
+  right: -10%;
+  width: 55%;
+  height: 55%;
+  background: radial-gradient(ellipse at center, rgba(139, 30, 45, 0.055) 0%, transparent 70%);
 }
 
 h1, h2, h3, h4, h5, h6 {

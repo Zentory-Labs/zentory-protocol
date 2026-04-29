@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import type { Asset, Direction, SignalProvider } from "@/lib/signals";
+import type { Asset, Direction, ResearchContributor } from "@/lib/research";
 
 export async function GET() {
   try {
@@ -12,8 +12,8 @@ export async function GET() {
       .limit(100);
 
     if (error) {
-      console.error("[GET /api/signals]", error.message);
-      return NextResponse.json({ error: "Failed to fetch signals" }, { status: 500 });
+      console.error("[GET /api/research]", error.message);
+      return NextResponse.json({ error: "Failed to fetch research" }, { status: 500 });
     }
     return NextResponse.json(data ?? []);
   } catch {
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { provider, asset, direction, size, price } = body as {
-      provider: SignalProvider;
+      provider: ResearchContributor;
       asset: Asset;
       direction: Direction;
       size: number;
@@ -60,13 +60,13 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
-      console.error("[POST /api/signals]", error.message);
-      return NextResponse.json({ error: "Failed to store signal" }, { status: 500 });
+      console.error("[POST /api/research]", error.message);
+      return NextResponse.json({ error: "Failed to store research" }, { status: 500 });
     }
 
     return NextResponse.json(data, { status: 201 });
   } catch (err) {
-    console.error("[POST /api/signals]", err);
+    console.error("[POST /api/research]", err);
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 }

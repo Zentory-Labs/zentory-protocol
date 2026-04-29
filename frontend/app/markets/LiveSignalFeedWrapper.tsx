@@ -86,7 +86,7 @@ export default function LiveSignalFeedWrapper({ signals: initialSignals }: LiveS
       <div className="flex items-center gap-2 mb-4">
         <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#22c55e" }} />
         <h2 className="text-lg font-bold" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>
-          Live Signal Feed
+          Live Research Feed
         </h2>
         <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e", fontFamily: "'Montserrat', sans-serif" }}>
           auto-refresh 30s
@@ -98,7 +98,7 @@ export default function LiveSignalFeedWrapper({ signals: initialSignals }: LiveS
       >
         {signals.length === 0 ? (
           <div className="p-6 text-center text-sm" style={{ color: "rgba(234,234,234,0.4)" }}>
-            No recent signals
+            No recent research
           </div>
         ) : (
           signals.slice(0, 8).map((sig) => {

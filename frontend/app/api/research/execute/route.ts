@@ -103,27 +103,27 @@ export async function POST(req: NextRequest) {
     if (limited) return limited;
 
     const body = await req.json();
-    const { signalId, asset, direction, size, price } = body as {
-      signalId: string;
+    const { researchId, asset, direction, size, price } = body as {
+      researchId: string;
       asset: string;
       direction: string;
       size: number;
       price: number;
     };
 
-    if (!signalId || !asset || !direction || typeof size !== "number" || typeof price !== "number") {
+    if (!researchId || !asset || !direction || typeof size !== "number" || typeof price !== "number") {
       return safeJson({ error: "Invalid payload" }, { status: 400 });
     }
 
     // Gate: keeper private key must be configured server-side
     if (!KEEPER_PRIVATE_KEY) {
-      console.error("[POST /api/signals/execute] KEEPER_PRIVATE_KEY not configured");
+      console.error("[POST /api/research/execute] KEEPER_PRIVATE_KEY not configured");
       return safeJson({ error: "Keeper private key not configured" }, { status: 500 });
     }
 
     const keeperPk = normalizePrivateKey(KEEPER_PRIVATE_KEY);
     if (!keeperPk) {
-      console.error("[POST /api/signals/execute] Invalid KEEPER_PRIVATE_KEY format");
+      console.error("[POST /api/research/execute] Invalid KEEPER_PRIVATE_KEY format");
       return safeJson(
         { error: "Invalid KEEPER_PRIVATE_KEY format (expected 32-byte hex, with or without 0x prefix)" },
         { status: 500 }
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (e) {
-      console.error("[POST /api/signals/execute] preflight failed", e);
+      console.error("[POST /api/research/execute] preflight failed", e);
       const detail =
         (e as any)?.shortMessage ??
         (e as any)?.cause?.shortMessage ??
@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
         args: [vaultAddress as `0x${string}`, isBuy, BigInt(size), BigInt(Math.round(price * 1_000_000))],
       });
     } catch (e) {
-      console.error("[POST /api/signals/execute] writeContract failed", e);
+      console.error("[POST /api/research/execute] writeContract failed", e);
       const detail =
         (e as any)?.shortMessage ??
         (e as any)?.cause?.shortMessage ??
@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
     try {
       receipt = await publicClient.waitForTransactionReceipt({ hash });
     } catch (e) {
-      console.error("[POST /api/signals/execute] waitForTransactionReceipt failed", e);
+      console.error("[POST /api/research/execute] waitForTransactionReceipt failed", e);
       return safeJson({ error: "Transaction not confirmed" }, { status: 502 });
     }
 
@@ -257,7 +257,7 @@ export async function POST(req: NextRequest) {
           executed_by: account.address,
           executor_address: addresses.StrategyExecutor,
         })
-        .eq("id", signalId);
+        .eq("id", researchId);
       if (updateErr) warnings.signals_update = { message: updateErr.message, code: (updateErr as any).code };
     } catch (e) {
       warnings.signals_update = errorToDetail(e);
@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const { error: insertErr } = await supabase.from("keeper_audit").insert({
-        signal_id: signalId,
+        signal_id: researchId,
         tx_hash: hash,
         gas_used: Number(receipt.gasUsed),
         executor_address: addresses.StrategyExecutor,
@@ -283,7 +283,7 @@ export async function POST(req: NextRequest) {
       ...(Object.keys(warnings).length ? { warnings } : {}),
     });
   } catch (err) {
-    console.error("[POST /api/signals/execute]", err);
+    console.error("[POST /api/research/execute]", err);
     return safeJson({ error: "Execution failed", detail: errorToDetail(err) }, { status: 500 });
   }
 }

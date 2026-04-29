@@ -243,11 +243,11 @@ export default function ApiKeysPage() {
       <div>
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full" style={{ background: "#b08d57", boxShadow: "0 0 8px #b08d57" }} />
-          <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>Signal Provider</span>
+          <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#b08d57", fontFamily: "'Montserrat', sans-serif" }}>Research Contributor</span>
         </div>
         <h1 className="text-3xl font-bold" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>API Keys</h1>
         <p className="text-sm mt-1" style={{ color: "rgba(106,111,117,0.8)", fontFamily: "'Montserrat', sans-serif" }}>
-          Manage API keys for authenticating signal submissions from your trading bots
+          Manage API keys for authenticating research submissions from your trading bots
         </p>
       </div>
 
@@ -283,9 +283,9 @@ export default function ApiKeysPage() {
       <div className="rounded-2xl p-6" style={{ background: "#1c1c21", border: "1px solid #2a2f3a" }}>
         <h2 className="text-base font-bold mb-4" style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}>Usage Guide</h2>
         <div className="space-y-3 text-sm" style={{ color: "rgba(234,234,234,0.55)", fontFamily: "'Montserrat', sans-serif" }}>
-          <p>Include your API key in the <code className="px-1.5 py-0.5 rounded text-xs font-mono" style={{ background: "rgba(0,0,0,0.4)", color: "#b08d57" }}>x-api-key</code> header when submitting signals:</p>
+          <p>Include your API key in the <code className="px-1.5 py-0.5 rounded text-xs font-mono" style={{ background: "rgba(0,0,0,0.4)", color: "#b08d57" }}>x-api-key</code> header when submitting research:</p>
           <pre className="rounded-xl p-4 overflow-x-auto text-xs font-mono" style={{ background: "#0b0b0d", border: "1px solid #2a2f3a", color: "#eaeaea" }}>
-{`curl -X POST https://your-app.vercel.app/api/provider \\
+{`curl -X POST https://your-app.vercel.app/api/contribute \\
   -H "Content-Type: application/json" \\
   -H "x-api-key: YOUR_API_KEY_HERE" \\
   -d '{

@@ -9,20 +9,54 @@ function shorten(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-const WALLET_ICONS: Record<string, string> = {
-  "MetaMask": "🦊",
-  "Rabby": "🐰",
-  "Coinbase": "💙",
-  "WalletConnect": "🔗",
-};
-
-function getWalletIcon(name: string): string {
+function WalletIconSvg({ name }: { name: string }) {
   const n = name.toLowerCase();
-  if (n.includes("metamask")) return WALLET_ICONS["MetaMask"];
-  if (n.includes("rabby")) return WALLET_ICONS["Rabby"];
-  if (n.includes("coinbase")) return WALLET_ICONS["Coinbase"];
-  if (n.includes("walletconnect")) return WALLET_ICONS["WalletConnect"];
-  return "🌐";
+  if (n.includes("walletconnect")) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M1.5 6.5L6 10.5L1.5 14.5L1.5 6.5Z" stroke="#3b99fc" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M8.5 14.5L11 10.5L8.5 6.5L8.5 14.5Z" stroke="#3b99fc" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M18.5 6.5L14 10.5L18.5 14.5L18.5 6.5Z" stroke="#3b99fc" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M14.5 6.5L12 10.5L14.5 14.5" stroke="#3b99fc" strokeWidth="1.5" strokeLinejoin="round"/>
+      </svg>
+    );
+  }
+  if (n.includes("metamask")) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M17.5 3L11 8.5L12.5 5.5L17.5 3Z" fill="#E17726" stroke="#E17726" strokeWidth="0.5"/>
+        <path d="M2.5 3L9 8.5L7.5 5.5L2.5 3Z" fill="#E27625" stroke="#E27625" strokeWidth="0.5"/>
+        <path d="M15.5 14L13 16L11.5 13.5L15.5 14Z" fill="#E27625" stroke="#E27625" strokeWidth="0.5"/>
+        <path d="M4.5 14L7 16L8.5 13.5L4.5 14Z" fill="#E27625" stroke="#E27625" strokeWidth="0.5"/>
+        <path d="M9 10.5L11 13L9 14.5L9 10.5Z" fill="#E27625" stroke="#E27625" strokeWidth="0.5"/>
+        <path d="M11 13L13 14.5L11 10.5L11 13Z" fill="#E27625" stroke="#E27625" strokeWidth="0.5"/>
+      </svg>
+    );
+  }
+  if (n.includes("coinbase")) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="7" stroke="#0052FF" strokeWidth="1.5"/>
+        <path d="M10 6V14M7 9H13M7 11H13" stroke="#0052FF" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+  if (n.includes("rabby")) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <ellipse cx="10" cy="10" rx="7" ry="5" stroke="#FFD43B" strokeWidth="1.5"/>
+        <circle cx="7" cy="9" r="1" fill="#FFD43B"/>
+        <circle cx="13" cy="9" r="1" fill="#FFD43B"/>
+        <path d="M7 12C7 12 8.5 14 10 14C11.5 14 13 12 13 12" stroke="#FFD43B" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="10" r="7" stroke="#6a6f75" strokeWidth="1.5"/>
+      <path d="M10 6V10L13 13" stroke="#6a6f75" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
 }
 
 export function WalletButton() {
@@ -265,7 +299,7 @@ export function WalletButton() {
                     (e.currentTarget as HTMLButtonElement).style.color = "#bfc3c7";
                   }}
                 >
-                  <span className="text-xl">{getWalletIcon(name)}</span>
+                  <WalletIconSvg name={name} />
                   <span className="text-sm font-medium" style={{ fontFamily: "'Montserrat', sans-serif" }}>{name}</span>
                 </button>
               );

@@ -4,13 +4,13 @@ import { useEffect } from "react";
 import { useAccount } from "wagmi";
 import { useRouter } from "next/navigation";
 
-export default function ProviderPortalPage() {
+export default function ContributePage() {
   const { isConnected } = useAccount();
   const router = useRouter();
 
   useEffect(() => {
     if (isConnected) {
-      router.push("/provider-portal/dashboard");
+      router.push("/contribute/dashboard");
     }
   }, [isConnected, router]);
 
@@ -45,7 +45,7 @@ export default function ProviderPortalPage() {
         }}
       >
         <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#b08d57", boxShadow: "0 0 8px #b08d57" }} />
-        Signal Provider Portal
+        Research Contributor Portal
       </div>
 
       {/* Heading */}
@@ -53,17 +53,17 @@ export default function ProviderPortalPage() {
         className="text-4xl sm:text-5xl font-bold tracking-tight mb-4"
         style={{ color: "#eaeaea", fontFamily: "'Montserrat', sans-serif" }}
       >
-        Provider Portal
+        Contributor Portal
       </h1>
       <p
         className="text-base leading-relaxed max-w-lg mb-10"
         style={{ color: "rgba(234,234,234,0.55)", fontFamily: "'Montserrat', sans-serif" }}
       >
-        Connect your wallet to access your provider dashboard. Manage API keys, submit signals,
-        and track your performance across the ZENT signal network.
+        Connect your wallet to access your contributor dashboard. Manage API keys, publish research,
+        and track your performance across the ZENT research network.
       </p>
 
-      {/* Connect button */}
+      {/* connect button */}
       <button
         onClick={handleConnect}
         className="px-8 py-4 rounded-2xl font-bold text-base transition-all duration-200 hover:scale-[1.03] active:scale-[0.98]"
@@ -88,7 +88,7 @@ export default function ProviderPortalPage() {
               </svg>
             ),
             title: "API Key Management",
-            desc: "Generate and revoke API keys to authenticate your signal submissions",
+            desc: "Generate and revoke API keys to authenticate your research submissions",
           },
           {
             icon: (
@@ -96,8 +96,8 @@ export default function ProviderPortalPage() {
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
               </svg>
             ),
-            title: "Signal Submission",
-            desc: "Submit directional signals with confidence scores and expiry windows",
+            title: "Publish Research",
+            desc: "Submit directional research with confidence scores and expiry windows",
           },
           {
             icon: (

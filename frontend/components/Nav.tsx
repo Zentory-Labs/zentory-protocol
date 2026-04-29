@@ -12,12 +12,12 @@ const WhitelistPopup = dynamic(() => import("./WhitelistPopup"), { ssr: false })
 const NAV_LINKS = [
   { href: "/", label: "Vaults" },
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/signals", label: "Signals" },
+  { href: "/research", label: "Research" },
   { href: "/markets", label: "Markets" },
   { href: "/subscribe", label: "Subscribe" },
   { href: "/stake", label: "Stake" },
   { href: "/govern", label: "Govern" },
-  { href: "/provider-portal", label: "Provider" },
+  { href: "/contribute", label: "Contribute" },
 ];
 
 export default function Nav() {

@@ -38,10 +38,10 @@ const TIERS: Tier[] = [
     priceZent: 100,
     priceUsd: 8,
     fiatPrice: 29,
-    emoji: "🔐",
+    emoji: "Lock",
     assets: ["Crypto Spot", "Crypto Perp"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP"],
-    description: "Access crypto signals for spot and perpetuals across top exchanges.",
+    description: "Access quant research for spot and perpetuals across top exchanges.",
     color: "#b08d57",
     badge: "rgba(176,141,87,0.15)",
     badgeBorder: "rgba(176,141,87,0.3)",
@@ -53,10 +53,10 @@ const TIERS: Tier[] = [
     priceZent: 500,
     priceUsd: 40,
     fiatPrice: 99,
-    emoji: "⚡",
+    emoji: "Bolt",
     assets: ["Crypto Spot", "Crypto Perp", "Equity"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY"],
-    description: "Everything in Basic plus equity signals powered by Ondo and Synthetix.",
+    description: "Everything in Basic plus equity research powered by Ondo and Synthetix.",
     color: "#c2353f",
     badge: "rgba(194,53,63,0.12)",
     badgeBorder: "rgba(194,53,63,0.3)",
@@ -68,7 +68,7 @@ const TIERS: Tier[] = [
     priceZent: 2000,
     priceUsd: 160,
     fiatPrice: 299,
-    emoji: "👑",
+    emoji: "Crown",
     assets: ["Crypto Spot", "Crypto Perp", "Equity", "Forex", "Commodities"],
     assetKeys: ["CRYPTO_SPOT", "CRYPTO_PERP", "EQUITY", "FOREX", "COMMODITIES"],
     description: "Full multi-asset coverage: crypto, equities, forex, and commodities.",
@@ -90,23 +90,23 @@ const ASSET_CLASS_TABLE = [
 const FAQ_ITEMS = [
   {
     q: "How does billing work?",
-    a: "Subscriptions are billed monthly in ZENT tokens. ZENT tokens go directly to signal providers and stakers within the protocol.",
+    a: "Subscriptions are billed monthly in ZENT tokens. ZENT tokens go directly to research contributors and stakers within the protocol.",
   },
   {
     q: "Can I cancel my subscription?",
     a: "Yes, you can cancel at any time. Your access remains active until the end of the current billing period.",
   },
   {
-    q: "What if I miss a signal?",
-    a: "All signals are recorded on-chain with timestamps. You can review the full signal history to catch up on any missed trades.",
+    q: "What if I miss a research update?",
+    a: "All research is recorded on-chain with timestamps. You can review the full research history to catch up on any missed updates.",
   },
   {
     q: "Do I need a minimum ZENT balance?",
     a: "Yes. You need sufficient ZENT tokens in your wallet to pay for your chosen subscription tier.",
   },
   {
-    q: "Are signals financial advice?",
-    a: "No. Signals are informational outputs from quant strategies. You execute trades on your own wallet. Zentory Protocol is not a financial advisor.",
+    q: "Is research financial advice?",
+    a: "No. Research is informational output from quant strategies. You execute trades on your own wallet. Zentory Protocol is not a financial advisor.",
   },
 ];
 
@@ -293,7 +293,7 @@ function CryptoSubscribeButton({ tier }: { tier: Tier }) {
           ? isSubscribing
             ? "Waiting for wallet…"
             : "Confirming subscription…"
-          : `💎 ZENT – ${tier.priceZent.toLocaleString()}/mo`}
+          : `ZENT – ${tier.priceZent.toLocaleString()}/mo`}
       </button>
 
       {state === "error" && error && (
@@ -328,19 +328,19 @@ function HowItWorks() {
       num: "01",
       title: "Choose & Connect",
       desc: "Select your subscription tier and connect your wallet.",
-      icon: "🔗",
+      icon: "Link",
     },
     {
       num: "02",
       title: "Pay with ZENT",
-      desc: "Subscribe in ZENT tokens. Your payment goes directly to signal providers and stakers.",
-      icon: "💎",
+      desc: "Subscribe in ZENT tokens. Your payment goes directly to research contributors and stakers.",
+      icon: "Diamond",
     },
     {
       num: "03",
-      title: "Follow Signals",
-      desc: "Access signals in your dashboard and execute trades on your own wallet.",
-      icon: "📡",
+      title: "Follow Research",
+      desc: "Access research in your dashboard and execute trades on your own wallet.",
+      icon: "Signal",
     },
   ];
 
@@ -363,7 +363,7 @@ function HowItWorks() {
             fontFamily: "'Montserrat', sans-serif",
           }}
         >
-          Three steps to access the full signal network
+          Three steps to access the full research network
         </p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -577,7 +577,7 @@ export default function SubscriptionVaultPage() {
   return (
     <div
       className="w-full overflow-x-hidden"
-      style={{ background: "#0b0b0d", fontFamily: "'Montserrat', sans-serif" }}
+      style={{ fontFamily: "'Montserrat', sans-serif" }}
     >
       {/* Ambient glows */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#8b1e2d]/5 rounded-full blur-3xl pointer-events-none -z-10" />
@@ -601,19 +601,19 @@ export default function SubscriptionVaultPage() {
                 boxShadow: "0 0 8px #c2353f",
               }}
             />
-            Multi-Asset Signal Network
+            Multi-Asset Research Network
           </div>
           <h1
             className="text-4xl sm:text-5xl font-bold tracking-tight"
             style={{ color: "#eaeaea" }}
           >
-            Access the Full Signal Network
+            Access the Full Research Network
           </h1>
           <p
             className="text-base leading-relaxed max-w-xl mx-auto"
             style={{ color: "rgba(234,234,234,0.6)" }}
           >
-            Subscribe to quant signal providers across crypto, equities, forex,
+            Subscribe to quant research contributors across crypto, equities, forex,
             and commodities. Execute on your own wallet — fully transparent, all
             on-chain.
           </p>
@@ -635,7 +635,7 @@ export default function SubscriptionVaultPage() {
                 fontFamily: "'Montserrat', sans-serif",
               }}
             >
-              Pay monthly in ZENT tokens — stake, subscribe, and access the full signal network
+              Pay monthly in ZENT tokens — stake, subscribe, and access the full research network
             </p>
           </div>
 
@@ -691,7 +691,7 @@ export default function SubscriptionVaultPage() {
                         fontFamily: "'Montserrat', sans-serif",
                       }}
                     >
-                      💎 ZENT
+                      ZENT
                     </span>
                   </div>
 

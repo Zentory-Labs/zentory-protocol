@@ -53,16 +53,16 @@ export async function GET(req: NextRequest) {
     const { data: signals, error: signalsError, count } = await query;
 
     if (signalsError) {
-      console.error("[GET /api/provider/signals]", signalsError.message);
-      return NextResponse.json({ error: "Failed to fetch signals" }, { status: 500 });
+      console.error("[GET /api/contribute/research]", signalsError.message);
+      return NextResponse.json({ error: "Failed to fetch research" }, { status: 500 });
     }
 
     return NextResponse.json({
-      signals: signals ?? [],
+      research: signals ?? [],
       total: count ?? 0,
     });
   } catch (err) {
-    console.error("[GET /api/provider/signals]", err);
+    console.error("[GET /api/contribute/research]", err);
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 }

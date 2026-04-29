@@ -1,6 +1,6 @@
 "use client";
 
-import type { Signal } from "@/lib/signals";
+import type { Research } from "@/lib/research";
 
 const EXPLORER_BASE = "https://hypurrscan.io/tx";
 
@@ -15,7 +15,7 @@ function formatTimestamp(ts: number): string {
   });
 }
 
-function DirectionBadge({ direction }: { direction: Signal["direction"] }) {
+function DirectionBadge({ direction }: { direction: Research["direction"] }) {
   const classes =
     direction === "LONG"
       ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
@@ -31,7 +31,7 @@ function DirectionBadge({ direction }: { direction: Signal["direction"] }) {
   );
 }
 
-function StatusBadge({ status }: { status: Signal["status"] }) {
+function StatusBadge({ status }: { status: Research["status"] }) {
   const classes =
     status === "executed"
       ? "bg-emerald-500/10 text-emerald-400"
@@ -47,7 +47,7 @@ function StatusBadge({ status }: { status: Signal["status"] }) {
   );
 }
 
-function ProviderBadge({ provider }: { provider: Signal["provider"] }) {
+function ContributorBadge({ provider }: { provider: Research["provider"] }) {
   const label = provider === "gp" ? "GP" : provider === "lumibot" ? "Lumibot" : "Manual";
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono bg-white/[0.06] text-white/60 border border-white/10">
@@ -72,12 +72,12 @@ function TxLink({ hash }: { hash: string }) {
   );
 }
 
-interface SignalTableProps {
-  signals: Signal[];
+interface ResearchTableProps {
+  research: Research[];
 }
 
-export default function SignalTable({ signals }: SignalTableProps) {
-  if (signals.length === 0) {
+export default function ResearchTable({ research }: ResearchTableProps) {
+  if (research.length === 0) {
     return (
       <div className="glass-card p-8 text-center">
         <svg
@@ -93,8 +93,8 @@ export default function SignalTable({ signals }: SignalTableProps) {
             d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
           />
         </svg>
-        <p className="text-sm font-medium text-white/70">No signals yet</p>
-        <p className="mt-1 text-xs text-white/50">Submit a trade via the form below to get started.</p>
+        <p className="text-sm font-medium text-white/70">No research yet</p>
+        <p className="mt-1 text-xs text-white/50">Publish research via the form below to get started.</p>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export default function SignalTable({ signals }: SignalTableProps) {
         <thead className="border-b border-white/10 bg-white/[0.03]">
           <tr>
             <th className="px-4 py-3 text-xs font-medium text-white/50 uppercase tracking-wider">Timestamp</th>
-            <th className="px-4 py-3 text-xs font-medium text-white/50 uppercase tracking-wider">Provider</th>
+            <th className="px-4 py-3 text-xs font-medium text-white/50 uppercase tracking-wider">Contributor</th>
             <th className="px-4 py-3 text-xs font-medium text-white/50 uppercase tracking-wider">Asset</th>
             <th className="px-4 py-3 text-xs font-medium text-white/50 uppercase tracking-wider">Direction</th>
             <th className="px-4 py-3 text-xs font-medium text-white/50 uppercase tracking-wider text-right">Size</th>
@@ -115,7 +115,7 @@ export default function SignalTable({ signals }: SignalTableProps) {
           </tr>
         </thead>
         <tbody>
-          {signals.map((sig, index) => (
+          {research.map((sig, index) => (
             <tr
               key={sig.id}
               className={`transition-colors ${
@@ -128,7 +128,7 @@ export default function SignalTable({ signals }: SignalTableProps) {
                 {sig.timestamp ? formatTimestamp(sig.timestamp) : "—"}
               </td>
               <td className="px-4 py-3">
-                <ProviderBadge provider={sig.provider} />
+                <ContributorBadge provider={sig.provider} />
               </td>
               <td className="px-4 py-3">
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-white/[0.06] text-white/80 border border-white/10 font-mono">

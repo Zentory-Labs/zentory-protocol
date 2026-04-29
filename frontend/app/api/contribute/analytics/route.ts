@@ -52,16 +52,16 @@ export async function GET(req: NextRequest) {
     const { data: stats, error: statsError } = await query;
 
     if (statsError) {
-      console.error("[GET /api/provider/analytics]", statsError.message);
+      console.error("[GET /api/contribute/analytics]", statsError.message);
       return NextResponse.json({ error: "Failed to fetch analytics" }, { status: 500 });
     }
 
     const statsData = stats ?? [];
-    const totalSignals = statsData.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.total_signals as number) ?? 0), 0);
-    const resolvedSignals = statsData.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.resolved_signals as number) ?? 0), 0);
+    const totalResearch = statsData.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.total_signals as number) ?? 0), 0);
+    const resolvedResearch = statsData.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.resolved_signals as number) ?? 0), 0);
     const avgAccuracy =
-      resolvedSignals > 0
-        ? statsData.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.avg_accuracy as number) ?? 0) * ((s.resolved_signals as number) ?? 0), 0) / resolvedSignals
+      resolvedResearch > 0
+        ? statsData.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.avg_accuracy as number) ?? 0) * ((s.resolved_signals as number) ?? 0), 0) / resolvedResearch
         : 0;
     const totalPayout = statsData.reduce((sum: number, s: Record<string, unknown>) => sum + ((s.total_payout as number) ?? 0), 0);
 
@@ -83,15 +83,15 @@ export async function GET(req: NextRequest) {
       }));
 
     return NextResponse.json({
-      totalSignals,
-      resolvedSignals,
+      totalResearch,
+      resolvedResearch,
       avgAccuracy: Math.round(avgAccuracy * 100) / 100,
       totalPayout: Math.round(totalPayout),
       currentRank: rank,
       accuracyHistory,
     });
   } catch (err) {
-    console.error("[GET /api/provider/analytics]", err);
+    console.error("[GET /api/contribute/analytics]", err);
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
 }

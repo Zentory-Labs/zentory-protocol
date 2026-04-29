@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Asset, Direction } from "@/lib/signals";
-import { logSignal, executeSignal } from "@/lib/signals";
+import type { Asset, Direction } from "@/lib/research";
+import { logResearch, executeResearch } from "@/lib/research";
 
 const ASSETS: Asset[] = ["BTC", "ETH", "XRP", "SOL"];
 const DIRECTIONS: Direction[] = ["LONG", "SHORT", "CLOSE"];
@@ -32,12 +32,12 @@ export default function TradeLoggerForm() {
     }
     startTransition(async () => {
       try {
-        const signal = await logSignal({ provider: "manual", asset, direction, size: sizeNum, price: priceNum });
-        showToast("success", `Signal logged (${signal.id}). Ready to execute.`);
+        const research = await logResearch({ provider: "manual", asset, direction, size: sizeNum, price: priceNum });
+        showToast("success", `Research published (${research.id}). Ready to execute.`);
         setSize("");
         setPrice("");
       } catch {
-        showToast("error", "Failed to log signal. Check your connection.");
+        showToast("error", "Failed to log research. Check your connection.");
       }
     });
   }
@@ -51,8 +51,8 @@ export default function TradeLoggerForm() {
     }
     startTransition(async () => {
       try {
-        const signal = await logSignal({ provider: "manual", asset, direction, size: sizeNum, price: priceNum });
-        const result = await executeSignal(signal as Parameters<typeof executeSignal>[0]);
+        const research = await logResearch({ provider: "manual", asset, direction, size: sizeNum, price: priceNum });
+        const result = await executeResearch(research as Parameters<typeof executeResearch>[0]);
         showToast("success", `Trade executed on-chain. TX: ${result.txHash.slice(0, 12)}…`);
         setSize("");
         setPrice("");
@@ -66,7 +66,7 @@ export default function TradeLoggerForm() {
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-      <h2 className="text-lg font-semibold text-white mb-1">Log Trade Signal</h2>
+      <h2 className="text-lg font-semibold text-white mb-1">Publish Research</h2>
       <p className="text-xs text-white/40 mb-5">Submit manually or execute directly on-chain via the keeper wallet.</p>
 
       {toast && (
@@ -125,7 +125,7 @@ export default function TradeLoggerForm() {
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={isPending}
             className="flex-1 rounded-lg border border-white/10 bg-white/5 py-2.5 text-sm font-semibold text-white hover:bg-white/10 disabled:opacity-40 transition-all">
-            {isPending ? "Logging…" : "Log Signal"}
+            {isPending ? "Publishing…" : "Publish Research"}
           </button>
           <button type="button" disabled={isPending} onClick={handleExecute}
             className="flex-1 rounded-lg bg-amber-500 py-2.5 text-sm font-semibold text-black hover:bg-amber-400 disabled:opacity-40 transition-all">

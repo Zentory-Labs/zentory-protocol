@@ -8,7 +8,7 @@ const SUPABASE_URL = "https://kwofgouhrdnolkatznor.supabase.co";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 
 if (!SUPABASE_KEY) {
-  console.error("❌  Set NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY env var");
+  console.error("ERROR: Set NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY env var");
   process.exit(1);
 }
 
@@ -32,10 +32,10 @@ async function restInsert(table: string, records: Record<string, unknown>[]) {
   });
   const text = await res.text();
   if (!res.ok) {
-    console.error(`   ❌ ${table}: ${text}`);
+    console.error(`   ERROR ${table}: ${text}`);
     return false;
   }
-  console.log(`   ✅ ${table}: ${records.length} rows`);
+  console.log(`   OK ${table}: ${records.length} rows`);
   return true;
 }
 
@@ -102,19 +102,19 @@ async function main() {
     { subscriber: "0x3456789012345678901234567890123456789012", tier_id: 2, tier_name: "ELITE", token_id: 3, asset_class_bitmap: "0x1F", expiration: NOW + 25 * 24 * ONE_HOUR, zent_paid: (2000n * 10n ** 18n).toString(), subscribed_at: NOW - 3 * 24 * ONE_HOUR, cancelled_at: null, refund_zent: null },
   ];
 
-  console.log("🌱  Seeding signals...");
+  console.log("Seeding signals...");
   await restInsert("signals", signals);
 
-  console.log("🌱  Seeding provider_stats...");
+  console.log("Seeding provider_stats...");
   await restInsert("provider_stats", providerStats);
 
-  console.log("🌱  Seeding epochs...");
+  console.log("Seeding epochs...");
   await restInsert("epochs", epochs);
 
-  console.log("🌱  Seeding subscriptions...");
+  console.log("Seeding subscriptions...");
   await restInsert("subscriptions", subscriptions);
 
-  console.log("\n🎉  Done! Visit http://localhost:3006/markets to see live data.");
+  console.log("\nDone! Visit http://localhost:3006/markets to see live data.");
 }
 
 main().catch(console.error);
