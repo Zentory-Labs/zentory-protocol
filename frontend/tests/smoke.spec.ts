@@ -13,9 +13,9 @@ test.describe("smoke", () => {
     await expect(page.getByText("Stake ZENT")).toBeVisible();
   });
 
-  test("signals page loads", async ({ page }) => {
-    await page.goto("/signals");
-    await expect(page.getByRole("heading", { name: /signal dashboard/i })).toBeVisible();
+  test("research page loads", async ({ page }) => {
+    await page.goto("/research");
+    await expect(page.getByRole("heading", { name: /research dashboard/i })).toBeVisible();
   });
 
   test("govern page loads", async ({ page }) => {

@@ -148,6 +148,8 @@ body {
   background-size: 40px 40px, 100% 4px;
   background-attachment: fixed;
   min-height: 100vh;
+  position: relative;
+  z-index: 1;
 }
 
 /* Ambient corner glows — gold top-left, crimson bottom-right */
@@ -162,16 +164,22 @@ body::after {
 body::before {
   top: -20%;
   left: -10%;
-  width: 55%;
-  height: 55%;
-  background: radial-gradient(ellipse at center, rgba(176, 141, 87, 0.055) 0%, transparent 70%);
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(ellipse, rgba(176, 141, 87, 0.04) 0%, transparent 70%);
 }
 body::after {
   bottom: -20%;
   right: -10%;
-  width: 55%;
-  height: 55%;
-  background: radial-gradient(ellipse at center, rgba(139, 30, 45, 0.055) 0%, transparent 70%);
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(ellipse, rgba(139, 30, 45, 0.06) 0%, transparent 70%);
+}
+
+/* Ensure root div doesn't override body background */
+#__next, main {
+  position: relative;
+  z-index: 1;
 }
 
 h1, h2, h3, h4, h5, h6 {

@@ -117,13 +117,13 @@ export async function POST(req: NextRequest) {
 
     // Gate: keeper private key must be configured server-side
     if (!KEEPER_PRIVATE_KEY) {
-      console.error("[POST /api/research/execute] KEEPER_PRIVATE_KEY not configured");
+      console.error("[research/execute] KEEPER_PRIVATE_KEY not configured");
       return safeJson({ error: "Keeper private key not configured" }, { status: 500 });
     }
 
     const keeperPk = normalizePrivateKey(KEEPER_PRIVATE_KEY);
     if (!keeperPk) {
-      console.error("[POST /api/research/execute] Invalid KEEPER_PRIVATE_KEY format");
+      console.error("[research/execute] Invalid KEEPER_PRIVATE_KEY format");
       return safeJson(
         { error: "Invalid KEEPER_PRIVATE_KEY format (expected 32-byte hex, with or without 0x prefix)" },
         { status: 500 }
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (e) {
-      console.error("[POST /api/research/execute] preflight failed", e);
+      console.error("[research/execute] preflight failed", e);
       const detail =
         (e as any)?.shortMessage ??
         (e as any)?.cause?.shortMessage ??
@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
         args: [vaultAddress as `0x${string}`, isBuy, BigInt(size), BigInt(Math.round(price * 1_000_000))],
       });
     } catch (e) {
-      console.error("[POST /api/research/execute] writeContract failed", e);
+      console.error("[research/execute] writeContract failed", e);
       const detail =
         (e as any)?.shortMessage ??
         (e as any)?.cause?.shortMessage ??
@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
     try {
       receipt = await publicClient.waitForTransactionReceipt({ hash });
     } catch (e) {
-      console.error("[POST /api/research/execute] waitForTransactionReceipt failed", e);
+      console.error("[research/execute] waitForTransactionReceipt failed", e);
       return safeJson({ error: "Transaction not confirmed" }, { status: 502 });
     }
 
@@ -283,7 +283,7 @@ export async function POST(req: NextRequest) {
       ...(Object.keys(warnings).length ? { warnings } : {}),
     });
   } catch (err) {
-    console.error("[POST /api/research/execute]", err);
+    console.error("[research/execute]", err);
     return safeJson({ error: "Execution failed", detail: errorToDetail(err) }, { status: 500 });
   }
 }

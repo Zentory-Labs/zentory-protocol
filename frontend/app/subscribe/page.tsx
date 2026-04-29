@@ -671,15 +671,23 @@ export default function SubscriptionVaultPage() {
                   {/* Header */}
                   <div className="flex items-start justify-between">
                     <div>
-                      <div className="text-2xl mb-1">{tier.emoji}</div>
-                      <h3
-                        className="text-xl font-bold"
+                      <div
+                        className="text-xl font-bold uppercase tracking-widest mb-1"
                         style={{
                           color: tier.color,
                           fontFamily: "'Montserrat', sans-serif",
                         }}
                       >
                         {tier.name}
+                      </div>
+                      <h3
+                        className="text-base font-semibold"
+                        style={{
+                          color: "rgba(234,234,234,0.7)",
+                          fontFamily: "'Montserrat', sans-serif",
+                        }}
+                      >
+                        Subscription
                       </h3>
                     </div>
                     <span
