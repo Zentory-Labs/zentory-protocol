@@ -14,25 +14,23 @@ function ResearchPerformanceBar({ research }: { research: Research[] }) {
     const executed = research.filter((s) => s.status === "executed");
     if (executed.length === 0) return null;
 
-    // Simulate P&L based on direction and price movement
-    // In production this would come from keeper_audit + on-chain price feeds
+    // Real P&L would come from keeper_audit + on-chain price feeds
     const ASSET_PRICES: Record<Asset, number> = { BTC: 96500, ETH: 3420, SOL: 140, XRP: 2.3 };
     const returns = executed.map((s) => {
-      const price = ASSET_PRICES[s.asset] ?? 100;
       const directionMultiplier = s.direction === "LONG" ? 1 : s.direction === "SHORT" ? -1 : 0;
-      // Simulate a realistic return based on direction
-      const simulatedReturn = directionMultiplier * (s.direction === "CLOSE" ? 0 : (Math.random() * 0.04 - 0.01));
-      return simulatedReturn;
+      // Return 0 until real P&L data (entry/exit prices) is available from on-chain keeper_audit
+      const priceChange = 0;
+      return priceChange;
     });
 
     const totalReturn = returns.reduce((a, b) => a + b, 0);
     const avgReturn = totalReturn / returns.length;
     const wins = returns.filter((r) => r > 0).length;
-    const winRate = (wins / returns.length) * 100;
-    const bestTrade = Math.max(...returns) * 100;
-    const worstTrade = Math.min(...returns) * 100;
-    const bestResearch = executed[returns.indexOf(Math.max(...returns))];
-    const worstResearch = executed[returns.indexOf(Math.min(...returns))];
+    const winRate = returns.length ? (wins / returns.length) * 100 : 0;
+    const bestTrade = returns.length ? Math.max(...returns) * 100 : 0;
+    const worstTrade = returns.length ? Math.min(...returns) * 100 : 0;
+    const bestResearch = returns.length ? executed[returns.indexOf(Math.max(...returns))] : null;
+    const worstResearch = returns.length ? executed[returns.indexOf(Math.min(...returns))] : null;
 
     return {
       totalTrades: executed.length,
@@ -49,7 +47,20 @@ function ResearchPerformanceBar({ research }: { research: Research[] }) {
     };
   }, [research]);
 
-  if (!stats) return null;
+  if (!stats) {
+    return (
+      <div className="glass-card p-6">
+        <p className="text-xs uppercase tracking-widest mb-4" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
+          Performance Summary
+        </p>
+        <div className="flex items-center justify-center py-8">
+          <p className="text-sm text-white/40 italic" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+            Live performance data will appear after the first epoch settles.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const metricCards = [
     {
@@ -120,12 +131,12 @@ function ContributorBreakdown({ research }: { research: Research[] }) {
     const allContributors = ["gp", "lumibot", "manual"] as const;
     return allContributors.map((p) => {
       const pResearch = executed.filter((s) => s.provider === p);
-      const wins = pResearch.filter(() => Math.random() > 0.45).length;
+      // Win rate will be computed from real P&L data when available via keeper_audit
       return {
         name: p,
         label: p === "gp" ? "Genesis Pulse" : p === "lumibot" ? "Lumibot" : "Manual",
         count: pResearch.length,
-        winRate: pResearch.length ? (wins / pResearch.length) * 100 : 0,
+        winRate: 0,
       };
     });
   }, [research]);

@@ -10,5 +10,6 @@ out/
 # Docs
 docs/
 
-# Dotenv file
+# Dotenv files — never commit these
 .env
+.env.local
