@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import fetch from 'node-fetch';
 import { setLeaderboard, setMarketsSignals } from '@/lib/cache';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -119,7 +118,7 @@ async function sendAlert(message: string) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          content: `\`[ZENTORY KEEPER]\` ${message}`,
+          content: `[ZENTORY KEEPER] ${message}`,
           components: [
             {
               type: 1,
