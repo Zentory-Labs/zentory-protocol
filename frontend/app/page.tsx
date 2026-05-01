@@ -368,7 +368,7 @@ export default function Home() {
               className="text-base md:text-lg xl:text-xl mb-6 font-light leading-relaxed"
               style={{ color: "rgba(234, 234, 234, 0.75)" }}
             >
-              Stake BTC, SOL, ETH, XRP or HYPE. Earn systematic yield from proprietary algorithms.
+              Stake BTC, SOL, ETH, XRP or HYPE. Access systematic yield from proprietary algorithms.
               <br />
               Your keys, your crypto — always.
             </p>
@@ -458,7 +458,7 @@ export default function Home() {
               <div className="space-y-4">
                 {[
                   { label: "Total Value Locked", value: "$0", sub: "Pre-mainnet" },
-                  { label: "Vault APY", value: "—", sub: "Live after launch" },
+                  { label: "Yield Metric", value: "—", sub: "Variable — launch TBD" },
                   { label: "Supported Assets", value: "BTC · ETH · SOL", sub: "XRP · HYPE coming" },
                   { label: "Strategy", value: "Premium/Discount", sub: "Non-directional alpha" },
                 ].map(({ label, value, sub }) => (

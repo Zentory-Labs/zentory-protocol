@@ -18,7 +18,7 @@ export async function GET() {
 
     if (error) {
       console.error("[GET /api/analytics/asset-classes] query error:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 200 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     const signals = data ?? [];

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -12,9 +13,12 @@ import {ISignalRegistry} from "../interfaces/ISignalRegistry.sol";
 ///         Providers sign signals with their wallet (EIP-712).
 ///         Anyone can submit a signal on behalf of a provider if they have the signature.
 /// @dev    SignalRecords are append-only. Status transitions happen via resolveSignals().
-contract SignalRegistry is EIP712, ISignalRegistry {
+contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     using SignalTypes for SignalTypes.Signal;
     using ECDSA for bytes32;
+
+    // ─── Roles ─────────────────────────────────────────────
+    bytes32 public constant SCORING_ORACLE = keccak256("SCORING_ORACLE");
 
     // ─── EIP-712 Domain ─────────────────────────────────────
     string public constant VERSION = "1.0";
@@ -52,6 +56,15 @@ contract SignalRegistry is EIP712, ISignalRegistry {
     /// @notice Authorized staking contract — reads provider stakes for weight.
     address public stakingContract;
 
+    /// @notice Ordered list of all providers (for indexing).
+    address[] public providers;
+
+    /// @notice Ordered list of all signal IDs (for indexing).
+    bytes32[] public signalIds;
+
+    /// @notice Mapping from (provider, epochId) to signal return value.
+    mapping(address => mapping(uint256 => int256)) public signalReturns;
+
     // ─── Errors ─────────────────────────────────────────────
     error SignalAlreadyExists(bytes32 signalId);
     error SignatureExpired(uint256 expiresAt, uint256 now);
@@ -64,9 +77,13 @@ contract SignalRegistry is EIP712, ISignalRegistry {
     error ExpiryTooFar(uint256 expiresAt, uint256 maxExpiry);
 
     // ─── Constructor ─────────────────────────────────────────
-    constructor(address _stakingContract) EIP712("ZentorySignalRegistry", VERSION) {
+    constructor(address _stakingContract, address _scoringOracle) EIP712("ZentorySignalRegistry", VERSION) {
         if (_stakingContract == address(0)) revert StakingContractNotSet();
+        if (_scoringOracle == address(0)) revert StakingContractNotSet();
         stakingContract = _stakingContract;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(SCORING_ORACLE, _scoringOracle);
     }
 
     // ─── Core Submit ─────────────────────────────────────────
@@ -102,6 +119,16 @@ contract SignalRegistry is EIP712, ISignalRegistry {
         signalExists[signalId] = true;
         providerNonce[provider] = nonce + 1;
         providerSignalIds[provider].push(signalId);
+        signalIds.push(signalId);
+
+        // Track provider if new.
+        if (providerNonce[provider] == 1) {
+            providers.push(provider);
+        }
+
+        // Store signal return for scoring.
+        uint256 epochId = currentEpochId;
+        signalReturns[provider][epochId] = direction;
 
         emit SignalTypes.SignalSubmitted(
             signalId, provider, assetClass, assetId, direction, confidence, expiresAt
@@ -214,7 +241,7 @@ contract SignalRegistry is EIP712, ISignalRegistry {
     function resolveSignals(
         bytes32[] calldata signalIds,
         uint256[] calldata accuraciesBps
-    ) external {
+    ) external onlyRole(SCORING_ORACLE) {
         if (signalIds.length != accuraciesBps.length) revert ArraysLengthMismatch();
 
         for (uint256 i = 0; i < signalIds.length; i++) {
@@ -237,6 +264,34 @@ contract SignalRegistry is EIP712, ISignalRegistry {
     {
         if (!signalExists[signalId]) revert SignalNotFound(signalId);
         return signals[signalId];
+    }
+
+    /// @inheritdoc ISignalRegistry
+    function getProviderCount() external view returns (uint256 count) {
+        return providers.length;
+    }
+
+    /// @inheritdoc ISignalRegistry
+    function getProviderAt(uint256 index) external view returns (address provider) {
+        if (index >= providers.length) revert SignalNotFound(0);
+        return providers[index];
+    }
+
+    /// @inheritdoc ISignalRegistry
+    function getSignalCount() external view returns (uint256 count) {
+        return signalIds.length;
+    }
+
+    /// @inheritdoc ISignalRegistry
+    function getSignalProvider(uint256 index) external view returns (address provider) {
+        if (index >= signalIds.length) revert SignalNotFound(0);
+        bytes32 id = signalIds[index];
+        return signals[id].provider;
+    }
+
+    /// @inheritdoc ISignalRegistry
+    function getSignalReturn(address provider, uint256 epochId) external view returns (int256 signalReturn) {
+        return signalReturns[provider][epochId];
     }
 
     /// @notice Returns paginated signal IDs and statuses for a provider.

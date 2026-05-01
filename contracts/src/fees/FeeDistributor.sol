@@ -19,7 +19,6 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
     uint8 public constant POOL_BUYBACK = 0;
     uint8 public constant POOL_GP_ENGINE = 1;
     uint8 public constant POOL_INSURANCE = 2;
-    uint8 public constant POOL_TREASURY = 3;
 
     // ─── Roles ─────────────────────────────────────────────────────────────
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
@@ -33,7 +32,7 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
     // ─── State ─────────────────────────────────────────────────────────────
     address public gpEngine;
     address public insurance;
-    address public treasury;
+    address public protocolTreasury; // ProtocolTreasury (routes 50% to ZENTBuyback, 50% to ops)
 
     /// @notice Accumulated performance fees per vault (accounting only — not pulled until distribute).
     mapping(address => uint256) public pendingFees;
@@ -48,20 +47,20 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
         address governor_,
         address gpEngine_,
         address insurance_,
-        address treasury_
+        address protocolTreasury_
     ) {
         require(asset_ != address(0), "FeeDistributor: zero asset");
         require(zent_ != address(0), "FeeDistributor: zero zent");
         require(governor_ != address(0), "FeeDistributor: zero governor");
         require(gpEngine_ != address(0), "FeeDistributor: zero gp engine");
         require(insurance_ != address(0), "FeeDistributor: zero insurance");
-        require(treasury_ != address(0), "FeeDistributor: zero treasury");
+        require(protocolTreasury_ != address(0), "FeeDistributor: zero protocol treasury");
 
         asset = IERC20(asset_);
         zent = IERC20(zent_);
         gpEngine = gpEngine_;
         insurance = insurance_;
-        treasury = treasury_;
+        protocolTreasury = protocolTreasury_;
 
         _grantRole(DEFAULT_ADMIN_ROLE, governor_);
         _grantRole(GOVERNOR_ROLE, governor_);
@@ -105,14 +104,14 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
         pools[POOL_BUYBACK] += buyback;
         pools[POOL_GP_ENGINE] += gpAmount;
         pools[POOL_INSURANCE] += insuranceAmount;
-        pools[POOL_TREASURY] += treasuryAmount;
 
         // Send non-buyback portions to their destinations immediately.
         emit FeesDistributed(buyback, gpAmount, insuranceAmount, treasuryAmount);
 
         if (gpAmount > 0) asset.safeTransfer(gpEngine, gpAmount);
         if (insuranceAmount > 0) asset.safeTransfer(insurance, insuranceAmount);
-        if (treasuryAmount > 0) asset.safeTransfer(treasury, treasuryAmount);
+        // Treasury (10%) flows to ProtocolTreasury which splits 50/50 to ZENTBuyback + operations
+        if (treasuryAmount > 0) asset.safeTransfer(protocolTreasury, treasuryAmount);
     }
 
     // ─── Buyback ───────────────────────────────────────────────────────────
@@ -150,7 +149,7 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
     function withdrawTo(address recipient, uint256 amount, uint8 poolId) external onlyRole(GOVERNOR_ROLE) {
         require(recipient != address(0), "FeeDistributor: zero recipient");
         require(amount > 0, "FeeDistributor: zero amount");
-        require(poolId == POOL_GP_ENGINE || poolId == POOL_TREASURY, "FeeDistributor: not directly withdrawable");
+        require(poolId == POOL_GP_ENGINE, "FeeDistributor: not directly withdrawable");
         require(pools[poolId] >= amount, "FeeDistributor: insufficient pool balance");
 
         pools[poolId] -= amount;
@@ -173,10 +172,10 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
         emit GovernorUpdated(old, newInsurance);
     }
 
-    function setTreasury(address newTreasury) external onlyRole(GOVERNOR_ROLE) {
-        require(newTreasury != address(0), "FeeDistributor: zero treasury");
-        address old = treasury;
-        treasury = newTreasury;
-        emit GovernorUpdated(old, newTreasury);
+    function setProtocolTreasury(address newProtocolTreasury) external onlyRole(GOVERNOR_ROLE) {
+        require(newProtocolTreasury != address(0), "FeeDistributor: zero protocol treasury");
+        address old = protocolTreasury;
+        protocolTreasury = newProtocolTreasury;
+        emit GovernorUpdated(old, newProtocolTreasury);
     }
 }

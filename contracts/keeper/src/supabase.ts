@@ -146,3 +146,14 @@ export async function markSignalsAsResolved(signalIds: string[]): Promise<void> 
     throw new Error(`Failed to mark signals as resolved: ${error.message}`);
   }
 }
+
+export async function updateKeeperHeartbeat(epochId: number): Promise<void> {
+  const { error } = await supabase.rpc('update_keeper_heartbeat', {
+    p_keeper_address: config.keeperAddress,
+    p_last_epoch: epochId,
+  });
+
+  if (error) {
+    console.error(`Failed to update keeper heartbeat: ${error.message}`);
+  }
+}

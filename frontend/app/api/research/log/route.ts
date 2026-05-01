@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import type { Asset, Direction, ResearchContributor } from "@/lib/research";
+import { geoBlockCheck } from "@/lib/geo-blocking";
 
 /**
  * POST /api/research/log
@@ -11,6 +12,9 @@ import type { Asset, Direction, ResearchContributor } from "@/lib/research";
  * token holders can trigger keeper execution.
  */
 export async function POST(req: NextRequest) {
+  const block = geoBlockCheck(req);
+  if (block) return block;
+
   try {
     const body = await req.json();
     const { provider, asset, direction, size, price } = body as {

@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from("signals")
-      .select("*", { count: "exact" })
+      .select("id, provider, asset, direction, size, price, status, submitted_at, created_at", { count: "exact" })
       .eq("provider", provider)
       .order("submitted_at", { ascending: false })
       .range(offset, offset + limit - 1);

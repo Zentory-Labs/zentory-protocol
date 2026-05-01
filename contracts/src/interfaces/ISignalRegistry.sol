@@ -52,4 +52,28 @@ interface ISignalRegistry {
 
     /// @notice Address of the authorized staking contract.
     function stakingContract() external view returns (address);
+
+    /// @notice Returns the total number of registered signal providers.
+    /// @return count Total provider count
+    function getProviderCount() external view returns (uint256 count);
+
+    /// @notice Returns the address of the provider at a given index.
+    /// @param index Provider index (0 to getProviderCount() - 1)
+    /// @return provider Address of the provider at the given index
+    function getProviderAt(uint256 index) external view returns (address provider);
+
+    /// @notice Returns the total number of submitted signals.
+    /// @return count Total signal count
+    function getSignalCount() external view returns (uint256 count);
+
+    /// @notice Returns the signal provider at a given signal index.
+    /// @param index Signal index (0 to getSignalCount() - 1)
+    /// @return provider Address of the signal provider
+    function getSignalProvider(uint256 index) external view returns (address provider);
+
+    /// @notice Returns the signal return value for a provider at a specific epoch.
+    /// @param provider Address of the signal provider
+    /// @param epochId The epoch ID to query
+    /// @return signalReturn The signal return value for that epoch
+    function getSignalReturn(address provider, uint256 epochId) external view returns (int256 signalReturn);
 }

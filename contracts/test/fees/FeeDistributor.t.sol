@@ -31,14 +31,14 @@ contract FeeDistributorTest is Test {
     address internal governor = makeAddr("governor");
     address internal gpEngine = makeAddr("gpEngine");
     address internal insurance = makeAddr("insurance");
-    address internal treasury = makeAddr("treasury");
+    address internal protocolTreasury = makeAddr("protocolTreasury");
     address internal vault = makeAddr("vault");
     address internal stranger = makeAddr("stranger");
 
     function setUp() external {
         wbtc = new MockERC20("Wrapped Bitcoin", "WBTC", 8);
         zent = new MockERC20("Zentory Token", "ZENT", 18);
-        distributor = new FeeDistributor(address(wbtc), address(zent), governor, gpEngine, insurance, treasury);
+        distributor = new FeeDistributor(address(wbtc), address(zent), governor, gpEngine, insurance, protocolTreasury);
 
         // Mint WBTC to the vault so it can accumulate fees
         MockERC20(address(wbtc)).mint(vault, 1_000 ether);
@@ -48,17 +48,22 @@ contract FeeDistributorTest is Test {
 
     function test_constructorRejectsZeroAsset() external {
         vm.expectRevert(bytes("FeeDistributor: zero asset"));
-        new FeeDistributor(address(0), address(zent), governor, gpEngine, insurance, treasury);
+        new FeeDistributor(address(0), address(zent), governor, gpEngine, insurance, protocolTreasury);
     }
 
     function test_constructorRejectsZeroZent() external {
         vm.expectRevert(bytes("FeeDistributor: zero zent"));
-        new FeeDistributor(address(wbtc), address(0), governor, gpEngine, insurance, treasury);
+        new FeeDistributor(address(wbtc), address(0), governor, gpEngine, insurance, protocolTreasury);
     }
 
     function test_constructorRejectsZeroGovernor() external {
         vm.expectRevert(bytes("FeeDistributor: zero governor"));
-        new FeeDistributor(address(wbtc), address(zent), address(0), gpEngine, insurance, treasury);
+        new FeeDistributor(address(wbtc), address(zent), address(0), gpEngine, insurance, protocolTreasury);
+    }
+
+    function test_constructorRejectsZeroProtocolTreasury() external {
+        vm.expectRevert(bytes("FeeDistributor: zero protocol treasury"));
+        new FeeDistributor(address(wbtc), address(zent), governor, gpEngine, insurance, address(0));
     }
 
     function test_rolesAssignedCorrectly() external view {
@@ -123,7 +128,7 @@ contract FeeDistributorTest is Test {
         assertEq(wbtc.balanceOf(address(distributor)), fee - fee / 2);
         assertEq(wbtc.balanceOf(gpEngine), fee * 25 / 100); // 25% → 2_500_000
         assertEq(wbtc.balanceOf(insurance), fee * 15 / 100); // 15% → 1_500_000
-        assertEq(wbtc.balanceOf(treasury), fee * 10 / 100); // 10% → 1_000_000
+        assertEq(wbtc.balanceOf(protocolTreasury), fee * 10 / 100); // 10% → 1_000_000
 
         assertEq(distributor.pendingFees(vault), 0);
     }
@@ -141,7 +146,7 @@ contract FeeDistributorTest is Test {
             fee * 50 / 100, // buyback stays in distributor
             fee * 25 / 100, // gpEngine
             fee * 15 / 100, // insurance
-            fee * 10 / 100 // treasury
+            fee * 10 / 100 // protocolTreasury
         );
         distributor.distribute(vault);
     }
@@ -221,21 +226,21 @@ contract FeeDistributorTest is Test {
         assertEq(wbtc.balanceOf(gpEngine), gpBalanceBefore + 500_000);
     }
 
-    function test_withdrawToTransfersFromTreasuryPool() external {
+    // Treasury (10%) is sent directly to ProtocolTreasury during distribute()
+    // and is no longer withdrawable via withdrawTo() — it is swept by ProtocolTreasury.sweep()
+    function test_distributeSendsTreasuryToProtocolTreasury() external {
         uint256 fee = 10_000_000;
         vm.startPrank(vault);
         wbtc.approve(address(distributor), type(uint256).max);
         distributor.accumulate(vault, fee);
         vm.stopPrank();
 
+        uint256 protocolTreasuryBalanceBefore = wbtc.balanceOf(protocolTreasury);
+
         vm.prank(stranger);
         distributor.distribute(vault);
 
-        uint256 treasuryBalanceBefore = wbtc.balanceOf(treasury);
-        vm.prank(governor);
-        distributor.withdrawTo(treasury, 200_000, 3); // POOL_TREASURY = 3
-
-        assertEq(wbtc.balanceOf(treasury), treasuryBalanceBefore + 200_000);
+        assertEq(wbtc.balanceOf(protocolTreasury), protocolTreasuryBalanceBefore + fee * 10 / 100);
     }
 
     function test_withdrawToRejectsFromBuybackPool() external {
@@ -285,11 +290,11 @@ contract FeeDistributorTest is Test {
         assertEq(distributor.insurance(), newInsurance);
     }
 
-    function test_setTreasuryUpdatesAddress() external {
-        address newTreasury = makeAddr("newTreasury");
+    function test_setProtocolTreasuryUpdatesAddress() external {
+        address newProtocolTreasury = makeAddr("newProtocolTreasury");
         vm.prank(governor);
-        distributor.setTreasury(newTreasury);
-        assertEq(distributor.treasury(), newTreasury);
+        distributor.setProtocolTreasury(newProtocolTreasury);
+        assertEq(distributor.protocolTreasury(), newProtocolTreasury);
     }
 
     function test_setGpEngineRejectedFromNonGovernor() external {

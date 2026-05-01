@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import type { Asset, Direction, ResearchContributor } from "@/lib/research";
+import { geoBlockCheck } from "@/lib/geo-blocking";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const block = geoBlockCheck(request);
+  if (block) return block;
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("signals")
-      .select("*")
+      .select("id, provider, asset, direction, price, status, created_at")
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -16,12 +19,16 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch research" }, { status: 500 });
     }
     return NextResponse.json(data ?? []);
-  } catch {
-    return NextResponse.json([]);
+  } catch (err) {
+    console.error("[GET /api/research]", err);
+    return NextResponse.json({ error: "Failed to fetch research" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
+  const block = geoBlockCheck(req);
+  if (block) return block;
+
   try {
     const body = await req.json();
     const { provider, asset, direction, size, price } = body as {

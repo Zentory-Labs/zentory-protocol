@@ -205,7 +205,11 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
 
     // ─── Keeper: Trade Execution ───────────────────────────────────────────
 
-    function recordTrade(int8 direction, uint256 size, uint256 entryPrice) external onlyRole(KEEPER_ROLE) {
+    function recordTrade(int8 direction, uint256 size, uint256 entryPrice)
+        external
+        onlyRole(KEEPER_ROLE)
+        nonReentrant
+    {
         require(direction == int8(1) || direction == int8(-1) || direction == int8(0), "Invalid direction");
         require(entryPrice > 0, "Invalid entry price");
         require(!isCircuitBreakerActive, "Circuit breaker active");
@@ -227,7 +231,7 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         emit TradeExecuted(direction, size, entryPrice, block.timestamp);
     }
 
-    function closePosition() external onlyRole(KEEPER_ROLE) {
+    function closePosition() external onlyRole(KEEPER_ROLE) nonReentrant {
         currentDirection = int8(0);
         currentPositionSize = 0;
         currentEntryPrice = 0;

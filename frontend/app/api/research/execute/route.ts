@@ -4,6 +4,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createPublicClient, createWalletClient, http, parseAbi } from "viem";
 import { strategyExecutorABI, HYPEREVM_TESTNET } from "@/lib/contracts";
 import { addresses } from "@/lib/contracts";
+import { geoBlockCheck } from "@/lib/geo-blocking";
 
 const RPC_URL = process.env.NEXT_PUBLIC_HYPEREVM_RPC ?? "https://rpc.hyperliquid-testnet.xyz/evm";
 const KEEPER_PRIVATE_KEY = process.env.KEEPER_PRIVATE_KEY ?? "";
@@ -100,6 +101,10 @@ export async function POST(req: NextRequest) {
     const auth = checkAuth(req);
     if (auth) return auth;
     const limited = checkRateLimit(req);
+    if (limited) return limited;
+
+    const block = geoBlockCheck(req);
+    if (block) return block;
     if (limited) return limited;
 
     const body = await req.json();
@@ -281,7 +286,7 @@ export async function POST(req: NextRequest) {
       txHash: hash,
       blockNumber: receipt.blockNumber,
       ...(Object.keys(warnings).length ? { warnings } : {}),
-    });
+    }, { status: 200 });
   } catch (err) {
     console.error("[research/execute]", err);
     return safeJson({ error: "Execution failed", detail: errorToDetail(err) }, { status: 500 });

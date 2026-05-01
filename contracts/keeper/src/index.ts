@@ -16,6 +16,7 @@ import {
   insertSignalScore,
   insertAuditLog,
   markSignalsAsResolved,
+  updateKeeperHeartbeat,
 } from './supabase';
 import { computeAccuracy, fetchCryptoPrice, batchFetchPrices } from './scoring';
 import { AccuracyResult, PayoutResult } from './types';
@@ -194,6 +195,12 @@ async function main(): Promise<SettleResult> {
     try {
       const settleTx = await chainSettleEpoch();
       console.log(`${LOG_PREFIX} Empty epoch settled: ${settleTx}`);
+      // Fire heartbeat for empty epoch too
+      try {
+        await updateKeeperHeartbeat(epochId);
+      } catch (e) {
+        console.error(`${LOG_PREFIX} Failed to update keeper heartbeat: ${(e as Error).message}`);
+      }
       return { epochId, totalSignals: 0, settledSignals: 0, failedSignals: 0, avgAccuracyBps: 0, settleTx };
     } catch (e) {
       console.error(`${LOG_PREFIX} Failed to settle empty epoch: ${(e as Error).message}`);
@@ -271,6 +278,14 @@ async function main(): Promise<SettleResult> {
     });
   } catch (e) {
     console.error(`${LOG_PREFIX} Failed to insert audit log: ${(e as Error).message}`);
+  }
+
+  // Step 9: Update keeper heartbeat (dead man's switch)
+  try {
+    await updateKeeperHeartbeat(epochId);
+    console.log(`${LOG_PREFIX} Keeper heartbeat updated for epoch ${epochId}`);
+  } catch (e) {
+    console.error(`${LOG_PREFIX} Failed to update keeper heartbeat: ${(e as Error).message}`);
   }
 
   console.log(

@@ -39,7 +39,8 @@ export async function GET(req: NextRequest) {
       .select("id, label, key_prefix, created_at, last_used_at, is_active")
       .eq("provider", provider)
       .eq("is_active", true)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(50);
 
     if (keysError) {
       console.error("[GET /api/provider/api-keys]", keysError.message);
@@ -170,7 +171,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Failed to revoke API key" }, { status: 500 });
     }
 
-    return NextResponse.json({ message: "API key revoked successfully" });
+    return NextResponse.json({ message: "API key revoked successfully" }, { status: 204 });
   } catch (err) {
     console.error("[DELETE /api/provider/api-keys]", err);
     return NextResponse.json({ error: "Bad request" }, { status: 400 });

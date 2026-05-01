@@ -19,12 +19,13 @@ export async function GET(
     const { data, error } = await supabase
       .from("epoch_history")
       .select("epoch_id, avg_accuracy_bps, total_payout_zent, settled_signals")
+      .eq("provider", provider)
       .order("epoch_id", { ascending: false })
       .limit(20);
 
     if (error) {
       console.error("[GET /api/leaderboard/[provider]] query error:", error.message);
-      return NextResponse.json({ epochs: [], error: error.message }, { status: 200 });
+      return NextResponse.json({ epochs: [], error: error.message }, { status: 500 });
     }
 
     const epochs = (data ?? []).map((row) => ({

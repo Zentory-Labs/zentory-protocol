@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
+import { getLeaderboard, setLeaderboard } from "@/lib/cache";
 
 export async function GET() {
+  // Try cache first
+  const cached = await getLeaderboard<{ providers: unknown[]; count: number }>();
+  if (cached) {
+    return NextResponse.json(cached, { status: 200 });
+  }
+
   let supabase;
   try {
     supabase = await createClient();
@@ -21,7 +28,7 @@ export async function GET() {
 
     if (error) {
       console.error("[GET /api/leaderboard] query error:", error.message);
-      return NextResponse.json({ providers: [], error: error.message }, { status: 200 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     const providers = (data ?? []).map((row) => {
@@ -57,7 +64,10 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ providers, count: providers.length });
+    const result = { providers, count: providers.length };
+    await setLeaderboard(result);
+
+    return NextResponse.json(result, { status: 200 });
   } catch (err) {
     console.error("[GET /api/leaderboard] unexpected error:", err);
     return NextResponse.json({ providers: [], error: String(err) }, { status: 500 });

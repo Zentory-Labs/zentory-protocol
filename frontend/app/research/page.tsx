@@ -9,6 +9,13 @@ import TradeLoggerForm from "./TradeLoggerForm";
 
 // ─── Performance Metrics ─────────────────────────────────────
 
+const DEMO_BANNER = (
+  <div style={{ background: "rgba(255,180,0,0.12)", border: "1px solid rgba(255,180,0,0.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+    <span style={{ color: "#FFB400", fontWeight: 700, fontSize: 12 }}>IMPORTANT:</span>
+    <span style={{ color: "rgba(234,234,234,0.7)", fontSize: 12, marginLeft: 8 }}>All performance data shown is for illustrative purposes only. No guarantees are made. Results may vary. This is not financial advice.</span>
+  </div>
+);
+
 function ResearchPerformanceBar({ research }: { research: Research[] }) {
   const stats = useMemo(() => {
     const executed = research.filter((s) => s.status === "executed");
@@ -106,6 +113,7 @@ function ResearchPerformanceBar({ research }: { research: Research[] }) {
       <p className="text-xs uppercase tracking-widest mb-4" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
         Performance Summary
       </p>
+      {DEMO_BANNER}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {metricCards.map(({ label, value, sub, accent }) => (
           <div
@@ -152,6 +160,7 @@ function ContributorBreakdown({ research }: { research: Research[] }) {
       <p className="text-xs uppercase tracking-widest mb-4" style={{ color: "rgba(106,111,117,0.7)", fontFamily: "'Montserrat', sans-serif" }}>
         Research Contributors
       </p>
+      {DEMO_BANNER}
       <div className="space-y-3">
         {contributorDefs.map(({ name, label, count, winRate }) => (
           <div key={name} className="flex items-center gap-3">

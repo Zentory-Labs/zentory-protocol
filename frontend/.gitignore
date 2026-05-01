@@ -26,3 +26,9 @@ playwright-report/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Sentry
+sentry.client.config.ts
+sentry.server.config.ts
+sentry.edge.config.ts
+instrumentation.ts

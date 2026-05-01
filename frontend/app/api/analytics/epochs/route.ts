@@ -19,7 +19,7 @@ export async function GET() {
 
     if (error) {
       console.error("[GET /api/analytics/epochs] query error:", error.message);
-      return NextResponse.json({ error: error.message }, { status: 200 });
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     const epochs = (data ?? []).map((e) => ({

@@ -1,9 +1,14 @@
 import * as dotenv from 'dotenv';
+import { privateKeyToAccount } from 'viem/accounts';
 dotenv.config();
+
+const keeperPrivateKey = process.env.KEEPER_PRIVATE_KEY!;
+const keeperAccount = privateKeyToAccount(keeperPrivateKey as `0x${string}`);
 
 export const config = {
   rpcUrl: process.env.HYPEREVM_RPC_URL!,
-  keeperPrivateKey: process.env.KEEPER_PRIVATE_KEY!,
+  keeperPrivateKey,
+  keeperAddress: keeperAccount.address,
   chainId: parseInt(process.env.CHAIN_ID || '998'),
   contracts: {
     signalRegistry: process.env.SIGNAL_REGISTRY_ADDRESS! as `0x${string}`,

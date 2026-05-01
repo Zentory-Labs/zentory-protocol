@@ -36,7 +36,7 @@ contract DeploySignalNetwork is Script {
         vm.startBroadcast(deployerKey);
 
         // 1. SignalRegistry
-        SignalRegistry signalRegistry = new SignalRegistry(address(staking));
+        SignalRegistry signalRegistry = new SignalRegistry(address(staking), deployer);
         console2.log("SignalRegistry deployed:", address(signalRegistry));
 
         // 2. EpochScoring
@@ -44,7 +44,8 @@ contract DeploySignalNetwork is Script {
             address(signalRegistry),
             address(staking),
             address(zent),
-            deployer  // initial scoringOracle; governance can update via setScoringOracle
+            deployer, // initial scoringOracle; governance can update via setScoringOracle
+            deployer  // initial keeper (EPOCH_SETTLER); governance can grant to keeper bot
         );
         console2.log("EpochScoring deployed:", address(scoring));
 

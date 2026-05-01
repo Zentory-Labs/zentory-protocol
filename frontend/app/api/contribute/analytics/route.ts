@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
     let query = supabase
       .from("provider_stats")
-      .select("*")
+      .select("epoch, asset_class, total_signals, resolved_signals, avg_accuracy, total_payout, cumulative_payout")
       .eq("provider", provider)
       .order("epoch", { ascending: false })
       .limit(epochs);
@@ -69,7 +69,8 @@ export async function GET(req: NextRequest) {
       .from("provider_stats")
       .select("provider")
       .eq("asset_class", assetClass ?? "CRYPTO_PERP")
-      .order("cumulative_payout", { ascending: false });
+      .order("cumulative_payout", { ascending: false })
+      .limit(100);
 
     const rank = rankData
       ? (rankData as Array<{ provider: string }>).findIndex((r: { provider: string }) => r.provider === provider) + 1

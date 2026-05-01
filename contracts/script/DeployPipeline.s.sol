@@ -7,6 +7,8 @@ import {ZENTVesting} from "../src/ZENTVesting.sol";
 import {ZENTStaking} from "../src/staking/ZENTStaking.sol";
 import {ModelBonding} from "../src/staking/ModelBonding.sol";
 import {FeeDistributor} from "../src/fees/FeeDistributor.sol";
+import {ProtocolTreasury} from "../src/ProtocolTreasury.sol";
+import {ZENTBuyback} from "../src/ZENTBuyback.sol";
 import {zETHVault} from "../src/vaults/zETHVault.sol";
 import {zBTCVault} from "../src/vaults/zBTCVault.sol";
 import {zXRPVault} from "../src/vaults/zXRPVault.sol";
@@ -211,17 +213,30 @@ contract DeployPipeline is Script {
         );
         console2.log("ModelBonding:", address(bonding));
 
+        // ZENTBuyback — non-discretionary buyback/burn.
+        // In production: the buyback asset is the vault asset (e.g. WETH) that gets
+        // swapped to USDC via a DEX aggregator before buying ZENT.
+        // For deployment: use WETH as the asset token (swapped to USDC in production).
+        uint256 buybackThreshold = vm.envOr("BUYBACK_THRESHOLD", uint256(1_000e18));
+        ZENTBuyback zentBuyback = new ZENTBuyback(address(zent), address(weth), buybackThreshold);
+        console2.log("ZENTBuyback:", address(zentBuyback));
+
+        // Deploy ProtocolTreasury (receives 10% treasury fees, splits 50/50 to ZENTBuyback + operations)
+        address operationsWallet = _opt("OPERATIONS_WALLET", treasury);
+        ProtocolTreasury protocolTreasury = new ProtocolTreasury(address(zentBuyback), operationsWallet);
+        console2.log("ProtocolTreasury:", address(protocolTreasury));
+
         FeeDistributor zethFees = new FeeDistributor(
-            address(weth), address(zent), deployer, gpEngine, insurance, treasury
+            address(weth), address(zent), deployer, gpEngine, insurance, address(protocolTreasury)
         );
         FeeDistributor zbtcFees = new FeeDistributor(
-            address(wbtc), address(zent), deployer, gpEngine, insurance, treasury
+            address(wbtc), address(zent), deployer, gpEngine, insurance, address(protocolTreasury)
         );
         FeeDistributor zxrpFees = new FeeDistributor(
-            address(wxrp), address(zent), deployer, gpEngine, insurance, treasury
+            address(wxrp), address(zent), deployer, gpEngine, insurance, address(protocolTreasury)
         );
         FeeDistributor zsolFees = new FeeDistributor(
-            address(wsol), address(zent), deployer, gpEngine, insurance, treasury
+            address(wsol), address(zent), deployer, gpEngine, insurance, address(protocolTreasury)
         );
         console2.log("FeeDistributors:", address(zethFees));
         console2.log("                ", address(zbtcFees));
@@ -370,6 +385,10 @@ contract DeployPipeline is Script {
         console2.log("  zBTC_Fees      ", address(zbtcFees));
         console2.log("  zXRP_Fees      ", address(zxrpFees));
         console2.log("  zSOL_Fees      ", address(zsolFees));
+        console2.log("");
+        console2.log("BUYBACK:");
+        console2.log("  ProtocolTreasury ", address(protocolTreasury));
+        console2.log("  ZENTBuyback    ", address(zentBuyback));
         console2.log("");
         console2.log("GOVERNANCE:");
         console2.log("  Timelock       ", address(timelock));

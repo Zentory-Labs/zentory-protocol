@@ -22,7 +22,7 @@ interface IFeeDistributor {
     /// @param path Token path for the swap (e.g. [WBTC, USDC, ZENT]).
     function triggerBuyback(address[] calldata path) external;
 
-    /// @notice Withdraw accumulated GP engine or treasury allocations.
+    /// @notice Withdraw accumulated GP engine allocations.
     function withdrawTo(address recipient, uint256 amount, uint8 poolId) external;
 
     /// @notice Returns the current accumulated balance for a given vault.

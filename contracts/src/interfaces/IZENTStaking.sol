@@ -47,6 +47,12 @@ interface IZENTStaking {
     ///         lock expiry — a locked-but-expired position still has slashable stake.
     function getProviderStake(address provider) external view returns (uint256 stake);
 
+    /// @notice Returns the stake amount for a provider at a specific historical epoch.
+    /// @param provider Address of the signal provider
+    /// @param epochId The epoch ID to query
+    /// @return stake The stake amount at that epoch
+    function getStakeAtEpoch(address provider, uint256 epochId) external view returns (uint256 stake);
+
     /// @notice Slash a provider's stake. Called by EpochScoring when a signal is penalized.
     /// @param provider Address of the signal provider to slash
     /// @param amount   Absolute amount of ZENT to slash from provider's position

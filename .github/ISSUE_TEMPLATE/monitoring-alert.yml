@@ -1,0 +1,13 @@
+name: Monitoring Alert
+about: Create an alert for a monitoring issue
+title: "[ALERT] "
+labels: ["alert", "production"]
+body:
+  - type: textarea
+    attributes:
+      label: What triggered the alert?
+      placeholder: Which service, what time, what alert fired
+  - type: textarea
+    attributes:
+      label: Current status
+      placeholder: Is it still down? What have you checked?

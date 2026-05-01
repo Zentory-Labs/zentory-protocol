@@ -59,7 +59,7 @@ export default function ContributePage() {
         className="text-base leading-relaxed max-w-lg mb-10"
         style={{ color: "rgba(234,234,234,0.55)", fontFamily: "'Montserrat', sans-serif" }}
       >
-        Build a publicly verifiable on-chain track record. Stake ZENT on your accuracy. Earn rewards when your research contributes to the ZENT Alpha Vault.
+        Build a publicly verifiable on-chain track record. Stake ZENT as a bond against accuracy. Receive ZENT credits for premium access when your research contributes to the ZENT Alpha Vault.
       </p>
 
       {/* connect button */}
