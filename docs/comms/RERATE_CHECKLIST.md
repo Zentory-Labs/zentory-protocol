@@ -12,22 +12,17 @@ This is the **re-rate trigger** track. The earlier tracks produced the public su
 
 Every item below has to be a hard "Yes" before re-rating, or the re-rate will not move the score meaningfully.
 
-### Track A — GitHub-facing rewrite
+### Track A — GitHub org + repo split (new — May 2026)
 
-- [ ] `c:\Users\juan\OneDrive\Documents\GitHub\ZENTORY LABS\ZentoryToken\README.md` committed and pushed to `main`.
-- [ ] `STRATEGY.md` committed and pushed.
-- [ ] `COMPETITORS.md` committed and pushed.
-- [ ] `TEAM.md` committed and pushed.
-- [ ] `CONTRIBUTING.md` committed and pushed.
-- [ ] `GITHUB_SETTINGS.md` committed and pushed (or applied — see steps below).
-- [ ] `docs/comms/SOCIAL_LAUNCH.md`, `docs/comms/FOUNDER_VERIFICATION.md`, `docs/comms/RERATE_CHECKLIST.md` committed and pushed.
-- [ ] Secrets audit complete (rotated Alchemy keys in `test_alchemy.py`, `test_monitor_final.py`, `test_receipt.py`; rotated deployer key in `scripts/simulate-e2e.ps1`).
-- [ ] **Repo flipped to public** (`gh repo edit edgeza/ZentoryToken --visibility public`). This is the single highest-impact action; without it the README is invisible.
-- [ ] Repo `Description` set to the string in [`GITHUB_SETTINGS.md`](../../GITHUB_SETTINGS.md) STEP 2.
-- [ ] Repo `Topics` populated per [`GITHUB_SETTINGS.md`](../../GITHUB_SETTINGS.md) STEP 3.
-- [ ] Repo `Homepage` set to `https://zentorylabs.com` per [`GITHUB_SETTINGS.md`](../../GITHUB_SETTINGS.md) STEP 4.
-- [ ] Social preview image uploaded per [`GITHUB_SETTINGS.md`](../../GITHUB_SETTINGS.md) STEP 5.
-- [ ] Discussions enabled and 3 seed threads posted per [`GITHUB_SETTINGS.md`](../../GITHUB_SETTINGS.md) STEP 8.
+The old `edgeza/ZentoryToken` monorepo has been split into `Zentory-Labs`. Confirm these four repos exist and are in the right state:
+
+- [ ] `Zentory-Labs/zentory-protocol` — **public**, has rewritten README, BSL 1.1 LICENSE, topics + description set, social preview uploaded, discussions enabled with 3 seed threads.
+- [ ] `Zentory-Labs/zentory-app` — public, AGPL-3.0 LICENSE, topics set.
+- [ ] `Zentory-Labs/zentorylabs.com` — public, MIT, topics set.
+- [ ] `Zentory-Labs/zentory-engine` — **private** (confirm this has NOT been made public).
+- [ ] `https://github.com/edgeza/ZentoryToken` redirects to `https://github.com/Zentory-Labs/zentory-protocol` (GitHub handles this automatically after a transfer).
+- [ ] Secrets audit clean: `git grep` for embedded keys returns zero in `zentory-protocol` and `zentory-app`.
+- [ ] The local `zentory-protocol/` folder's README now has the "Open Source Policy" section and the new repo-layout table pointing to the other three repos.
 
 ### Track B — Marketing site
 
@@ -36,7 +31,8 @@ Every item below has to be a hard "Yes" before re-rating, or the re-rate will no
 - [ ] `zentorylabs.com/app/layout.tsx` JSON-LD blocks and `twitter:site` meta deployed.
 - [ ] `zentorylabs.com/app/sitemap.ts` deployed; verify `https://www.zentorylabs.com/sitemap.xml` resolves and includes `/why`.
 - [ ] `zentorylabs.com/app/robots.ts` deployed; verify `https://www.zentorylabs.com/robots.txt` resolves and explicitly allows GPTBot / ClaudeBot / PerplexityBot.
-- [ ] `zentorylabs.com/components/Header.tsx` shows GitHub link (top nav).
+- [ ] `zentorylabs.com/components/Header.tsx` shows GitHub link pointing to `https://github.com/Zentory-Labs/zentory-protocol` (updated from the old `edgeza/ZentoryToken` URL).
+- [ ] `zentorylabs.com/components/Footer.tsx` and `zentorylabs.com/app/layout.tsx` JSON-LD `sameAs` links all updated to the new `Zentory-Labs/` URLs.
 - [ ] `zentorylabs.com/components/Footer.tsx` shows X / GitHub / dApp / Why ZENTORY / Whitepaper links.
 - [ ] `zentorylabs.com/data/team.json` has `links` object populated with real handles (per Founder Verification doc).
 - [ ] `zentorylabs.com/app/team/[slug]/page.tsx` renders the new `Verifiable handles` block.
@@ -88,10 +84,10 @@ After the last item above is true, wait for the following before clicking re-rat
 ## How to trigger the re-rate
 
 1. Log into the rating platform with the account that owns the project record.
-2. Navigate to the project page for `edgeza/ZentoryToken`.
-3. **Verify the platform is reading the public repo, not the cached private one.** If it still says "Unverified" or shows the old description, click "Refresh / Re-fetch" first.
+2. Navigate to the project page for `Zentory-Labs/zentory-protocol` (the rating platform may have auto-detected the new URL after the transfer; if it still shows `edgeza/ZentoryToken`, use the old URL and update it to `Zentory-Labs/zentory-protocol`).
+3. **Verify the platform is reading the public repo, not a cached private snapshot.** If it still says "Unverified" or shows the old description, click "Refresh / Re-fetch" first.
 4. Click "Re-rate" / "Refresh score" / "Submit for re-evaluation" (label varies).
-5. Confirm the new content (description, topics, README excerpt) is reflected in the platform's preview before submitting.
+5. Confirm the new content (description, topics, README excerpt, BSL LICENSE) is reflected in the platform's preview before submitting.
 6. Submit.
 
 The platform will queue the re-rate. Wait 5–30 minutes for the new score.
@@ -126,8 +122,8 @@ Diagnostic order:
 
 1. **Did the rater see the new README?** Check the platform's project preview pane. If it still shows the empty / old description, the platform is using a cache. Force-refresh.
 2. **Did the rater see the marketing site?** Check the platform's site preview. If it shows the OLD copy ("Earn Systematic Yield"), the platform has a Cloudflare or its own cache. Wait 24h and retry.
-3. **Is the repo actually public?** `gh repo view edgeza/ZentoryToken --json isPrivate` should return `false`.
-4. **Are topics actually attached?** `gh repo view edgeza/ZentoryToken --json repositoryTopics` should return a non-null array.
+3. **Is the repo actually public?** `gh repo view Zentory-Labs/zentory-protocol --json isPrivate` should return `false`.
+4. **Are topics actually attached?** `gh repo view Zentory-Labs/zentory-protocol --json repositoryTopics` should return a non-null array.
 5. **Did founder verification go through?** Check the project page for the Founders dimension status.
 
 If 1–5 are all green and the score still hasn't moved, the rater is likely batching re-evaluations weekly. Wait 7 days, then retry.

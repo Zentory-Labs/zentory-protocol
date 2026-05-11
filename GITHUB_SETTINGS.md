@@ -1,251 +1,152 @@
-# GitHub Settings Action Spec — `edgeza/ZentoryToken` and `edgeza/zentorylabs.com`
+# GitHub Settings — `Zentory-Labs` Organization
 
-*This file is an operational checklist for the maintainer of the two GitHub repositories. Each item below is a manual action in GitHub UI or `gh` CLI. None of these can be applied by code; they are repo-level settings.*
-
-**Why this matters:** the rating platform that produced our 56/100 score explicitly cites "absence of a project description or README" three times under Uniqueness. The local README is excellent, but the repo is **private**, the README is **untracked**, the GitHub `Description` is empty, no `Topics` are set, and the `Homepage` points to a Vercel preview. The rater cannot read what it cannot see.
-
-This document tells you exactly what to change, in what order, and why.
+*Operational checklist for the four repos under the `Zentory-Labs` GitHub organization. Last updated: May 2026.*
 
 ---
 
-## STEP 0 — Decision: make `ZentoryToken` public
+## Pre-flight: secrets audit (mandatory before any repo goes public)
 
-The single highest-leverage change. Current state:
+**Do this before anything else.** If a key is already in any public git history, it is burned — rotate it at the provider first, then scrub.
 
+```powershell
+# Run inside zentory-protocol/ (after the split, this is the local folder)
+git grep -nE "0x[a-fA-F0-9]{64}|sk_live_|alch_|PRIVATE_KEY\s*="
 ```
-edgeza/ZentoryToken    →  isPrivate: true,  description: "",  topics: null,  homepage: zentory-token.vercel.app
-edgeza/zentorylabs.com →  isPrivate: true,  description: "",  topics: null,  homepage: zentorylabs-com.vercel.app
-```
 
-**Recommendation:** make `edgeza/ZentoryToken` **public** before the next rating pass. Reasons:
+Known files to check (from pre-split audit):
 
-- The Uniqueness 40 score is unfixable without it. Every other action in this file is downstream.
-- The codebase already assumes public scrutiny: there is a `SECURITY.md`, an Immunefi setup doc ([`docs/IMMUNEFI_SETUP.md`](docs/IMMUNEFI_SETUP.md)), and a verification master plan ([`docs/plans/2026-04-25-001-verification-master-plan.md`](docs/plans/2026-04-25-001-verification-master-plan.md)). Audits require public source.
-- Competitors with comparable Investment Thesis scores (Numerai, Hyperliquid, etc.) are all public-source.
-- Smart contracts deployed to a public testnet are effectively decompilable. Hiding the README does not hide the protocol; it only hides the *story*.
-
-**Risks to mitigate before going public:**
-
-1. **Secrets audit.** Search history for `ALCHEMY_API_KEY`, `PRIVATE_KEY`, `STRIPE_*`, `SUPABASE_SERVICE_ROLE_KEY`. The exploration found embedded Alchemy keys in `test_alchemy.py`, `test_monitor_final.py`, `test_receipt.py`, and an embedded deployer key in `scripts/simulate-e2e.ps1`. **Rotate** these keys, then either delete the files or move the keys to env vars **before** flipping the repo public. If the keys are already in git history, also run `git filter-repo` or accept that they are rotated-and-burned.
-2. **Internal docs review.** Skim [`docs/regulatory-memo.md`](docs/regulatory-memo.md), [`docs/BUYBACK_DESIGN.md`](docs/BUYBACK_DESIGN.md), [`docs/SECURITY_AUDIT_BRIEF.md`](docs/SECURITY_AUDIT_BRIEF.md) for anything you would not want a journalist quoting. These are currently fine to publish on a read of the summaries, but verify before the flip.
-3. **`frontend-old/`** is deprecated per [`docs/roadmap/implementation-status.md`](docs/roadmap/implementation-status.md). Consider deleting it from the public branch (keep a tag/archive for history if you need it).
-
-If you decide to keep `ZentoryToken` private, then everything below applies to the **marketing site** (`edgeza/zentorylabs.com`), and the marketing site has to carry every Uniqueness signal alone. That is doable but strictly harder — the rater explicitly looks for the repo.
-
-### Action (gh CLI)
-
-```
-# DO THIS LAST, after the secrets audit and content rewrite are committed.
-gh repo edit edgeza/ZentoryToken --visibility public --accept-visibility-change-consequences
-```
+| File | Credential | Fix |
+|---|---|---|
+| `engine/tests/test_alchemy.py` | Alchemy key | Rotate → delete |
+| `engine/tests/test_monitor_final.py` | Alchemy key | Rotate → delete |
+| `engine/tests/test_receipt.py` | Alchemy key | Rotate → delete |
+| `scripts/simulate-e2e.ps1` | Deployer private key | Rotate → scrub |
 
 ---
 
-## STEP 1 — Commit the new content
+## After the split
 
-The new files this branch introduces are currently untracked or modified locally. **They must be committed and pushed** for the rater to see them, regardless of public/private status.
+The four repos after running `MIGRATION_PLAN.md`:
 
-```
-git add README.md STRATEGY.md COMPETITORS.md TEAM.md CONTRIBUTING.md GITHUB_SETTINGS.md
-git status                          # verify the staged set
-git commit -m "docs: public-facing rewrite for rater + investor evaluation"
-git push origin main
-```
-
-If you decided to make the repo public, do `STEP 0` only **after** this push lands on `main`.
+| Repo | Visibility | License | Local folder |
+|---|---|---|---|
+| `Zentory-Labs/zentory-protocol` | **Public** (flipped after audit) | BSL 1.1 | `zentory-protocol/` |
+| `Zentory-Labs/zentory-app` | Public | AGPL-3.0 | `zentory-app/` |
+| `Zentory-Labs/zentorylabs.com` | Public | MIT | `zentorylabs.com/` |
+| `Zentory-Labs/zentory-engine` | **Private** | Proprietary | `zentory-engine/` |
 
 ---
 
-## STEP 2 — Repo `Description`
+## Settings to apply after the split (gh CLI)
 
-Set the GitHub "About" description (max ~350 chars).
+These are all handled by `migrate_to_org.ps1`. Manual alternatives below.
 
-```
-gh repo edit edgeza/ZentoryToken \
-  --description "Non-custodial Alpha Vaults + on-chain quant Signal Arena on HyperEVM. ERC-4626 vaults (zBTC/zETH/zSOL/zXRP/zHYPE), EIP-712 signed signals, Ghost Portfolio attribution, fixed-supply ZENT utility token. Solidity + Foundry + Hyperliquid."
-```
+### Description + Homepage + Topics
 
-Why this exact text: it is the literal sentence the rater will index. It contains the protocol category ("Alpha Vaults", "Signal Arena"), the chain ("HyperEVM"), the standards ("ERC-4626", "EIP-712"), the venue ("Hyperliquid"), the differentiator ("Ghost Portfolio"), and the token ("ZENT"). Every word is a search hit.
+```bash
+# zentory-protocol
+gh repo edit Zentory-Labs/zentory-protocol \
+  --description "ZENTORY Protocol — on-chain quant Signal Arena on HyperEVM. Non-custodial ERC-4626 Alpha Vaults, EIP-712 signed signals, ZENT-staked reputation, Ghost Portfolio attribution. Solidity + Foundry." \
+  --homepage "https://zentorylabs.com" \
+  --add-topic "defi" --add-topic "hyperevm" --add-topic "erc4626" \
+  --add-topic "signals" --add-topic "vaults" --add-topic "solidity" \
+  --add-topic "foundry" --add-topic "quant" --add-topic "attribution" \
+  --add-topic "non-custodial" --add-topic "bsl" --add-topic "zentory"
 
-Apply the same treatment to the marketing repo:
+# zentory-app
+gh repo edit Zentory-Labs/zentory-app \
+  --description "ZENTORY dApp — non-custodial Alpha Vaults + Signal Arena UI for HyperEVM. Source for app.zentorylabs.com." \
+  --homepage "https://app.zentorylabs.com" \
+  --add-topic "defi" --add-topic "hyperevm" --add-topic "nextjs" \
+  --add-topic "wagmi" --add-topic "viem" --add-topic "erc4626" \
+  --add-topic "dapp" --add-topic "web3"
 
-```
-gh repo edit edgeza/zentorylabs.com \
-  --description "Marketing site for ZENTORY Labs — The Signal Arena on HyperEVM. Non-custodial Alpha Vaults, EIP-712 quant signals, Ghost Portfolio attribution, ZENT token. Next.js 16 + Tailwind + Supabase."
-```
-
----
-
-## STEP 3 — Topics
-
-Topics drive GitHub search and ecosystem-page placement.
-
-```
-gh repo edit edgeza/ZentoryToken \
-  --add-topic hyperevm \
-  --add-topic hyperliquid \
-  --add-topic defi \
-  --add-topic erc-4626 \
-  --add-topic vault \
-  --add-topic quant \
-  --add-topic on-chain-signals \
-  --add-topic eip-712 \
-  --add-topic copy-trading \
-  --add-topic foundry \
-  --add-topic solidity \
-  --add-topic non-custodial \
-  --add-topic alpha-vault \
-  --add-topic signal-arena \
-  --add-topic zentory
+# zentorylabs.com
+gh repo edit Zentory-Labs/zentorylabs.com \
+  --description "Marketing website for ZENTORY Protocol (zentorylabs.com)." \
+  --homepage "https://zentorylabs.com" \
+  --add-topic "nextjs" --add-topic "marketing" --add-topic "tailwindcss"
 ```
 
-For the marketing repo:
+### Discussions (zentory-protocol only — seed threads manually in the GitHub UI)
 
-```
-gh repo edit edgeza/zentorylabs.com \
-  --add-topic zentory \
-  --add-topic hyperevm \
-  --add-topic defi \
-  --add-topic nextjs \
-  --add-topic marketing-site
+```bash
+gh api -X PATCH /repos/Zentory-Labs/zentory-protocol -f has_discussions=true
 ```
 
----
-
-## STEP 4 — Homepage URL
-
-Currently points to a `*.vercel.app` preview. Change both to the canonical brand domain.
-
-```
-gh repo edit edgeza/ZentoryToken    --homepage "https://zentorylabs.com"
-gh repo edit edgeza/zentorylabs.com --homepage "https://zentorylabs.com"
-```
-
----
-
-## STEP 5 — Social preview image
-
-GitHub renders a 1280×640 PNG when the repo is shared on Twitter/Slack/LinkedIn. An unset preview shows a generic GitHub card and tells the rater "no marketing investment."
-
-**Action (manual; cannot be done via `gh`):**
-
-1. Generate a 1280×640 PNG with: ZENTORY wordmark + tagline "The Signal Arena on HyperEVM" + a subtle gradient or shader background. Use [`zentorylabs.com/zentory_logo_dark.png`](../zentorylabs.com/zentory_logo_dark.png) and [`zentorylabs.com/zentory_logo_light.png`](../zentorylabs.com/zentory_logo_light.png) as source.
-2. Upload at: `https://github.com/edgeza/ZentoryToken/settings` → Social preview → Upload an image.
-3. Do the same for `edgeza/zentorylabs.com`.
-
-If you don't have a designer cycle right now, use Figma's free `Open Graph Image` template and 5 minutes is enough.
-
----
-
-## STEP 6 — README badge row
-
-Add a badge row near the top of [`README.md`](README.md) once the repo is public and CI is running on `main`. Badges are the second thing a rater sees after the description.
-
-Suggested set:
-
-```
-[![CI](https://github.com/edgeza/ZentoryToken/actions/workflows/ci.yml/badge.svg)](https://github.com/edgeza/ZentoryToken/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/edgeza/ZentoryToken)](LICENSE)
-[![Solidity](https://img.shields.io/badge/solidity-0.8.28-363636.svg)](contracts/foundry.toml)
-[![HyperEVM](https://img.shields.io/badge/chain-HyperEVM-blue.svg)](https://zentorylabs.com)
-[![Twitter Follow](https://img.shields.io/twitter/follow/ZENTORYLabs?style=social)](https://twitter.com/ZENTORYLabs)
-```
-
-Insert immediately after the `# ZENTORY Protocol` H1 in the README. (Not committed in this round because they only render correctly once the repo is public and CI history exists.)
-
----
-
-## STEP 7 — Pinned repositories on `edgeza`'s profile
-
-GitHub orgs/users can pin up to 6 repos. Pin in this order on `https://github.com/edgeza`:
-
-1. `ZentoryToken` (the protocol).
-2. `zentorylabs.com` (the marketing site).
-3. Any other public artifact in the brand (whitepaper repo if split out, engine repo if split out, etc.).
-
-This is a manual action: `https://github.com/edgeza` → "Customize your pins."
-
----
-
-## STEP 8 — GitHub Discussions
-
-Turn on Discussions and seed it. Discussions show "active project" to scrapers more reliably than an empty Issues tab.
-
-```
-gh repo edit edgeza/ZentoryToken --enable-discussions
-```
-
-Then in the UI, create these starter threads in **Announcements** category:
-
-1. **"Welcome to ZENTORY Protocol"** — paste a condensed version of `README.md` § Problem Novelty + Solution Differentiation.
-2. **"Roadmap to mainnet Q4 2026"** — paste the pitch-deck slide 17 timeline.
+Seed 3 threads in the Announcements category:
+1. **"Welcome to ZENTORY Protocol"** — paste the Problem Novelty + Solution Differentiation from README.
+2. **"Roadmap to mainnet Q4 2026"** — paste the Status section from README.
 3. **"How to verify everything we claim"** — link to `STRATEGY.md` §9 "How we ask to be evaluated."
 
----
+### Social preview image (manual — github.com UI only)
 
-## STEP 9 — `CODE_OF_CONDUCT.md`
+Upload a 1280×640 PNG at:
+- `github.com/Zentory-Labs/zentory-protocol/settings` → Social preview → Upload
+- `github.com/Zentory-Labs/zentory-app/settings` → Social preview → Upload
+- `github.com/Zentory-Labs/zentorylabs.com/settings` → Social preview → Upload
 
-Standard signal. Use the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct.md) verbatim, replacing the contact email with `conduct@zentorylabs.com` (or `contact@zentorylabs.io` if you don't want a separate inbox).
+Suggested content: ZENTORY wordmark + "The Signal Arena on HyperEVM" + a subtle dark gradient. Use `zentorylabs.com/zentory_logo_dark.png` as a base.
 
-Not blocking, but adds a low-cost professionalism signal.
+### Pin repos on org profile (manual)
 
----
+At `github.com/Zentory-Labs`, pin in order:
+1. `zentory-protocol` — the trust layer
+2. `zentory-app` — the dApp
+3. `zentorylabs.com` — the marketing site
 
-## STEP 10 — Verify ownership on the rating platform
+### Profile README for the org
 
-The rating report explicitly lists:
+Create `Zentory-Labs/.github` with a profile README at:
+`https://github.com/Zentory-Labs/.github/edit/main/profile/README.md`
 
-- `Repository edgeza/ZentoryToken` — **Unverified**
-- `Project handle @zentorylabs` — **Unverified**
-
-Both have to be claimed on the rating platform (whichever one issued the 56/100 — likely Tokenization Potential Value / "TPV" platform). Verification typically requires:
-
-- Adding a meta tag or `.well-known/` file to `zentorylabs.com`, OR
-- Signing a message with the project deployer wallet, OR
-- Posting a tweet from `@ZENTORYLabs` with a verification code.
-
-The exact mechanism is platform-specific. Whoever holds the platform login should complete this *after* `STEP 1` (so the rater sees the new content immediately on verification) and *before* triggering a re-rate.
-
----
-
-## STEP 11 — Re-trigger rating
-
-Once `STEP 0`–`STEP 10` are complete:
-
-1. Wait 2–4 hours for GitHub search index to refresh (so topics appear).
-2. Wait until the marketing site's new `/why` page (deployed by the `zentorylabs.com` repo updates) has propagated and is indexable.
-3. Click "Re-rate" / "Refresh" on the rating platform.
-
-Expected lift if all of A1–E2 land:
-
-| Dimension | Before | Target after this round |
-|---|---|---|
-| Uniqueness | 40 | 75–85 |
-| Social Presence | 20 | 40–60 (limited by tweet history depth) |
-| Founders | 0 | Verified (binary flip) |
-| Investment Thesis | 83 | 83–88 (small bump from clearer docs) |
-| **Overall** | **56** | **75–82** |
-
-The Social score will lag by 2–4 weeks regardless of effort, because the rater weighs **content history**, not just account existence.
-
----
-
-## Order of operations (one-pager)
-
+Suggested content:
 ```
-1. Audit & rotate secrets in ZentoryToken         ← blocking
-2. Commit README, STRATEGY, COMPETITORS, TEAM,    ← this branch
-   CONTRIBUTING, GITHUB_SETTINGS to main
-3. Push to origin/main
-4. Make ZentoryToken public (gh repo edit ... --visibility public)
-5. Set Description, Topics, Homepage on both repos
-6. Upload social-preview.png on both repos
-7. Enable Discussions; seed 3 threads
-8. Pin ZentoryToken + zentorylabs.com on edgeza profile
-9. Add CODE_OF_CONDUCT.md
-10. Verify repo + handle ownership on rating platform
-11. Wait ~24h for indexing
-12. Trigger re-rate
+# ZENTORY Labs
+
+Building the verifiable signal market for HyperEVM.
+
+- [Protocol](https://github.com/Zentory-Labs/zentory-protocol) — Solidity contracts, tests, deploy scripts (BSL 1.1)
+- [dApp](https://github.com/Zentory-Labs/zentory-app) — UI for Alpha Vaults + Signal Arena (AGPL-3.0)
+- [Marketing](https://github.com/Zentory-Labs/zentorylabs.com) — zentorylabs.com
+
+The alpha-generating engine is proprietary and not published.
 ```
 
-Steps 1–4 are the irreversible part of the sequence. Steps 5–9 are reversible UI changes you can iterate on freely. Step 10 is one-time.
+---
+
+## Flipping zentory-protocol to public
+
+**Do this only after the secrets audit comes back clean.**
+
+```bash
+gh repo edit Zentory-Labs/zentory-protocol --visibility public
+```
+
+This is the single highest-leverage action for the rating. Without it, the rater's scraper hits a 404 on every claim.
+
+---
+
+## Verifying ownership on the rating platform
+
+The rating report listed:
+- `Repository edgeza/ZentoryToken` — Unverified
+- `@zentorylabs` — Unverified
+
+After the split, update both to:
+- `Repository Zentory-Labs/zentory-protocol`
+- `@ZENTORYLabs` (canonical handle; X URL is case-insensitive)
+
+Verification steps per the platform's docs (typically: add a meta tag to `zentorylabs.com`, or sign a message with the project deployer wallet, or post a tweet from `@ZENTORYLabs` with a verification code).
+
+---
+
+## After everything lands
+
+Wait 24–72 hours for AI scrapers (GPTBot, ClaudeBot, PerplexityBot, the rating platform's own crawler) to re-index:
+- `github.com/Zentory-Labs/zentory-protocol` (public)
+- `zentorylabs.com/why` (deployed with new links)
+- `zentorylabs.com/sitemap.xml`
+- `zentorylabs.com/robots.txt`
+
+Then trigger re-rate per `docs/comms/RERATE_CHECKLIST.md`.

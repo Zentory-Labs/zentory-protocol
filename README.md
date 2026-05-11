@@ -286,23 +286,63 @@ For social: [@ZENTORYLabs](https://twitter.com/ZENTORYLabs)
 
 ---
 
+## Open Source Policy
+
+The ZENTORY protocol is built in two layers:
+
+### Public layer — `zentory-protocol` (this repo, BSL 1.1)
+
+The trust layer is fully public. Smart contracts, tests, deploy scripts, the epoch-settlement keeper, and all strategic documentation (this README, STRATEGY, COMPETITORS, whitepaper) live here under **Business Source License 1.1**.
+
+BSL 1.1 means:
+- Anyone can **read** the contracts, audit them, and build open-source integrations.
+- Commercial forks (hosted services that compete with ZENTORY Protocol) are blocked from launching **until September 30, 2030** — 4+ years of runway to earn distribution before any copycat can legally compete.
+- On September 30, 2030 the license automatically converts to **GPL-3.0** and the code is fully open forever.
+
+This is the same license Uniswap V4 uses. It is the right balance: **open enough to be trusted, closed enough to protect the business**.
+
+### Closed layer — `zentory-engine` (private forever)
+
+The research engine that **generates** trading signals lives in a **private repository**. It is never published.
+
+What the engine produces (EIP-712 signed signals, accuracy scores settled on-chain by `EpochScoring`) is **fully public** — anyone can verify on-chain that a signal was posted, that ZENT was staked, and what the 4-hour-epoch accuracy score was. What the engine uses to decide *which* signals to post is proprietary.
+
+This is the same model Numerai uses (public scoring contract, private model weights), and the same model every serious trading firm in the world uses. Users verify **output quality** on-chain; ZENTORY Labs keeps the **methodology** private.
+
+### Why not fully open source?
+
+Fully open-sourcing the engine would mean publishing the strategy parameters, genetic programming configurations, and the complete signal-generation methodology. That is the alpha. Publishing it would let any HyperEVM deployment clone the signal-generation layer immediately, at zero cost, with no R&D required.
+
+We chose BSL 1.1 for the protocol contracts because they will be on the block explorer at mainnet anyway (verified contracts are how DeFi users assess safety — unverified = unsafe). Making them readable 6 months early builds verifiable track record. The BSL prevents a competitor from packaging them into a hosted competing service before September 2030.
+
+For questions about commercial licensing of the protocol contracts, contact: `contact@zentorylabs.io`
+
+---
+
 ## Repository layout
 
+After the ZENTORY Labs organization split (completed May 2026), this repository (`Zentory-Labs/zentory-protocol`) contains:
+
 ```
-ZentoryToken/
-├── contracts/          Foundry-based Solidity protocol
-│   ├── src/            26 contracts, grouped by subsystem
-│   ├── test/           18 test files (unit + fuzz + invariants + xlang)
-│   ├── script/         Forge deploy + simulate scripts
-│   └── keeper/         TypeScript epoch-settlement keeper
-├── engine/             Python `zentory-engine` (GP, signer, indexer, executor)
-├── frontend/           Next.js 16 dApp (wagmi + viem + Supabase)
-├── frontend-old/       Archived pre-merge dApp (do not use)
-├── supabase/           Migrations + edge functions
-├── docs/               Whitepaper, plans, runbooks, reports
+zentory-protocol/
+├── contracts/          Solidity 0.8.28 + Foundry
+│   ├── src/           26 contracts, grouped by subsystem
+│   ├── test/          18 test files (unit + fuzz + invariants + xlang)
+│   ├── script/        Forge deploy + simulate scripts
+│   └── keeper/        TypeScript epoch-settlement keeper
+├── supabase/          Migrations + edge functions
+├── docs/              Whitepaper, plans, runbooks, reports
 ├── packages/zentory-ui Shared design tokens + Tailwind preset
-└── scripts/            Ops helpers (PowerShell E2E simulator)
+└── scripts/           Ops helpers
 ```
+
+The three related repos are:
+
+| Repo | License | Contents |
+|---|---|---|
+| [`Zentory-Labs/zentory-app`](https://github.com/Zentory-Labs/zentory-app) | AGPL-3.0 | dApp source (Next.js 16 + wagmi + viem) → app.zentorylabs.com |
+| [`Zentory-Labs/zentorylabs.com`](https://github.com/Zentory-Labs/zentorylabs.com) | MIT | Marketing site → zentorylabs.com |
+| [`Zentory-Labs/zentory-engine`](https://github.com/Zentory-Labs/zentory-engine) | Proprietary | Strategy research engine (GP, signer, indexer, executor) — **private forever** |
 
 For build, deploy, and ops procedures see [`DEPLOYMENT.md`](DEPLOYMENT.md). For security disclosure see [`SECURITY.md`](SECURITY.md). For the high-level commercial framing see [`STRATEGY.md`](STRATEGY.md) and [`docs/INVESTOR_ONE_PAGER.md`](docs/INVESTOR_ONE_PAGER.md).
 
