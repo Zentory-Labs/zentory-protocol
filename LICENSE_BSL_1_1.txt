@@ -1,0 +1,124 @@
+Business Source License 1.1
+
+License name:      ZENTORY Protocol BSL 1.1
+Initial developer: ZENTORY Labs
+Source location:   https://github.com/Zentory-Labs/zentory-protocol
+License version:   1.1
+License URI:       https://github.com/Zentory-Labs/zentory-protocol/blob/main/LICENSE_BSL_1_1.txt
+
+Change date:       September 30, 2030
+Change license:    GNU General Public License, Version 3.0 (GPL-3.0)
+
+---
+
+TERMS AND CONDITIONS
+
+1. Definitions.
+
+"Licensed Work" means the Solidity smart contracts, Foundry test suites,
+deploy scripts, and keeper bot source code located in the
+`contracts/`, `scripts/`, and `keeper/` directories of the
+`Zentory-Labs/zentory-protocol` repository at the time of execution
+of this License, as well as any documentation, README files, and
+other written materials accompanying or describing the Licensed Work.
+
+"Use" means any act of importing, copying, modifying, deploying,
+running, or otherwise utilizing the Licensed Work, in whole or in part.
+
+"Contributor" means ZENTORY Labs and any natural or legal person
+that has contributed modifications or additions to the Licensed Work.
+
+2. License Grant.
+
+Subject to the terms of this License, ZENTORY Labs grants to You
+a worldwide, non-exclusive, royalty-free, revocable license to Use
+the Licensed Work:
+
+  (a) for any Non-Commercial Purpose;
+  (b) under the condition that any program, application, or service
+      that Uses the Licensed Work, in whole or in part, and is offered
+      to third parties as a hosted, managed, or SaaS service (a
+      "Competing Service") may only be offered to third parties
+      after the Change Date;
+
+  (c) under the condition that any program, application, or service
+      that Uses the Licensed Work, in whole or in part, must, if
+      reasonably practicable, prominently display the following
+      attribution text in human-readable form:
+
+      "Powered by ZENTORY Protocol — https://github.com/Zentory-Labs/zentory-protocol"
+
+3. Non-Commercial Purpose.
+
+"Non-Commercial Purpose" means any use of the Licensed Work
+exclusively for research, education, personal experimentation,
+or development of open-source software projects that are
+distributed at no charge and do not compete with any
+ZENTORY Labs commercial offering.
+
+Any use of the Licensed Work by a for-profit entity, or in
+connection with any commercial product, service, or offering
+that generates revenue, subscription fees, deposit fees, or
+any other form of monetary compensation, is a Commercial
+Use and requires a separate written license from ZENTORY Labs.
+
+4. Competing Service Restriction.
+
+Notwithstanding Section 2(b), any entity that offers a Competing
+Service that Uses the Licensed Work, in whole or in part, may
+only do so after the Change Date (September 30, 2030).
+
+A "Competing Service" is any service that (i) provides
+non-custodial, on-chain vault functionality with ERC-4626 deposits,
+EIP-712 signed signal registries, epoch-based accuracy scoring,
+Hold/Ghost/Actual portfolio attribution, and ZENT token utility,
+on HyperEVM or any compatible EVM chain, and (ii) competes
+directly with ZENTORY Protocol's product offering.
+
+The Competing Service restriction does NOT apply to:
+  - Open-source implementations of the ZENTORY Protocol interface
+    standard that do not offer a hosted or managed competing service.
+  - Academic research and publication describing the Licensed Work.
+  - Forked copies of the Licensed Work that do not deploy or operate
+    a Competing Service before the Change Date.
+
+5. Disclaimer.
+
+THE LICENSED WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+LICENSED WORK OR THE USE OR OTHER DEALINGS IN THE LICENSED WORK.
+
+6. Trade Secrets.
+
+No provision of this License shall be interpreted to prohibit
+ZENTORY Labs from protecting its trade secrets or confidential
+business information that is embodied in the Licensed Work and
+that ZENTORY Labs has designated as confidential, except as
+expressly set forth herein. This License does not grant any
+rights in or to such trade secrets beyond what is expressly stated.
+
+7. Termination.
+
+This License is effective until the Change Date (September 30, 2030),
+unless earlier terminated by ZENTORY Labs in writing.
+Sections 5 (Disclaimer) and 6 (Trade Secrets) survive termination.
+
+This License automatically and permanently converts to GPL-3.0
+on and after the Change Date, without further action by any party,
+and You may at that time treat the Licensed Work under GPL-3.0 terms.
+
+8. Governing Law.
+
+This License shall be governed by and construed in accordance
+with the laws of the Cayman Islands, without regard to its
+conflict of law provisions.
+
+---
+
+ZENTORY Labs
+contact@zentorylabs.io
+https://github.com/Zentory-Labs/zentory-protocol
