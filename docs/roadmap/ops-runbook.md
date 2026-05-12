@@ -14,7 +14,7 @@ This is the minimal operational playbook for deploying and safely operating the 
 
 ## CI (minimum)
 
-### Protocol core (`ZentoryToken`)
+### Protocol core (`Zentory-Labs/zentory-protocol`)
 - **Contracts**:
   - compile + unit tests
   - fuzz/invariant tests (separate job; allowed longer runtime)

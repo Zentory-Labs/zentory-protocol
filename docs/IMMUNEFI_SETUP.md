@@ -23,7 +23,7 @@ Most projects start at the lower end of the range and increase after the first a
 
 For each contract:
 
-- **Source code URL:** `https://github.com/edgeza/ZentoryToken/blob/main/contracts/src/<CONTRACT>.sol`
+- **Source code URL:** `https://github.com/Zentory-Labs/zentory-protocol/blob/main/contracts/src/<CONTRACT>.sol`
 - **Deployment address:** TBD — add after mainnet deployment
 - **Chain:** HyperEVM (Chain ID: 998 for testnet, TBD for mainnet)
 
@@ -72,4 +72,4 @@ Critical bugs in DeFi can cost $10M+ — see Euler Finance 2023: $197M exploit. 
 - Immunefi: https://immunefi.com
 - ZENTORY Bug Bounty Page: https://zentorytoken.xyz/bug-bounty
 - Security Contact: security@zentorylabs.com
-- GitHub Repo: https://github.com/edgeza/ZentoryToken
+- GitHub Repo: https://github.com/Zentory-Labs/zentory-protocol

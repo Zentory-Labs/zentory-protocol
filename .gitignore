@@ -22,3 +22,15 @@ tools/foundry-win/
 # Secrets
 .env
 .env.*
+
+# Leftover monorepo folders that have been split out into their own repos
+# (May 2026). These directories may still exist locally on a contributor's
+# machine but MUST NOT be re-added to this public protocol repo:
+#   engine/        -> moved to Zentory-Labs/zentory-engine  (PRIVATE, proprietary)
+#   frontend/      -> moved to Zentory-Labs/zentory-app     (AGPL-3.0, public)
+#   frontend-old/  -> deprecated, do not re-publish
+# If you need to work on the engine or dApp, clone those repos directly.
+engine/
+frontend/
+frontend-old/
+

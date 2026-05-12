@@ -148,7 +148,7 @@ ZENTORY's vault strategy is fully verifiable on-chain. This brings:
 
 - **Project website**: https://zentorylabs.com
 - **App**: https://app.zentorylabs.com
-- **Docs / GitHub**: https://github.com/edgeza/ZentoryToken
+- **Docs / GitHub**: https://github.com/Zentory-Labs/zentory-protocol
 - **Hyperliquid community**: Join the conversation via Discord (ZENTORY server) or Twitter
 - **Email**: [contact@zentorylabs.com](mailto:contact@zentorylabs.com) *(placeholder — update with your actual contact email)*
 - **Twitter**: [ @ZENTORYLabs](https://x.com/ZENTORYLabs) *(placeholder — update with your actual Twitter handle)*

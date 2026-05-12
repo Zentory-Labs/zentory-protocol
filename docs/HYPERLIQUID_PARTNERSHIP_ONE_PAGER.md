@@ -33,7 +33,7 @@ We are asking for **technical integration support, an ecosystem grant, co-market
 ## Contact
 
 - **App**: app.zentorylabs.com
-- **Docs**: github.com/edgeza/ZentoryToken
+- **Docs**: github.com/Zentory-Labs/zentory-protocol
 - **Email**: [contact@zentorylabs.com]
 - **Twitter**: [@ZENTORYLabs]
 - **Discord**: [ZENTORY Discord]

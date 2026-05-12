@@ -17,7 +17,7 @@
 #### app.zentorylabs.com DOWN
 1. Check Vercel dashboard: https://vercel.com/edgeza/zentorytoken
 2. Check Vercel deployment logs for the latest deploy
-3. Check GitHub Actions: https://github.com/edgeza/ZentoryToken/actions
+3. Check GitHub Actions: https://github.com/Zentory-Labs/zentory-protocol/actions
 4. If Vercel error: check build logs, fix, push
 5. If CI failure: fix tests, push
 

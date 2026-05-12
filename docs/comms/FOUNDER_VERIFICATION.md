@@ -28,8 +28,8 @@ Each co-founder runs through the same checklist on their own accounts.
 
 | Surface | Current | Target |
 |---|---|---|
-| GitHub `@edgeza` bio | TBA — verify | Mentions "Co-Founder, ZENTORY Labs — Head of Algo & Strategy." Links: `zentorylabs.com`, `github.com/edgeza/ZentoryToken`. |
-| GitHub pinned repos | TBA — verify | `ZentoryToken` and `zentorylabs.com` are pinned. |
+| GitHub `@edgeza` bio | TBA — verify | Mentions "Co-Founder, ZENTORY Labs — Head of Algo & Strategy." Links: `zentorylabs.com`, `github.com/Zentory-Labs/zentory-protocol`. |
+| GitHub pinned repos | TBA — verify | `Zentory-Labs/zentory-protocol` and `Zentory-Labs/zentory-app` are pinned on the org profile; founders pin the same on their personal profiles. |
 | GitHub profile README (`edgeza/edgeza` if it exists, otherwise create) | TBA | Short intro: who, what role at ZENTORY, what to read first (link the new README sections). |
 | X profile (when set up) | None | Bio: "Co-Founder @ZENTORYLabs — Head of Algo & Strategy. Building the Signal Arena on HyperEVM." Header: ZENTORY brand. Pinned: link to the @ZENTORYLabs C2 thread. |
 | LinkedIn (optional) | TBA | "Co-Founder, ZENTORY Labs" with link to zentorylabs.com. Helps the rater on Founders score. |
@@ -42,7 +42,7 @@ Once these are set, send the URLs to Shaman to plug into [`TEAM.md`](../../TEAM.
 | Surface | Current | Target |
 |---|---|---|
 | GitHub profile | TBA — create if needed | Bio mentions "Co-Founder, ZENTORY Labs — Head of Operations & PR." Link to zentorylabs.com. |
-| GitHub pinned | TBA | `ZentoryToken` and `zentorylabs.com` (once you have collaborator visibility). |
+| GitHub pinned | TBA | `Zentory-Labs/zentory-protocol` and `Zentory-Labs/zentory-app` (once you have collaborator visibility on the org). |
 | X profile (when set up) | None | Bio: "Co-Founder @ZENTORYLabs — Head of Ops & PR." Header: ZENTORY brand. Pinned: link to the @ZENTORYLabs C2 thread. |
 | LinkedIn (optional) | TBA | "Co-Founder, ZENTORY Labs" with link to zentorylabs.com. |
 | Email signature | TBA | Title + zentorylabs.com link. |
@@ -63,7 +63,7 @@ Send URLs to Edge for inclusion in `TEAM.md` and `team.json`.
 Once D2 is complete and the new content has been pushed to GitHub + deployed to `zentorylabs.com`:
 
 1. **Log into** the rating platform (whoever holds the credentials).
-2. **Open** the project record for `edgeza/ZentoryToken`.
+2. **Open** the project record for `Zentory-Labs/zentory-protocol` (the platform may still show the old `edgeza/ZentoryToken` URL — GitHub auto-redirects, but it's cleaner to update the platform's project URL to point at the new path).
 3. **Find** the Founders section. Most platforms ask for one or both of:
    - Public profile links (X, GitHub, LinkedIn) for each named founder.
    - Optional: KYC document upload to the platform itself (not publicly visible).

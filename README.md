@@ -1,5 +1,13 @@
 # ZENTORY Protocol
 
+[![CI](https://github.com/Zentory-Labs/zentory-protocol/actions/workflows/ci.yml/badge.svg)](https://github.com/Zentory-Labs/zentory-protocol/actions/workflows/ci.yml)
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](./LICENSE)
+[![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636.svg?logo=solidity)](contracts/src)
+[![Foundry](https://img.shields.io/badge/Built%20with-Foundry-FFDB1C.svg)](https://book.getfoundry.sh/)
+[![HyperEVM](https://img.shields.io/badge/Chain-HyperEVM%20testnet%20%28998%29-7C3AED.svg)](DEPLOYMENTS.md)
+[![Discussions](https://img.shields.io/github/discussions/Zentory-Labs/zentory-protocol)](https://github.com/Zentory-Labs/zentory-protocol/discussions)
+[![Last commit](https://img.shields.io/github/last-commit/Zentory-Labs/zentory-protocol)](https://github.com/Zentory-Labs/zentory-protocol/commits/main)
+
 **The Signal Arena on HyperEVM — non-custodial Alpha Vaults plus a verifiable on-chain quant reputation layer.**
 
 ZENTORY is a protocol-grade DeFi stack that combines:
@@ -17,6 +25,8 @@ ZENTORY is **not** a token launchpad, an "investment discovery" directory, or a 
 | Whitepaper v2 (May 2026) | [`docs/whitepaper.md`](docs/whitepaper.md) |
 | Investor one-pager | [`docs/INVESTOR_ONE_PAGER.md`](docs/INVESTOR_ONE_PAGER.md) |
 | Smart contracts | [`contracts/src/`](contracts/src) |
+| Live testnet deployments | [`DEPLOYMENTS.md`](DEPLOYMENTS.md) |
+| Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 | Security policy | [`SECURITY.md`](SECURITY.md) |
 | Strategy doc | [`STRATEGY.md`](STRATEGY.md) |
 | Competitive map | [`COMPETITORS.md`](COMPETITORS.md) |

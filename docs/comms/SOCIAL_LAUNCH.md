@@ -25,10 +25,10 @@ The rating platform that issued the 56/100 score lists `@zentorylabs` as **Unver
 ### Step-by-step
 
 1. **Log into** the rating platform (whoever set up the project record originally).
-2. **Open** the project page for `edgeza/ZentoryToken`.
+2. **Open** the project page for `Zentory-Labs/zentory-protocol` (if the platform still shows the old `edgeza/ZentoryToken` URL, update it — GitHub auto-redirects, but the platform should track the canonical name).
 3. **Click** "Verify project handle" (label varies by platform; sometimes "Connect Twitter/X").
 4. **Authorize** via X OAuth, OR copy the verification code the platform issues and tweet it from `@ZENTORYLabs`.
-5. **Update X bio** to include `zentorylabs.com` and `github.com/edgeza/ZentoryToken`.
+5. **Update X bio** to include `zentorylabs.com` and `github.com/Zentory-Labs/zentory-protocol`.
 6. **Update X header / banner image** to the same artwork as the GitHub social preview (`STEP 5` of [`GITHUB_SETTINGS.md`](../../GITHUB_SETTINGS.md)).
 7. **Update pinned tweet** to the C2 thread below as soon as it is posted.
 
@@ -178,7 +178,7 @@ Verify everything we just claimed:
 → Why ZENTORY (vs Numerai, Yearn, eToro Copy, dHEDGE): zentorylabs.com/why
 → Whitepaper: zentorylabs.com/whitepaper
 → dApp (testnet): app.zentorylabs.com
-→ Contracts: github.com/edgeza/ZentoryToken
+→ Contracts: github.com/Zentory-Labs/zentory-protocol
 
 The Signal Arena is coming. Be early.
 ```

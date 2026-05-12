@@ -2,17 +2,22 @@
 
 ## Repository Structure
 
-```
-ZentoryToken/           ← Protocol monorepo (this is the main repo)
-├── contracts/           Solidity smart contracts (Foundry)
-├── engine/              Python trading engine
-├── frontend/            Next.js DApp (app.zentorylabs.com)
-├── frontend-old/      Deprecated — old frontend, do not use
-├── packages/          Shared packages (zentory-ui)
-├── docs/               Plans, roadmaps, security findings
-└── whitepaper/        Whitepaper content
+As of May 2026 the monorepo has been split into four repositories under the `Zentory-Labs` GitHub organization:
 
-zentorylabs.com/        ← Marketing website (zentorylabs.com)
+```
+Zentory-Labs/zentory-protocol     ← This repo (BSL 1.1, public)
+├── contracts/                      Solidity smart contracts (Foundry)
+├── docs/                           Plans, roadmaps, security findings
+└── whitepaper/                     Whitepaper source content
+
+Zentory-Labs/zentory-app          ← Next.js dApp (AGPL-3.0, public)
+                                    Deployed at app.zentorylabs.com
+
+Zentory-Labs/zentory-engine       ← Research engine (Proprietary, private)
+                                    Off-chain signer; binds to on-chain
+                                    SignalRegistry via EIP-712 only.
+
+Zentory-Labs/zentorylabs.com      ← Marketing website (MIT, private repo)
 ```
 
 ---
@@ -208,7 +213,7 @@ Before any mainnet deployment, clear these gates from `docs/plans/2026-04-25-001
 |---|---|
 | Marketing site | https://zentorylabs.com |
 | DApp | https://app.zentorylabs.com |
-| DApp GitHub | `ZentoryToken/frontend/` |
+| DApp GitHub | [`Zentory-Labs/zentory-app`](https://github.com/Zentory-Labs/zentory-app) |
 | HyperEVM Testnet RPC | https://rpc.hyperliquid-testnet.xyz/evm |
 | HyperEVM Explorer | https://hypurrscan.io |
 | Supabase Dashboard | https://supabase.com/dashboard |

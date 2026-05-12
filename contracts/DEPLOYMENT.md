@@ -36,7 +36,7 @@ Deployed by `0x3F07367008158dC272Dd8A38812e1460eF5a390a` on 2026-04-27:
 ## Quick Deploy (Full Protocol)
 
 ```bash
-# In ZentoryToken/contracts/
+# In zentory-protocol/contracts/
 forge script script/DeployPipeline.s.sol \
   --rpc-url https://rpc.hyperliquid-testnet.xyz/evm \
   --private-key $PRIVATE_KEY \

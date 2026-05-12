@@ -51,7 +51,7 @@ We do not operate a token-holder-facing fund. The protocol is the product.
 
 To verify the team:
 
-1. **GitHub:** [`edgeza/ZentoryToken`](https://github.com/edgeza/ZentoryToken) owner. Commit history shows the active maintainer. The README points back to this `TEAM.md`.
+1. **GitHub:** [`Zentory-Labs/zentory-protocol`](https://github.com/Zentory-Labs/zentory-protocol) under the [`Zentory-Labs`](https://github.com/Zentory-Labs) organization (transferred from the original `edgeza/ZentoryToken` monorepo in May 2026; the old URL auto-redirects). Commit history shows the active maintainer. The README points back to this `TEAM.md`.
 2. **X:** [@ZENTORYLabs](https://twitter.com/ZENTORYLabs) is the canonical project handle. Founders' personal handles will be cross-linked from the project handle's bio once the handle is verified on the rating platform.
 3. **Marketing site:** [zentorylabs.com/team](https://zentorylabs.com/team) — mirrors the bios above with the same handles. The site is the only public surface we control end-to-end.
 4. **Email:** `*@zentorylabs.io` and `*@zentorylabs.com` resolve to ZENTORY Labs domain, which is the same brand as the marketing site, the dApp ([app.zentorylabs.com](https://app.zentorylabs.com)), and the X handle.

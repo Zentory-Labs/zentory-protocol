@@ -2,7 +2,7 @@
 
 **Prepared:** April 2026
 **Contact:** [your email / Discord]
-**Repository:** https://github.com/edgeza/ZentoryToken
+**Repository:** https://github.com/Zentory-Labs/zentory-protocol
 
 ---
 
@@ -219,7 +219,7 @@ Indicative range for a two-phase full audit of a protocol of this complexity: **
 
 - **Email:** [your email]
 - **Discord:** [your Discord handle]
-- **GitHub:** github.com/edgeza/ZentoryToken
+- **GitHub:** github.com/Zentory-Labs/zentory-protocol
 - **Paperclip (dashboard):** http://localhost:3100/ZEN/dashboard
 
 **Next steps:**
