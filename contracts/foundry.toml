@@ -14,6 +14,10 @@ block_gas_limit = 30000000
 
 [profile.ci]
 fuzz.runs = 1000
+# Disable via_ir in CI to avoid stack-too-deep Yul errors from the IR pipeline.
+# Production deployments should use the default profile with via_ir = true for
+# better gas optimization, but CI needs faster, more reliable builds.
+via_ir = false
 
 # ─── Chain RPC URLs ─────────────────────────────────────────────────────────
 # HyperEVM Testnet (Hyperliquid Blaze Testnet)
