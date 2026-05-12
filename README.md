@@ -231,8 +231,6 @@ Vault performance fees (per whitepaper v2 §6: **15%** on yield) route through [
 
 The buyback connects real protocol revenue to a deflationary force on the fixed supply. There is no inflationary subsidy in this design.
 
-> Note: an earlier marketing artifact ([`whitepaper/page.tsx`](whitepaper/page.tsx)) lists 20% performance fee from a pre-v2 draft. The canonical numbers are in [`docs/whitepaper.md`](docs/whitepaper.md) v2 (May 2026). Reconciliation is tracked in `docs/roadmap/`.
-
 ---
 
 ## Architecture at a glance
