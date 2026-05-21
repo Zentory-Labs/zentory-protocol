@@ -4,7 +4,14 @@
 # ============================================================
 
 $RPC = "https://rpc.hyperliquid-testnet.xyz/evm"
-$DEPLOYER_KEY = "0x0000000000000000000000000000000000000000000000000000000000000000-REDACTED-LEAKED-DEPLOYER-KEY"
+# Deployer key must be supplied via env var. NEVER hardcode it.
+# The previously hardcoded value has been removed; rotate the key at the wallet
+# level and reseed the env before running this script. See HANDOFF.md.
+if (-not $env:DEPLOYER_KEY) {
+    Write-Error "DEPLOYER_KEY env var is required. Set with: `$env:DEPLOYER_KEY = '0x...'"
+    exit 1
+}
+$DEPLOYER_KEY = $env:DEPLOYER_KEY
 $FOUNDRY_BIN = "$env:TEMP\foundry"
 
 # ── Addresses ──────────────────────────────────────────────
