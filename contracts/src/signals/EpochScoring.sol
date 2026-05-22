@@ -172,51 +172,79 @@ contract EpochScoring is AccessControl {
         uint256 epochId = currentEpochId;
         if (epochStates[epochId].settled) revert EpochAlreadySettled(epochId);
 
-        uint256 endTime   = block.timestamp;
         uint256 startTime = lastEpochStart;
-
+        uint256 endTime   = block.timestamp;
         emit EpochStarted(epochId, startTime, endTime);
 
-        EpochState storage state = epochStates[epochId];
         uint256 signalCount = ISignalRegistry(signalRegistry).getSignalCount();
-        state.totalSignals = signalCount;
+        epochStates[epochId].totalSignals = signalCount;
 
         // Compute total stake across all providers for stake-weight normalization.
         totalStake = 0;
         for (uint256 i = 0; i < signalCount; i++) {
-            address provider = ISignalRegistry(signalRegistry).getSignalProvider(i);
-            totalStake += IZENTStaking(zentStaking).getProviderStake(provider);
+            totalStake += IZENTStaking(zentStaking).getProviderStake(
+                ISignalRegistry(signalRegistry).getSignalProvider(i)
+            );
         }
 
-        // Score each provider and build results array.
+        // Score each provider into results[]. Loop body extracted into
+        // _scoreProvider() to keep settleEpoch under Yul's stack-depth limit.
         ScoreResult[] memory results = new ScoreResult[](signalCount);
         for (uint256 i = 0; i < signalCount; i++) {
-            address provider = ISignalRegistry(signalRegistry).getSignalProvider(i);
-            (uint256 stake, uint256[] memory epochsActive) = _getProviderStakeInfo(provider);
-
-            // Get actual vs. signal return for this epoch.
-            int256 actualReturn = _getEpochPriceMovement(epochId);
-            int256 signalReturn = ISignalRegistry(signalRegistry).getSignalReturn(provider, epochId);
-            uint256 accuracy = _calculateAccuracy(actualReturn, signalReturn);
-
-            // Combine: 50% accuracy, 30% recency, 20% stake weight.
-            uint256 recencyBonus = _calculateRecencyBonus(provider, epochId, epochsActive);
-            uint256 stakeScore = totalStake > 0 ? (stake * 100) / totalStake : 0;
-            uint256 finalScore = (accuracy * 50 / 100) + (recencyBonus * 30 / 100) + (stakeScore * 20 / 100);
-
-            results[i] = ScoreResult({
-                provider: provider,
-                accuracy: accuracy,
-                finalScore: finalScore,
-                rank: 0  // filled after sorting
-            });
+            results[i] = _scoreProvider(epochId, i);
         }
 
         // Rank results by finalScore descending.
         _rankResults(results);
 
-        // Calculate and apply rewards for top-performing providers.
-        uint256 reward = epochReward / signalCount;
+        // Distribute rewards to top-ranked providers.
+        totalRewards = _distributeRewards(results);
+
+        // Apply payouts for all signals with cached accuracy values.
+        _applyPayouts(epochId, startTime, endTime);
+
+        EpochState storage state = epochStates[epochId];
+        state.settled = true;
+        state.settledSignals = signalCount;
+        lastEpochStart = block.timestamp;
+        currentEpochId = epochId + 1;
+
+        emit EpochSettled(epochId, state.totalSignals, state.settledSignals);
+    }
+
+    /// @dev Extracted from settleEpoch() to keep its local-variable count below
+    ///      the Yul stack-too-deep threshold. Scores one provider for one epoch.
+    function _scoreProvider(uint256 epochId, uint256 idx)
+        internal
+        view
+        returns (ScoreResult memory)
+    {
+        address provider = ISignalRegistry(signalRegistry).getSignalProvider(idx);
+        (uint256 stake, uint256[] memory epochsActive) = _getProviderStakeInfo(provider);
+
+        uint256 accuracy = _calculateAccuracy(
+            _getEpochPriceMovement(epochId),
+            ISignalRegistry(signalRegistry).getSignalReturn(provider, epochId)
+        );
+
+        uint256 recencyBonus = _calculateRecencyBonus(provider, epochId, epochsActive);
+        uint256 stakeScore = totalStake > 0 ? (stake * 100) / totalStake : 0;
+        uint256 finalScore = (accuracy * 50 / 100) + (recencyBonus * 30 / 100) + (stakeScore * 20 / 100);
+
+        return ScoreResult({
+            provider: provider,
+            accuracy: accuracy,
+            finalScore: finalScore,
+            rank: 0 // filled after sorting
+        });
+    }
+
+    /// @dev Extracted from settleEpoch() — distributes rewards to ranked results.
+    function _distributeRewards(ScoreResult[] memory results)
+        internal
+        returns (uint256 totalRewards)
+    {
+        uint256 reward = epochReward / results.length;
         for (uint256 i = 0; i < results.length; i++) {
             if (results[i].rank <= REWARD_CUTOFF) {
                 totalRewards += reward;
@@ -224,16 +252,6 @@ contract EpochScoring is AccessControl {
                 zentStaking.reward(results[i].provider, reward);
             }
         }
-
-        // Apply payouts for all signals with cached accuracy values.
-        _applyPayouts(epochId, startTime, endTime);
-
-        state.settled = true;
-        state.settledSignals = signalCount;
-        lastEpochStart = block.timestamp;
-        currentEpochId = epochId + 1;
-
-        emit EpochSettled(epochId, state.totalSignals, state.settledSignals);
     }
 
     // ─── Payout Application ─────────────────────────────────
