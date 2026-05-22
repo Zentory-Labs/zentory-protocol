@@ -19,9 +19,10 @@ contracts/broadcast/*/31337/
 contracts/broadcast/**/dry-run/
 tools/foundry-win/
 
-# Secrets
+# Secrets — keep real env files out, but allow .env.example as a template
 .env
 .env.*
+!.env.example
 
 # Leftover monorepo folders that have been split out into their own repos
 # (May 2026). These directories may still exist locally on a contributor's
