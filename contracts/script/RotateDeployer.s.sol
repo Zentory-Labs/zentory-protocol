@@ -5,38 +5,55 @@ import {Script, console2} from "forge-std/Script.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 /// @title RotateDeployer
-/// @notice Revokes every AccessControl role held by the (leaked) deployer
-///         address across all 26 deployed contracts. Safe to re-run — checks
-///         hasRole() before each renounceRole() and skips no-ops.
+/// @notice Two-step rotation: grants DEFAULT_ADMIN_ROLE to a fresh NEW_ADMIN
+///         wallet, then renounces every AccessControl role held by the leaked
+///         deployer. Net effect: you keep admin power via a clean key, the
+///         leaked key has zero remaining authority.
 ///
-/// PRECONDITION: ZentGovernor + Timelock must already hold DEFAULT_ADMIN_ROLE
-///   on every contract that requires it. Phase5Only.s.sol set this up via
-///   grantRole(DEFAULT_ADMIN_ROLE, zentGovernor) — verify before running this
-///   script, otherwise you risk locking out admin entirely.
+///         Pass NEW_ADMIN == DEPLOYER_ADDR to skip the grant step and do a
+///         pure renunciation (only ZentGovernor + Timelock retain admin —
+///         appropriate post-audit, not pre-mainnet).
+///
+///         Safe to re-run — checks hasRole() before each call and skips
+///         no-ops.
+///
+/// PRECONDITION: ZentGovernor + Timelock independently hold DEFAULT_ADMIN_ROLE
+///   on the contracts that require it (Phase5Only.s.sol set this up). This
+///   script touches ONLY the deployer EOA's grants; governance keeps its
+///   admin independently.
 ///
 /// USAGE:
-///   1. Verify governance already has admin (cast call from contracts/):
-///        cast call $ZENT_GOVERNOR "hasRole(bytes32,address)(bool)" \
-///          0x0000...0000 $ZENT_GOVERNOR_ADDR
-///      Repeat for each vault, executor, adapter, staking, etc.
+///   1. Generate a fresh admin wallet (store the key in a hardware wallet or
+///      encrypted password manager — DO NOT commit it):
+///        cast wallet new
+///      Note the address; that's NEW_ADMIN.
 ///
-///   2. Set env vars:
+///   2. Fund NEW_ADMIN with a small amount of testnet HYPE for gas (only
+///      needed if you'll call admin functions from it later; not required
+///      for the rotation itself).
+///
+///   3. Set env vars:
 ///        export PRIVATE_KEY=<leaked deployer key — 0xdc4289...aaf8>
 ///        export DEPLOYER_ADDR=<address of that key>
+///        export NEW_ADMIN=<address from step 1>
 ///
-///   3. Dry-run first (no broadcast):
+///   4. Dry-run first (no broadcast — prints which roles will be touched):
 ///        forge script script/RotateDeployer.s.sol --rpc-url $RPC_URL -vvv
 ///
-///   4. If output looks correct, broadcast:
+///   5. If output looks correct, broadcast:
 ///        forge script script/RotateDeployer.s.sol --rpc-url $RPC_URL \
 ///          --broadcast --slow --legacy
 ///
-///   5. Post-run verification (each line must print false):
-///        cast call $ZENT "hasRole(bytes32,address)(bool)" \
-///          0x0000...0000 $DEPLOYER_ADDR
-///      etc.
+///   6. Post-run verification (dry-run again — should print "Deployer holds
+///      NO roles"):
+///        forge script script/RotateDeployer.s.sol --rpc-url $RPC_URL -vvv
 ///
-///   6. Burn the leaked key — it has no remaining power on the protocol.
+///   7. Verify NEW_ADMIN can now hit admin functions on at least one vault:
+///        cast call $ZBTC_VAULT "hasRole(bytes32,address)(bool)" \
+///          0x0000...0000 $NEW_ADMIN
+///      Should print "true".
+///
+///   8. Burn the leaked deployer key. Securely back up NEW_ADMIN's key.
 contract RotateDeployer is Script {
     bytes32 constant DEFAULT_ADMIN_ROLE = 0x00;
     bytes32 constant KEEPER_ROLE     = keccak256("KEEPER_ROLE");
@@ -133,17 +150,28 @@ contract RotateDeployer is Script {
             "PRIVATE_KEY does not match DEPLOYER_ADDR - double-check both env vars before broadcasting"
         );
 
+        // NEW_ADMIN receives DEFAULT_ADMIN_ROLE on every contract where the
+        // (leaked) deployer currently holds it. This preserves your ability to
+        // hotfix vault parameters during the pre-mainnet phase without leaving
+        // the leaked key active. Pass DEPLOYER_ADDR as NEW_ADMIN to skip the
+        // transfer step (e.g. for a pure renunciation post-audit).
+        address newAdmin = vm.envAddress("NEW_ADMIN");
+        require(newAdmin != address(0), "NEW_ADMIN required - cannot be zero address");
+        bool transferAdmin = (newAdmin != deployer);
+
         _buildRegistries();
 
         console2.log("=== RotateDeployer ===");
         console2.log("Chain:", block.chainid);
-        console2.log("Deployer (to renounce):", deployer);
+        console2.log("Deployer (to revoke):", deployer);
+        console2.log("New admin (to grant):", newAdmin);
         console2.log("Contracts:", CONTRACTS.length);
         console2.log("Roles per contract:", ROLES.length);
         console2.log("");
 
         // ─── Pre-flight: read which roles the deployer currently holds ──
         uint256 totalHeld = 0;
+        uint256 adminHeld = 0;
         bool[][] memory heldMatrix = new bool[][](CONTRACTS.length);
         for (uint256 i = 0; i < CONTRACTS.length; i++) {
             heldMatrix[i] = new bool[](ROLES.length);
@@ -155,6 +183,7 @@ contract RotateDeployer is Script {
                     heldMatrix[i][r] = has;
                     if (has) {
                         totalHeld++;
+                        if (ROLES[r] == DEFAULT_ADMIN_ROLE) adminHeld++;
                         console2.log("HOLD:", LABELS[i], ROLE_LABELS[r]);
                     }
                 } catch {
@@ -172,23 +201,56 @@ contract RotateDeployer is Script {
         }
 
         console2.log("");
-        console2.log("Renouncing", totalHeld, "role grants...");
+        if (transferAdmin) {
+            console2.log("Step 1: grant DEFAULT_ADMIN_ROLE to NEW_ADMIN where deployer holds it");
+            console2.log("Step 2: renounce ALL roles from deployer");
+        } else {
+            console2.log("NEW_ADMIN == deployer; pure renunciation, no grants");
+        }
         console2.log("");
 
-        // ─── Execute: renounce each held role ───────────────────────────
+        // ─── Execute ─────────────────────────────────────────────────────
         vm.startBroadcast(key);
+        uint256 granted = 0;
         uint256 renounced = 0;
+
+        // Step 1: grant DEFAULT_ADMIN_ROLE to newAdmin everywhere deployer has it
+        if (transferAdmin) {
+            for (uint256 i = 0; i < CONTRACTS.length; i++) {
+                // ROLES[0] is DEFAULT_ADMIN_ROLE by construction (see _buildRegistries order)
+                if (!heldMatrix[i][0]) continue;
+                // Skip if newAdmin already has it (idempotent)
+                try IAccessControl(CONTRACTS[i]).hasRole(DEFAULT_ADMIN_ROLE, newAdmin) returns (bool already) {
+                    if (already) {
+                        console2.log("SKIP-grant (newAdmin already admin):", LABELS[i]);
+                        continue;
+                    }
+                } catch {}
+                try IAccessControl(CONTRACTS[i]).grantRole(DEFAULT_ADMIN_ROLE, newAdmin) {
+                    console2.log("GRANT:", LABELS[i], "-> newAdmin");
+                    granted++;
+                } catch Error(string memory reason) {
+                    console2.log("FAIL-grant:", LABELS[i]);
+                    console2.log("       reason:", reason);
+                } catch {
+                    console2.log("FAIL-grant (unknown revert):", LABELS[i]);
+                }
+            }
+            console2.log("");
+        }
+
+        // Step 2: renounce every role deployer holds
         for (uint256 i = 0; i < CONTRACTS.length; i++) {
             for (uint256 r = 0; r < ROLES.length; r++) {
                 if (!heldMatrix[i][r]) continue;
                 try IAccessControl(CONTRACTS[i]).renounceRole(ROLES[r], deployer) {
-                    console2.log("DONE:", LABELS[i], ROLE_LABELS[r]);
+                    console2.log("RENOUNCE:", LABELS[i], ROLE_LABELS[r]);
                     renounced++;
                 } catch Error(string memory reason) {
-                    console2.log("FAIL:", LABELS[i], ROLE_LABELS[r]);
+                    console2.log("FAIL-renounce:", LABELS[i], ROLE_LABELS[r]);
                     console2.log("       reason:", reason);
                 } catch {
-                    console2.log("FAIL (unknown revert):", LABELS[i], ROLE_LABELS[r]);
+                    console2.log("FAIL-renounce (unknown revert):", LABELS[i], ROLE_LABELS[r]);
                 }
             }
         }
@@ -198,16 +260,19 @@ contract RotateDeployer is Script {
         console2.log("==========================================");
         console2.log("  DEPLOYER ROTATION COMPLETE");
         console2.log("==========================================");
-        console2.log("Renounced:", renounced, "of", totalHeld);
+        console2.log("Admin grants to newAdmin:", granted, "of", adminHeld);
+        console2.log("Role renunciations from deployer:", renounced, "of", totalHeld);
         console2.log("");
         console2.log("VERIFY:");
         console2.log("  Re-run this script (dry-run, no --broadcast) and");
         console2.log("  confirm it prints 'Deployer holds NO roles'.");
         console2.log("");
         console2.log("THEN:");
-        console2.log("  Burn the leaked key. It now has zero power on the");
-        console2.log("  protocol. Future deploys: generate a fresh key with");
-        console2.log("  `cast wallet new`, fund with testnet HYPE, use as");
-        console2.log("  PRIVATE_KEY for future Foundry scripts.");
+        console2.log("  Securely back up the NEW_ADMIN key (hardware wallet,");
+        console2.log("  encrypted password manager, multisig). Burn the leaked");
+        console2.log("  deployer key - it has zero power on the protocol now.");
+        console2.log("  ZentGovernor + Timelock retain their existing admin");
+        console2.log("  rights independently; this rotation only touches the");
+        console2.log("  EOA side of the access-control matrix.");
     }
 }
