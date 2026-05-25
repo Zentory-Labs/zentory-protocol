@@ -9,8 +9,13 @@
  * Usage: npx ts-node src/heartbeat.ts
  */
 
+import * as dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import fetch from 'node-fetch';
+
+// Node 20+ exposes `fetch` as a global. We deliberately do NOT depend on
+// node-fetch — keeps the dep tree smaller and avoids ESM/CJS interop pain.
+
+dotenv.config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;

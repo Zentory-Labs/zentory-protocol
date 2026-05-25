@@ -196,12 +196,12 @@ Numerai-style scoring:
 
 ## Contract Addresses (HyperEVM Testnet)
 
-| Contract      | Address                                    |
-|--------------|--------------------------------------------|
+| Contract       | Address                                    |
+|----------------|--------------------------------------------|
 | SignalRegistry | 0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c |
-| EpochScoring  | 0xC9F7345574e8734247556Ed4e30B11851E285bA4 |
-| ZENTStaking   | 0xC9F7345574e8734247556Ed4e30B11851E285bA4 |
-| ZENT Token    | 0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c |
+| EpochScoring   | 0xB6b206AaF3a482624238dD8292BB63EDBAf59143 |
+| ZENTStaking    | 0x4E2e7Fd3C85c05697b24743e580B03abCD6d0c65 |
+| ZENT Token     | 0x271cd48c1297CacCD810c7B1BCD904f459df7117 |
 
 RPC: https://rpc.testnet.hyperliquid.xyz
 Chain ID: 998
