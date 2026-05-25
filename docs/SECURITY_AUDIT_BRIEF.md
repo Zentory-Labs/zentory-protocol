@@ -1,8 +1,11 @@
 # ZENTORY Labs — Smart Contract Security Audit Brief
 
-**Prepared:** April 2026
+**Prepared:** May 25, 2026 (revised)
 **Contact:** [your email / Discord]
 **Repository:** https://github.com/Zentory-Labs/zentory-protocol
+**Codebase size:** ~3,586 LOC across 26 Solidity files (`contracts/src/`)
+**Test suite:** 17 Foundry test files (`contracts/test/`)
+**Target launch:** HyperEVM mainnet (chain 999), Q3–Q4 2026, audit-gated
 
 ---
 
@@ -59,11 +62,13 @@ contracts/src/
 
 ### Out of Scope
 
-- Frontend (Next.js app at `frontend/`)
+- Frontend (Next.js app in separate repo `Zentory-Labs/zentory-app`, deployed to `app.zentorylabs.com`)
 - Backend (Supabase — treated as third-party)
-- Keeper scripts (`contracts/keeper/`)
+- Keeper scripts (`contracts/keeper/` — TypeScript, runs on Railway)
+- Indexer scripts (separate repo `Zentory-Labs/zentory-engine`, Python — runs on Railway)
+- HyperCoreAdapter's internal premium/discount algorithm (proprietary — treat as black box; audit its interaction surface with the vault, not the algorithm itself)
 - Any third-party token integrations (USDC, WBTC, WETH, etc.)
-- Engine trading logic (`engine/` Python package)
+- Hyperliquid L1 precompile correctness (out of our control)
 
 ---
 
@@ -149,13 +154,14 @@ A sophisticated attack vector for a protocol that combines staking, scoring, and
 
 ---
 
-## 5. Test Coverage
+## 5. Test Coverage & Prior Work
 
-- **Current test count:** 18 Solidity test files under `contracts/test/`
+- **Test count:** 17 Foundry test files under `contracts/test/`
 - **Test framework:** Foundry (`forge`) — see `contracts/foundry.toml`
-- **Coverage tool:** No Slither detector-based coverage tool is installed. An internal Slither run was conducted on 2026-04-26 (`docs/reports/slither-2026-04-26.json`) yielding **180 total findings** (37 high/medium severity).
-- **Invariant testing:** None currently in place.
-- **Recommended for audit firm:** Expand to formal invariant testing (e.g., via Foundry's `forge invariant`).
+- **Static analysis:** Internal Slither run conducted on 2026-04-26 — output committed at `docs/reports/slither-2026-04-26.json` (180 findings, 37 high/medium). Findings have been triaged; intentional-acceptances are documented in §6.
+- **Internal pentest:** Conducted 2026-04-26 — report at `docs/reports/pentest-2026-04-26.md`. Findings from this pentest were fixed in Phase 5 redeploy of `StrategyExecutor` + `HyperCoreAdapter`.
+- **Invariant testing:** Not yet implemented. Auditing firm is welcome (and encouraged) to recommend a property-based invariant suite — we will fund + integrate it.
+- **CI:** All tests run on every PR via GitHub Actions; broadcasts checked in under `contracts/broadcast/`.
 
 ---
 
@@ -173,7 +179,7 @@ The following issues are known and intentionally not fixed:
 
 ## 7. Previous Audits
 
-No formal third-party audit has been conducted on this codebase as of April 2026. An internal Slither static analysis run was performed on 2026-04-26 with 180 findings (37 high/medium severity). Findings have been reviewed but not yet remediated. This audit brief is the first step toward engaging a formal audit firm.
+No formal third-party audit has been conducted on this codebase as of May 2026. Internal Slither + manual pentest performed in late April 2026 surfaced 180 findings (37 high/medium); high-severity findings in `StrategyExecutor` and `HyperCoreAdapter` were addressed in the Phase 5 redeploy. This engagement is the first formal external audit.
 
 ---
 
@@ -200,10 +206,10 @@ Firms may propose an alternative structure based on their assessment of the code
 
 ## 10. Timeline
 
-- **Target audit start:** Flexible — minimum **2 weeks notice** before desired start; prefer start after internal review of Slither findings
-- **Target mainnet launch:** TBD — audit completion is a prerequisite
-- **Can provide:** Testnet contract addresses, deployment transaction hashes (available in `contracts/broadcast/`), full codebase access (including private forks if needed), and a technical walkthrough call with the protocol team
-- **Report delivery expectation:** Draft report within 10 business days of phase end; 5 business days for fact-check responses
+- **Target audit start:** Flexible — earliest engagement July 2026, willing to fit your bench
+- **Target mainnet launch:** Q3–Q4 2026, gated on audit completion + remediation
+- **What we can provide upfront:** Full testnet deployment artifacts (chain 998 broadcasts in `contracts/broadcast/`), per-contract spec docs (`docs/whitepaper.md` §4), architecture diagram, internal pentest report, Slither output, walkthrough call (1–2 hours) with the protocol team
+- **Report delivery expectation:** Draft within 10 business days of phase end; 5 business days for fact-check + remediation iteration; final re-review against remediation diffs
 
 ---
 
@@ -211,24 +217,26 @@ Firms may propose an alternative structure based on their assessment of the code
 
 [FIRM TO PROPOSE]
 
-Indicative range for a two-phase full audit of a protocol of this complexity: **USD $30,000 – $60,000**. Final budget to be agreed upon proposal. Payment terms: 50% on engagement, 50% on draft report delivery.
+Based on industry rates for protocols of this size (≈3.6k LOC, multi-contract, multiple integration surfaces), we expect proposals in the **USD $80,000 – $200,000** range. Final budget agreed at engagement. Payment terms: 50% on engagement, 50% on draft delivery; remediation re-review billed at firm's hourly rate.
+
+We are evaluating Spearbit, Cantina, Trail of Bits, and considering a Code4rena/Sherlock contest as a supplement (not replacement). Quote separately for: (a) Phase 1+2 firm audit, (b) optional remediation re-review, (c) optional ongoing retainer for monthly diff reviews post-mainnet.
 
 ---
 
 ## 12. Contact & Next Steps
 
-- **Email:** [your email]
-- **Discord:** [your Discord handle]
-- **GitHub:** github.com/Zentory-Labs/zentory-protocol
-- **Paperclip (dashboard):** http://localhost:3100/ZEN/dashboard
+- **Email:** edge@zentorylabs.com  *(replace with your preferred contact)*
+- **Telegram:** @ZentoryEdge       *(or your handle)*
+- **GitHub:** github.com/Zentory-Labs/zentory-protocol  *(public — `contracts/src/`)*
+- **Website:** zentorylabs.com / app.zentorylabs.com (testnet dApp)
 
 **Next steps:**
-1. Share this brief with selected audit firms (Sigma Prime, Trail of Bits, OpenZeppelin, Spearbit, CodeHawks)
-2. Receive and review proposals (scope, timeline, budget)
-3. Select firm and agree on engagement terms
-4. Grant repository access and schedule kickoff call
-5. Provide deployment artifacts, architecture diagrams, and any additional context the firm requests
+1. Reply with availability + initial scope estimate
+2. We share repo access, internal pentest, Slither output, and book a walkthrough call
+3. Firm submits proposal (scope, timeline, budget, team)
+4. We sign engagement letter + transfer 50% deposit
+5. Audit begins on agreed start date
 
 ---
 
-*This brief is confidential. Please do not share without ZENTORY Labs written consent.*
+*This brief is confidential. Please do not share or quote externally without ZENTORY Labs' written consent.*
