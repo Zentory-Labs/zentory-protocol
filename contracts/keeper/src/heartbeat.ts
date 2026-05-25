@@ -96,31 +96,31 @@ async function checkKeeperHeartbeat() {
 async function sendAlert(message: string) {
   console.error(`ALERT: ${message}`);
 
-  if (DISCORD_WEBHOOK_URL) {
-    try {
-      await fetch(DISCORD_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: `\`[ZENTORY KEEPER]\` ${message}`,
-          components: [
-            {
-              type: 1,
-              components: [
-                {
-                  type: 2,
-                  style: 4,
-                  label: 'View UptimeRobot',
-                  url: 'https://uptimerobot.com/dashboard',
-                },
-              ],
-            },
-          ],
-        }),
-      });
-    } catch (e) {
-      console.error('Failed to send Discord alert:', e);
+  if (!DISCORD_WEBHOOK_URL) {
+    return;
+  }
+
+  // Webhook tokens can't post message components (link buttons need a real
+  // bot Authorization header). Earlier code sent a "View UptimeRobot" button
+  // and Discord rejected the whole payload with 400 — fetch doesn't throw on
+  // 4xx so failure was silent. Now we just send `content` and explicitly
+  // check the response status so misconfigurations surface in logs.
+  try {
+    const res = await fetch(DISCORD_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: `\`[ZENTORY KEEPER]\` ${message}`,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '<no body>');
+      console.error(`Discord webhook returned ${res.status}: ${body}`);
+    } else {
+      console.log('Discord alert posted.');
     }
+  } catch (e) {
+    console.error('Failed to send Discord alert:', e);
   }
 }
 
