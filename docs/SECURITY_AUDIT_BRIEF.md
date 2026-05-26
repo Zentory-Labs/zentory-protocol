@@ -165,7 +165,50 @@ A sophisticated attack vector for a protocol that combines staking, scoring, and
 
 ---
 
-## 6. Known Issues / Acknowledge Risks
+## 6. Known Issues / Acknowledged Risks
+
+The following issues are known. Some are intentional design choices we'd
+defend; some are quirks we'd like the audit to confirm or reject; one is a
+fix that has already shipped but is worth flagging because it indicates
+the class of bug to look for elsewhere.
+
+### 6.0 Fixed pre-audit — divide-by-zero in `EpochScoring._distributeRewards`
+
+**Discovered:** 2026-05-26 in production, after the keeper bot's first
+24 hours of operation against a freshly redeployed `EpochScoring`. The
+heartbeat fired 30+ consecutive CRITICAL alerts before we caught it.
+
+**Bug:** `_distributeRewards` computed `epochReward / results.length`.
+When no quants had submitted signals (the bootstrap state on every
+fresh deploy), `results.length == 0` and the expression panicked with
+Solidity 0.8's built-in divide-by-zero check. The whole `settleEpoch`
+transaction reverted, the keeper exited with code 1 every 4-hour cron
+fire, and the epoch counter could never advance — a permanent boot-time
+deadlock unless at least one signal was submitted before the keeper's
+first run.
+
+**Fix:** commit `d48ed85` adds an empty-`signalCount` fast path at the
+top of `settleEpoch` (marks settled + advances counter + emits event)
+and a belt-and-braces `if (results.length == 0) return 0;` guard at
+the top of `_distributeRewards`. Both shipped + redeployed on testnet
+at `0xDcB2a366dCD5eE126793523b1BeFd78E32A1694d`.
+
+**Regression test:** `test/signals/EpochScoring.t.sol` — 6 tests pin
+the empty-epoch behavior (succeeds, emits event, advances state, role
+check still fires, settle-twice protected, no timing crash). The
+divide-by-zero class of bug cannot return.
+
+**Why we're flagging this for the audit firm:** it indicates the bug
+class to look for elsewhere — boundary conditions in numeric paths,
+especially in the fee-distribution + scoring math. We've audited the
+visible cases internally but the audit firm should run an exhaustive
+sweep across `_distributeRewards`, `_applyPayouts`, `applyPayout`, and
+the buyback flow for the same shape of bug (divide-by-zero, modulo-by-
+zero, signed-int underflow on `uint256` casts, etc.).
+
+---
+
+### 6.1 Acknowledged design quirks
 
 The following issues are known and intentionally not fixed:
 
