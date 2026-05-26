@@ -41,7 +41,12 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     /// @notice Gas-efficient existence check.
     mapping(bytes32 => bool) public signalExists;
 
-    /// @notice Current epoch counter.
+    /// @notice Current epoch counter. Advances when SCORING_ORACLE (EpochScoring)
+    ///         calls advanceEpoch() at the end of a successful settlement.
+    /// @dev    Audit-finding C-2 fix. Prior to this, the counter was declared
+    ///         but never incremented — every signal was stored under epoch 0
+    ///         while EpochScoring's own counter advanced past it, breaking the
+    ///         entire scoring pipeline.
     uint256 public currentEpochId;
 
     /// @notice Configurable epoch duration (governance-adjustable).
@@ -292,6 +297,30 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     /// @inheritdoc ISignalRegistry
     function getSignalReturn(address provider, uint256 epochId) external view returns (int256 signalReturn) {
         return signalReturns[provider][epochId];
+    }
+
+    /// @notice Advance the epoch counter by 1. Called by EpochScoring at the end
+    ///         of `settleEpoch`. Gated by SCORING_ORACLE role so only the
+    ///         configured scoring contract can rotate epochs.
+    /// @dev    Audit-finding C-2 fix. Without this, currentEpochId was stuck at
+    ///         0 forever and signalReturns[provider][0] was the only slot ever
+    ///         written.
+    function advanceEpoch() external onlyRole(SCORING_ORACLE) {
+        unchecked {
+            currentEpochId += 1;
+        }
+    }
+
+    /// @notice Transfer DEFAULT_ADMIN_ROLE to a new admin and renounce from
+    ///         the caller. Audit M-4 fix: constructor grants admin to the
+    ///         deployer EOA (msg.sender) with no previous way to move it.
+    /// @dev    Atomic grant + renounce. The new admin must be non-zero and
+    ///         different from the caller.
+    function transferAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newAdmin != address(0), "SignalRegistry: zero admin");
+        require(newAdmin != msg.sender, "SignalRegistry: same admin");
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+        _revokeRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     /// @notice Returns paginated signal IDs and statuses for a provider.

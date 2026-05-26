@@ -6,6 +6,7 @@ import {ZENTStaking} from "../src/staking/ZENTStaking.sol";
 import {ModelBonding} from "../src/staking/ModelBonding.sol";
 import {FeeDistributor} from "../src/fees/FeeDistributor.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import {requireChainFromEnv} from "./lib/ChainGuard.sol";
 
 /// @notice Deploys ZENTStaking, ModelBonding, and one FeeDistributor per vault.
 /// @dev Run standalone:
@@ -30,6 +31,7 @@ contract DeployStaking is Script {
     uint64  constant DEFAULT_UNBOND_COOLDOWN = 14 days;
 
     function run() external {
+        requireChainFromEnv(); // F-05
         uint256 key        = vm.envUint("PRIVATE_KEY");
         address zent       = _must("ZENT");
         address governor   = _must("GOVERNOR");

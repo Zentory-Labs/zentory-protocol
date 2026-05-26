@@ -18,6 +18,7 @@ import {StrategyExecutor} from "../src/keeper/StrategyExecutor.sol";
 import {Timelock} from "../src/governance/Timelock.sol";
 import {Zentroller} from "../src/governance/Zentroller.sol";
 import {ZentGovernor} from "../src/governance/ZentGovernor.sol";
+import {requireChainFromEnv} from "./lib/ChainGuard.sol";
 
 /// @notice Minimal ERC20 mock for testnet vault assets.
 /// On mainnet these would be real Wrapped assets (WETH, WBTC, etc.).
@@ -115,6 +116,7 @@ contract DeployPipeline is Script {
     uint256 constant BACKER_TOTAL = 150_000_000e18;
 
     function run() external {
+        requireChainFromEnv(); // F-05
         uint256 key       = vm.envUint("PRIVATE_KEY");
         // Allow skipping GOVERNOR_KEY for testnet runs; default to deployer key.
         uint256 governorKey = vm.envOr("GOVERNOR_KEY", key);

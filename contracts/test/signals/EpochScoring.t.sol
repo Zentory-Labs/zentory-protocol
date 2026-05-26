@@ -42,6 +42,12 @@ contract MockSignalRegistry {
     ) external pure returns (bytes32) { return bytes32(0); }
     function submitSignalBatch(SignalTypes.Signal[] calldata)
         external pure returns (bytes32[] memory ids) { return ids; }
+
+    // Audit C-2 fix: settleEpoch now calls advanceEpoch() on the registry to
+    // keep the registry's epoch counter in lockstep with EpochScoring's.
+    // Mock tracks its own counter so tests can assert it gets bumped.
+    uint256 public currentEpochId;
+    function advanceEpoch() external { currentEpochId += 1; }
 }
 
 /// @notice Minimum-viable mock for IZENTStaking. Empty-epoch path doesn't

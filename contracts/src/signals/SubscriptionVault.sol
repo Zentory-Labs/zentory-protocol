@@ -204,6 +204,11 @@ contract SubscriptionVault is ReentrancyGuard {
         SubscriptionInfo storage sub = subscriptionInfo[tokenId];
         if (sub.subscriber != msg.sender) revert NotOwnerOfToken(tokenId);
 
+        // Cache fields before `delete` zeros the storage slot. Reading
+        // `sub.subscriber` after the delete returns address(0), which would
+        // route the refund to the zero address and revert.
+        address subscriber = sub.subscriber;
+
         uint32 remainingSeconds;
         if (sub.expiration > uint32(block.timestamp)) {
             remainingSeconds = sub.expiration - uint32(block.timestamp);
@@ -218,10 +223,10 @@ contract SubscriptionVault is ReentrancyGuard {
         _burn(tokenId);
 
         // Recompute latestExpiration from remaining tokens
-        _recomputeLatestExpiration(msg.sender);
+        _recomputeLatestExpiration(subscriber);
 
         if (refundZENT > 0) {
-            zentToken.safeTransfer(sub.subscriber, refundZENT);
+            zentToken.safeTransfer(subscriber, refundZENT);
         }
 
         emit Cancelled(tokenId, refundZENT, remainingSeconds);
@@ -291,14 +296,36 @@ contract SubscriptionVault is ReentrancyGuard {
         return _balanceOf[owner];
     }
 
-    /// @notice Transfer subscription NFT to a new owner.
-    function transferFrom(address from, address to, uint256 tokenId) external {
-        require(_ownerOf[tokenId] == from, "SubscriptionVault: not owner");
-        require(to != address(0), "SubscriptionVault: zero address");
-        _ownerOf[tokenId] = to;
-        _balanceOf[from]--;
-        _balanceOf[to]++;
-        emit Transfer(from, to, tokenId);
+    /// @notice Subscriptions are non-transferable.
+    /// @dev    The previous implementation had no approval check, so any
+    ///         address could move any subscription NFT, and it did not
+    ///         migrate the `subscriber`/`latestExpiration` state on transfer.
+    ///         Rather than implement full ERC-721 with approval state, we
+    ///         block transfers entirely — subscriptions are scoped to the
+    ///         purchasing wallet per the published spec. To change ownership,
+    ///         cancel and re-subscribe from the new wallet.
+    function transferFrom(address /*from*/, address /*to*/, uint256 /*tokenId*/) external pure {
+        revert("SubscriptionVault: non-transferable");
+    }
+
+    /// @notice Subscriptions are non-transferable; approvals have no effect.
+    function approve(address /*to*/, uint256 /*tokenId*/) external pure {
+        revert("SubscriptionVault: non-transferable");
+    }
+
+    /// @notice Subscriptions are non-transferable; approvals have no effect.
+    function setApprovalForAll(address /*operator*/, bool /*approved*/) external pure {
+        revert("SubscriptionVault: non-transferable");
+    }
+
+    /// @notice ERC-721 conformance stub — subscriptions are non-transferable.
+    function getApproved(uint256 /*tokenId*/) external pure returns (address) {
+        return address(0);
+    }
+
+    /// @notice ERC-721 conformance stub — subscriptions are non-transferable.
+    function isApprovedForAll(address /*owner*/, address /*operator*/) external pure returns (bool) {
+        return false;
     }
 
     // ─── Internal ───────────────────────────────────────────
@@ -320,12 +347,13 @@ contract SubscriptionVault is ReentrancyGuard {
     }
 
     /// @notice Return the highest tier that matches the given asset class bitmap.
+    /// @dev    Iterates ELITE → PRO → BASIC. Explicit unroll instead of a
+    ///         `for (uint256 i = 2; i >= 0; i--)` loop which would underflow on
+    ///         the i==0 decrement and trigger panic 0x11 — bricking renewals.
     function _getTierForBitmap(uint8 bitmap) internal view returns (Tier memory tier) {
-        for (uint256 i = 2; i >= 0; i--) {
-            if (uint8(uint256(tiers[i].assetClassBitmap) & bitmap) != 0) {
-                return tiers[i];
-            }
-        }
+        if (uint8(uint256(tiers[2].assetClassBitmap) & bitmap) != 0) return tiers[2];
+        if (uint8(uint256(tiers[1].assetClassBitmap) & bitmap) != 0) return tiers[1];
+        if (uint8(uint256(tiers[0].assetClassBitmap) & bitmap) != 0) return tiers[0];
         return tiers[0];
     }
 

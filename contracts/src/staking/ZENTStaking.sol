@@ -37,6 +37,15 @@ contract ZENTStaking is AccessControl, IZENTStaking {
     /// @notice Sum of veBalance across all active positions (total voting weight).
     uint256 public totalVeSupply;
 
+    /// @notice Address that receives slashed ZENT. Defaults to the staking
+    ///         contract itself (acts as an internal insurance buffer) if the
+    ///         constructor receives address(0). Governor-adjustable via
+    ///         `setInsuranceFund`. Must NEVER be address(0) post-deploy.
+    address public insuranceFund;
+
+    /// @notice Emitted when the insurance fund recipient changes.
+    event InsuranceFundUpdated(address indexed previous, address indexed current);
+
     struct Position {
         uint128 amount;
         uint64 lockEnd;
@@ -51,9 +60,26 @@ contract ZENTStaking is AccessControl, IZENTStaking {
 
         zent = IERC20(zent_);
         minStake = minStake_;
+        // Default to this contract as the insurance buffer. Governance MUST
+        // call setInsuranceFund() before mainnet so slashed ZENT flows into
+        // the real insurance contract (audit-finding H-4). Until then,
+        // slashed ZENT accumulates in this contract's own balance — bounded
+        // exposure, no leak back to the slasher.
+        insuranceFund = address(this);
+        emit InsuranceFundUpdated(address(0), address(this));
 
         _grantRole(DEFAULT_ADMIN_ROLE, governor_);
         _grantRole(GOVERNOR_ROLE, governor_);
+    }
+
+    /// @notice Update the insurance fund recipient.
+    /// @dev    Governor-only. Rejects address(0) to prevent slashed ZENT
+    ///         from being burned to the zero address by accident.
+    function setInsuranceFund(address newFund) external onlyRole(GOVERNOR_ROLE) {
+        require(newFund != address(0), "ZENTStaking: zero insurance fund");
+        address previous = insuranceFund;
+        insuranceFund = newFund;
+        emit InsuranceFundUpdated(previous, newFund);
     }
 
     // ─── Stake ─────────────────────────────────────────────────────────────
@@ -203,7 +229,17 @@ contract ZENTStaking is AccessControl, IZENTStaking {
         totalVeSupply = totalVeSupply - oldVe + newVe;
 
         emit ProviderSlashed(provider, amount, msg.sender);
-        zent.safeTransfer(msg.sender, amount);
+        // H-4 fix: route slashed ZENT to the insurance fund, not the slasher.
+        // Previously sent to msg.sender, which is always the GOVERNOR_ROLE
+        // holder (EpochScoring) — slashed ZENT got stuck in that contract
+        // forever, and the insurance fund never accumulated from slashing.
+        address fund = insuranceFund;
+        if (fund != address(this)) {
+            zent.safeTransfer(fund, amount);
+        }
+        // When fund == address(this), the slashed ZENT just stays in this
+        // contract's balance as an internal buffer until governance points
+        // `insuranceFund` at a real recipient.
     }
 
     /// @inheritdoc IZENTStaking

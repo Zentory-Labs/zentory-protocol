@@ -72,11 +72,14 @@ contract ZENTBuybackTest is Test {
 
     // ─── execute ──────────────────────────────────────────────────────────
 
+    // Audit M-5: buyback no longer pulls from msg.sender via safeTransferFrom.
+    // The contract must be funded directly (FeeDistributor / ProtocolTreasury
+    // route via safeTransfer, not approve). Tests below mint USDC into the
+    // buyback contract itself.
+
     function test_executeRevertsBelowThreshold() external {
-        // Mint small USDC amount (below threshold)
-        usdc.mint(caller, 500e6);
-        vm.prank(caller);
-        usdc.approve(address(buyback), type(uint256).max);
+        // Fund buyback below threshold.
+        usdc.mint(address(buyback), 500e6);
 
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(ZENTBuyback.BelowThreshold.selector, 500e6));
@@ -84,21 +87,16 @@ contract ZENTBuybackTest is Test {
     }
 
     function test_executeRevertsWhenNoUsdcReceived() external {
-        // Caller has USDC but no approval
-        usdc.mint(caller, 1000e6);
-
+        // No USDC in the contract — below threshold, reverts.
         vm.prank(caller);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(ZENTBuyback.BelowThreshold.selector, 0));
         buyback.execute();
     }
 
     function test_executeSucceedsAboveThresholdAndBurnsZENT() external {
-        // Mint USDC to caller and pre-mint ZENT to buyback contract for burn
-        usdc.mint(caller, 5000e6);
+        // Pre-fund the buyback with USDC + ZENT (pre-bought via DEX in production).
+        usdc.mint(address(buyback), 5000e6);
         zent.mint(address(buyback), 1000e18);
-
-        vm.prank(caller);
-        usdc.approve(address(buyback), type(uint256).max);
 
         uint256 deadZentBefore = zent.balanceOf(0x000000000000000000000000000000000000dEaD);
 
@@ -109,12 +107,10 @@ contract ZENTBuybackTest is Test {
         assertEq(zent.balanceOf(0x000000000000000000000000000000000000dEaD), deadZentBefore + 1000e18);
     }
 
-    function test_executeTransfersUsdcFromCaller() external {
-        usdc.mint(caller, 2000e6);
+    function test_executeUsesContractBalance() external {
+        // Funding via direct transfer (FeeDistributor pattern), not caller approval.
+        usdc.mint(address(buyback), 2000e6);
         zent.mint(address(buyback), 100e18);
-
-        vm.prank(caller);
-        usdc.approve(address(buyback), type(uint256).max);
 
         uint256 callerUsdcBefore = usdc.balanceOf(caller);
         uint256 contractUsdcBefore = usdc.balanceOf(address(buyback));
@@ -122,16 +118,14 @@ contract ZENTBuybackTest is Test {
         vm.prank(caller);
         buyback.execute();
 
-        assertEq(usdc.balanceOf(caller), callerUsdcBefore - 2000e6);
-        assertEq(usdc.balanceOf(address(buyback)), contractUsdcBefore + 2000e6);
+        // Caller balance unchanged — no longer pulled from.
+        assertEq(usdc.balanceOf(caller), callerUsdcBefore);
+        assertEq(usdc.balanceOf(address(buyback)), contractUsdcBefore);
     }
 
     function test_executeNoZENTToBurn() external {
-        // Caller sends USDC but no ZENT in contract — should not revert
-        usdc.mint(caller, 2000e6);
-
-        vm.prank(caller);
-        usdc.approve(address(buyback), type(uint256).max);
+        // Buyback has enough USDC but nothing to burn yet — should not revert.
+        usdc.mint(address(buyback), 2000e6);
 
         vm.prank(caller);
         buyback.execute(); // should not revert

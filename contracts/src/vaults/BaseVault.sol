@@ -101,6 +101,19 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         return asset_;
     }
 
+    // ─── Inflation-Attack Mitigation ───────────────────────────────────────
+    /// @notice Decimals offset between shares and underlying asset.
+    /// @dev    OpenZeppelin's ERC4626 default of 0 leaves the first-depositor
+    ///         "donation" inflation attack open. Returning 6 multiplies the
+    ///         attacker's required donation by 10^6, making the attack
+    ///         economically unviable on every supported underlying. Paired
+    ///         with the seed-via-deposit() invariant in MainnetDeployVaults,
+    ///         this closes the inflation-attack vector.
+    ///         See https://docs.openzeppelin.com/contracts/5.x/erc4626#inflation-attack
+    function _decimalsOffset() internal pure override returns (uint8) {
+        return 6;
+    }
+
     // ─── ERC4626 Overrides ─────────────────────────────────────────────────
 
     function deposit(uint256 assets, address receiver)
@@ -146,12 +159,18 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     }
 
     /// @inheritdoc IVault
+    /// @dev    NAV per share denominated in asset units. With `_decimalsOffset()`
+    ///         set to 6 (audit H-1 inflation-attack mitigation), share decimals
+    ///         = asset decimals + 6. `shareUnit` accounts for that offset so the
+    ///         "1 share" denominator matches the actual ERC20 decimals of the
+    ///         share token, keeping NAV in asset-unit terms exactly as before
+    ///         the offset was introduced.
     function getNavPerShare() public view returns (uint256) {
         uint256 supply = totalSupply();
         // slither-disable-next-line incorrect-equality
         if (supply == 0) return lastNavPerShare;
-        uint256 assetUnit = 10 ** IERC20Metadata(asset()).decimals();
-        return (totalAssets() * assetUnit) / supply;
+        uint256 shareUnit = 10 ** decimals();
+        return (totalAssets() * shareUnit) / supply;
     }
 
     // ─── Performance Fee ───────────────────────────────────────────────────
@@ -166,8 +185,12 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         }
 
         uint256 alpha = nav - hwm;
-        uint256 assetUnit = 10 ** IERC20Metadata(asset()).decimals();
-        uint256 fee = (alpha * totalSupply() * performanceFee) / (assetUnit * 10000);
+        // Fee is computed in asset units: alpha (asset units per share) × supply
+        // (shares) / shareUnit (raw units per share) × performanceFee / 10000.
+        // shareUnit replaces the previous assetUnit denominator to stay
+        // consistent with the share-decimals offset (audit H-1).
+        uint256 shareUnit = 10 ** decimals();
+        uint256 fee = (alpha * totalSupply() * performanceFee) / (shareUnit * 10000);
 
         if (fee > 0) {
             performanceFeeAccrued += fee;

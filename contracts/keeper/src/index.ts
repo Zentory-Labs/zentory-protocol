@@ -140,6 +140,13 @@ async function processSignal(
 async function main(): Promise<SettleResult> {
   console.log(`${LOG_PREFIX} Keeper starting...`);
 
+  // F-03: assert the RPC actually serves chain 998 before any writes.
+  // Catches misconfigured RPC URLs that would otherwise sign mainnet txns
+  // with the keeper's testnet authorization. Bails out loud if mismatched.
+  const { assertChainId } = await import('./chain');
+  await assertChainId();
+  console.log(`${LOG_PREFIX} Chain ID verified: 998`);
+
   // Verify keeper is authorized
   try {
     const oracle = await import('./chain').then((m) => m.getScoringOracle());

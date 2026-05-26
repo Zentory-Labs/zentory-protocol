@@ -2,6 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /// @title ZENTVesting
@@ -10,6 +12,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 ///         Tokens are pre-deposited; beneficiaries can claim after the cliff.
 contract ZENTVesting {
     using SafeCast for uint256;
+    using SafeERC20 for IERC20;
 
     /// @notice Emitted when a beneficiary claims vested tokens
     event Claimed(address indexed beneficiary, uint256 amount);
@@ -94,7 +97,8 @@ contract ZENTVesting {
         }
 
         emit Funded(msg.sender, totalToFund);
-        require(zent.transferFrom(msg.sender, address(this), totalToFund), "ZENTVesting: transfer failed");
+        // Audit M-6 fix: SafeERC20 for consistency with the rest of the codebase.
+        IERC20(address(zent)).safeTransferFrom(msg.sender, address(this), totalToFund);
     }
 
     /// @notice Number of beneficiaries
@@ -123,7 +127,7 @@ contract ZENTVesting {
         schedules[beneficiary].claimed = newClaimed.toUint128();
 
         emit Claimed(beneficiary, amount);
-        require(zent.transfer(beneficiary, amount), "ZENTVesting: transfer failed");
+        IERC20(address(zent)).safeTransfer(beneficiary, amount); // M-6
     }
 
     /// @notice Deployer can revoke a revocable schedule and reclaim unvested tokens.
@@ -138,7 +142,7 @@ contract ZENTVesting {
         s.totalAmount = vested.toUint128();
         s.revoked = true;
         if (unvested > 0) {
-            require(zent.transfer(deployer, unvested), "ZENTVesting: transfer failed");
+            IERC20(address(zent)).safeTransfer(deployer, unvested); // M-6
         }
     }
 

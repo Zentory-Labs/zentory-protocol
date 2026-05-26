@@ -148,6 +148,11 @@ contract StrategyExecutor is AccessControl {
     /// @dev    Only the current DEFAULT_ADMIN_ROLE holder (deployer) can call this
     ///         after initial setup is complete.
     function transferAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        // L-3 fix: reject zero-address newAdmin. Previous version silently
+        // accepted address(0), atomically renouncing admin to nobody and
+        // bricking all future role administration on this contract.
+        require(newAdmin != address(0), "StrategyExecutor: zero admin");
+        require(newAdmin != msg.sender, "StrategyExecutor: same admin");
         grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
         renounceRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
@@ -211,19 +216,36 @@ contract StrategyExecutor is AccessControl {
             revert PositionSizeExceedsLimit(size, maxSize);
         }
 
-        // Leverage check: for directional trades (long/short), verify position leverage
-        // does not exceed maxLeverageBPS for this vault. Close (direction=2) bypasses this.
+        // Leverage check: for directional trades (long/short), verify position
+        // notional does not exceed maxLeverageBPS × vault NAV. Close
+        // (direction=2) bypasses this since it reduces existing exposure.
+        //
+        // H-5 fix: previously this compared positionValue (USD notional) to
+        // `maxLevBPS * 1e6` — a $30B cap with maxLevBPS=30000 that had nothing
+        // to do with vault NAV. A $100k vault could pass a $30B position.
+        //
+        // Real leverage = position notional / vault NAV. Both are evaluated
+        // in the underlying asset's units to avoid a separate USD oracle:
+        // - position size is denominated in the same asset as the vault's
+        //   underlying (e.g. zBTC vault trades BTC, holds WBTC)
+        // - vault.totalAssets() returns the WBTC balance net of accrued fees
+        // - leverage_bps = size * 10000 / totalAssets()
+        //
+        // This rejects size > maxLevBPS/10000 × vault NAV. With maxLevBPS=30000
+        // (3x), a $100k-NAV vault is capped at $300k position notional.
         uint256 maxLevBPS = maxLeverageBPS[vault];
         if (maxLevBPS > 0 && direction != 2) {
-            // Position USD notional = size (asset units) * price (10^8 format)
-            // e.g. 1 BTC * $65,000 = 6_500_000_000 (in 10^8 units) / 1e8 = $65,000
-            uint256 positionValue = (size * price) / 1e8;
-            // maxLeverageBPS is in BPS (e.g. 30000 = 3x). Max notional = BPS/10000 of $1M = $300
-            // For a more usable cap, treat maxLeverageBPS as max notional in $ (÷1e2 for BPS→$)
-            uint256 maxNotional = (maxLevBPS * 1e6); // maxLevBPS=30000 → $30,000,000 notional cap
-            if (positionValue > maxNotional) {
+            uint256 vaultAssets = IVault(vault).totalAssets();
+            if (vaultAssets == 0) {
+                emit SignalRejected(vault, "vault has zero assets");
+                revert LeverageExceedsLimit(size, 0);
+            }
+            // size * 10000 may overflow uint256 only at sizes >> 10^70 (impossible
+            // for any real-world position). Solidity 0.8 checked math catches it.
+            uint256 leverageBps = (size * 10000) / vaultAssets;
+            if (leverageBps > maxLevBPS) {
                 emit SignalRejected(vault, "leverage exceeds max");
-                revert LeverageExceedsLimit(positionValue, maxNotional);
+                revert LeverageExceedsLimit(leverageBps, maxLevBPS);
             }
         }
 

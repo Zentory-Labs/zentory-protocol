@@ -7,6 +7,7 @@ import {EpochScoring} from "../src/signals/EpochScoring.sol";
 import {SubscriptionVault} from "../src/signals/SubscriptionVault.sol";
 import {ZENT} from "../src/ZENT.sol";
 import {ZENTStaking} from "../src/staking/ZENTStaking.sol";
+import {requireChainFromEnv} from "./lib/ChainGuard.sol";
 
 /// @notice Deploys the full ZentoryToken signal network contracts.
 ///
@@ -22,6 +23,7 @@ import {ZENTStaking} from "../src/staking/ZENTStaking.sol";
 ///     --broadcast
 contract DeploySignalNetwork is Script {
     function run() external {
+        requireChainFromEnv(); // F-05
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
 

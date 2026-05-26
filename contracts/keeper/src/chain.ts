@@ -170,6 +170,32 @@ export function getKeeperWallet() {
   });
 }
 
+// Cached chain-id assertion result so we don't re-fetch on every write.
+let chainIdVerified = false;
+
+/**
+ * Verify the configured RPC actually answers with chain ID 998 before any
+ * write. Audit F-03: previously the keeper would build a viem client bound
+ * to chain 998 but trust the RPC URL to be correct — same failure mode that
+ * almost bit us on the zSOL bug. If RPC_URL is misconfigured (or poisoned),
+ * viem signs against whatever chain the RPC returns. This check fails loud.
+ *
+ * Call at boot in index.ts and idempotently from any write path. Cached
+ * after the first successful call to avoid extra RPC round-trips.
+ */
+export async function assertChainId(): Promise<void> {
+  if (chainIdVerified) return;
+  const client = getPublicClient();
+  const observed = await client.getChainId();
+  if (observed !== 998) {
+    throw new Error(
+      `[keeper] chain-ID mismatch: RPC returned ${observed}, expected 998. ` +
+        `Refusing to broadcast. Check HYPEREVM_RPC_URL.`,
+    );
+  }
+  chainIdVerified = true;
+}
+
 // ─── Read Operations ─────────────────────────────────────────────────────────
 
 export async function checkEpochReady(): Promise<boolean> {
@@ -237,6 +263,7 @@ export async function setAccuracy(
   signalId: `0x${string}`,
   accuracyBps: number
 ): Promise<`0x${string}`> {
+  await assertChainId(); // F-03 belt-and-braces
   const wallet = getKeeperWallet();
   const hash = await wallet.writeContract({
     address: config.contracts.epochScoring,
@@ -251,6 +278,7 @@ export async function setAccuracyBatch(
   signalIds: `0x${string}`[],
   accuraciesBps: number[]
 ): Promise<`0x${string}`> {
+  await assertChainId(); // F-03 belt-and-braces
   const wallet = getKeeperWallet();
   const hash = await wallet.writeContract({
     address: config.contracts.epochScoring,
@@ -262,6 +290,7 @@ export async function setAccuracyBatch(
 }
 
 export async function applyPayout(signalId: `0x${string}`): Promise<PayoutResult> {
+  await assertChainId(); // F-03 belt-and-braces
   const wallet = getKeeperWallet();
   try {
     await wallet.writeContract({
@@ -289,7 +318,11 @@ export async function applyPayout(signalId: `0x${string}`): Promise<PayoutResult
     const error = e as Error;
     return {
       signalId,
-      provider: signalId,
+      // Audit F-08 fix: previously `provider: signalId` — shoving the signalId
+      // bytes into the address-typed field. Downstream Supabase writes would
+      // store a garbage provider. Use the zero address sentinel; the caller
+      // can check `success === false` to skip the DB write entirely.
+      provider: '0x0000000000000000000000000000000000000000' as `0x${string}`,
       payoutZent: 0n,
       success: false,
       error: error.message,
@@ -298,6 +331,7 @@ export async function applyPayout(signalId: `0x${string}`): Promise<PayoutResult
 }
 
 export async function settleEpoch(): Promise<`0x${string}`> {
+  await assertChainId(); // F-03 belt-and-braces
   const wallet = getKeeperWallet();
   const hash = await wallet.writeContract({
     address: config.contracts.epochScoring,

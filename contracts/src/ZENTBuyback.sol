@@ -32,17 +32,20 @@ contract ZENTBuyback is Ownable(msg.sender) {
         minBuybackThreshold = _minThreshold;
     }
 
-    /// @notice Called by keeper or automation when USDC balance >= threshold.
-    ///         Pulls USDC from caller, swaps for ZENT on the market, and burns ZENT to dead address.
+    /// @notice Called by keeper or automation when this contract's USDC
+    ///         balance >= threshold. Swaps USDC for ZENT on the market and
+    ///         burns ZENT to dead address.
     /// @dev Integration-ready: in production route through a DEX aggregator (e.g. 1inch).
     ///      For standalone testing the contract accepts pre-bought ZENT and burns it.
+    ///
+    ///      Audit M-5 fix: the previous implementation called
+    ///      `safeTransferFrom(msg.sender, address(this), callerBalance)` —
+    ///      a pull-everything pattern that would drain any address with an
+    ///      outstanding USDC approval to this contract. This contract is
+    ///      funded *by* the FeeDistributor and ProtocolTreasury, which do
+    ///      direct safeTransfer (not approve), so the pull was never the
+    ///      intended fueling path. Removing it closes the griefing vector.
     function execute() external {
-        // Pull ALL USDC from caller (caller must approve this contract first)
-        uint256 callerBalance = usdc.balanceOf(msg.sender);
-        if (callerBalance > 0) {
-            usdc.safeTransferFrom(msg.sender, address(this), callerBalance);
-        }
-
         uint256 usdcBalance = usdc.balanceOf(address(this));
         if (usdcBalance < minBuybackThreshold) {
             revert BelowThreshold(usdcBalance);

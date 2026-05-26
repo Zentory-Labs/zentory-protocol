@@ -11,6 +11,7 @@ import {zETHVault} from "../src/vaults/zETHVault.sol";
 import {zBTCVault} from "../src/vaults/zBTCVault.sol";
 import {zXRPVault} from "../src/vaults/zXRPVault.sol";
 import {zSOLVault} from "../src/vaults/zSOLVault.sol";
+import {requireChainFromEnv} from "./lib/ChainGuard.sol";
 
 /// @notice Deploy only HyperCoreAdapter + StrategyExecutor (Phase 5 only)
 /// Pre-existing addresses (all verified live on-chain):
@@ -43,6 +44,7 @@ contract Phase5Only is Script {
     }
 
     function run() external {
+        requireChainFromEnv(); // F-05
         uint256 key = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(key);
         address keeper = vm.envAddress("KEEPER");

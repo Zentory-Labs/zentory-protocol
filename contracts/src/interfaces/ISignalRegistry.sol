@@ -76,4 +76,12 @@ interface ISignalRegistry {
     /// @param epochId The epoch ID to query
     /// @return signalReturn The signal return value for that epoch
     function getSignalReturn(address provider, uint256 epochId) external view returns (int256 signalReturn);
+
+    /// @notice Returns the registry's current epoch counter.
+    function currentEpochId() external view returns (uint256);
+
+    /// @notice Advance the registry's epoch counter. Called by EpochScoring at
+    ///         the end of settleEpoch so subsequent signal submissions land in
+    ///         the next epoch bucket. Audit-finding C-2 fix.
+    function advanceEpoch() external;
 }

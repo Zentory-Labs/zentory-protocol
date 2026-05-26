@@ -5,6 +5,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {Timelock} from "../src/governance/Timelock.sol";
 import {Zentroller} from "../src/governance/Zentroller.sol";
 import {ZentGovernor} from "../src/governance/ZentGovernor.sol";
+import {requireChainFromEnv} from "./lib/ChainGuard.sol";
 
 /// @notice Deploys TimelockController, Zentroller (staking link), and ZentGovernor.
 /// @dev Run standalone:
@@ -31,6 +32,9 @@ contract DeployGovernance is Script {
     uint256 constant DEFAULT_TIMELOCK_DELAY     = 48 hours;
 
     function run() external {
+        // F-05: enforce EXPECTED_CHAIN_ID before broadcasting.
+        requireChainFromEnv();
+
         uint256 key       = vm.envUint("PRIVATE_KEY");
         address zent     = _must("ZENT");
         address staking  = _must("STAKING");

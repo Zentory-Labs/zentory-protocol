@@ -14,6 +14,7 @@ import {Zentroller} from "../src/governance/Zentroller.sol";
 import {ZentGovernor} from "../src/governance/ZentGovernor.sol";
 import {ZENTStaking} from "../src/staking/ZENTStaking.sol";
 import {ModelBonding} from "../src/staking/ModelBonding.sol";
+import {requireChainFromEnv} from "./lib/ChainGuard.sol";
 
 /// @notice Resume script: deploys only contracts missing from prior partial run.
 /// Pre-existing on-chain addresses (verified):
@@ -56,6 +57,7 @@ contract ResumeDeployment is Script {
     }
 
     function run() external {
+        requireChainFromEnv(); // F-05
         uint256 key       = vm.envUint("PRIVATE_KEY");
         uint256 governorKey = vm.envOr("GOVERNOR_KEY", key);
         address deployer  = vm.addr(key);

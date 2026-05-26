@@ -192,6 +192,11 @@ contract StrategyExecutorTest is Test {
         executor.grantRole(executor.GUARDIAN_ROLE(), guardian);
         signer = vm.addr(SIGNER_KEY);
         executor.setAuthorizedSigner(signer);
+        // L-2: HyperCoreAdapter now requires EXECUTOR_ROLE to call
+        // sendLimitOrder. Grant it to the StrategyExecutor so signed signals
+        // can be relayed in tests. Governor holds DEFAULT_ADMIN_ROLE on the
+        // adapter (set in adapter constructor).
+        adapter.grantRole(adapter.EXECUTOR_ROLE(), address(executor));
         vm.stopPrank();
     }
 

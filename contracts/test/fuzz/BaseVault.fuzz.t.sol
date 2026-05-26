@@ -45,7 +45,12 @@ contract BaseVaultFuzzTest is Test {
         uint256 shares = vault.deposit(assets, alice);
 
         assertGe(shares, 1, "deposit must return >= 1 share");
-        assertLe(shares, assets, "shares cannot exceed deposit amount");
+        // Audit H-1: BaseVault overrides _decimalsOffset() to 6 to mitigate
+        // the first-depositor inflation attack. Shares are issued at 10**6 ×
+        // asset units at the 1:1 NAV ratio, so the original `shares <= assets`
+        // invariant no longer holds. The economically meaningful invariant is
+        // that shares cannot exceed assets × the share offset.
+        assertLe(shares, uint256(assets) * 1e6, "shares cannot exceed assets * 10**6");
     }
 
     function test_fuzz_depositAndWithdrawRoundTrip(uint96 assets) external {

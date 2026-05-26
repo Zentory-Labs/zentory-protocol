@@ -36,6 +36,12 @@ contract BaseVaultTest is Test {
     // MockERC20 uses 18 decimals (OZ default)
     uint256 constant ASSET_UNIT = 10 ** 18;
 
+    // Audit H-1 fix: BaseVault overrides ERC4626._decimalsOffset() to 6,
+    // mitigating the first-depositor inflation attack. As a result, share
+    // amounts are scaled up by 10**6 vs. asset amounts at the 1:1 NAV ratio.
+    // Tests that assert specific share counts use this multiplier.
+    uint256 constant SHARE_OFFSET = 10 ** 6;
+
     function setUp() public {
         asset = new ERC20Mock();
         asset.mint(address(this), type(uint256).max);
@@ -93,6 +99,8 @@ contract BaseVaultTest is Test {
     // ─── Deposit ─────────────────────────────────────────────────────────────
 
     function test_firstDepositorGetsOneToOneShares() external {
+        // With ERC4626 decimals offset = 6 (audit H-1), the first depositor's
+        // shares == assets * 10**6 (not 1:1 raw, but 1:1 in NAV terms).
         uint256 depositAmount = 10 * ASSET_UNIT;
         _transferAsset(alice, depositAmount);
 
@@ -102,8 +110,8 @@ contract BaseVaultTest is Test {
         vm.prank(alice);
         uint256 shares = vault.deposit(depositAmount, alice);
 
-        assertEq(shares, depositAmount);
-        assertEq(vault.balanceOf(alice), depositAmount);
+        assertEq(shares, depositAmount * SHARE_OFFSET);
+        assertEq(vault.balanceOf(alice), depositAmount * SHARE_OFFSET);
         assertEq(vault.totalAssets(), depositAmount);
     }
 
@@ -127,9 +135,14 @@ contract BaseVaultTest is Test {
         vm.prank(bob);
         uint256 bobShares = vault.deposit(bobDeposit, bob);
 
-        // NAV=1.5, bob deposits 15 assets → gets 10 shares
-        assertLt(bobShares, bobDeposit);
-        assertEq(bobShares, 10 * ASSET_UNIT);
+        // NAV=1.5, bob deposits 15 assets → gets 10 shares (in share units = assets * 10**6 at 1:1).
+        // With offset=6, alice held 10e18 * 10^6 shares; bob's 15-asset deposit
+        // at NAV=1.5 mints 10e18 * 10^6 ≈ 10 * ASSET_UNIT * SHARE_OFFSET shares.
+        assertLt(bobShares, bobDeposit * SHARE_OFFSET);
+        // Approximate equality with ±0.001% tolerance for OZ rounding.
+        uint256 expected = 10 * ASSET_UNIT * SHARE_OFFSET;
+        uint256 diff = bobShares > expected ? bobShares - expected : expected - bobShares;
+        assertLt(diff, expected / 100000, "bobShares too far from 10 * ASSET_UNIT * SHARE_OFFSET");
     }
 
     // ─── High-Water Mark & Performance Fee ─────────────────────────────────

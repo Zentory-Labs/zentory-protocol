@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Script, console2} from "forge-std/Script.sol";
 import {HyperCoreAdapter} from "../src/keeper/HyperCoreAdapter.sol";
 import {StrategyExecutor} from "../src/keeper/StrategyExecutor.sol";
+import {requireChainFromEnv} from "./lib/ChainGuard.sol";
 
 /// @notice Deploys HyperCoreAdapter and StrategyExecutor (the keeper layer).
 /// @dev Run standalone:
@@ -31,6 +32,7 @@ contract DeployKeeper is Script {
     uint256 constant DEFAULT_MAX_LEVERAGE_BPS = 30000;
 
     function run() external {
+        requireChainFromEnv(); // F-05
         uint256 key        = vm.envUint("PRIVATE_KEY");
         address governor  = _must("GOVERNOR");
         address keeper    = _must("KEEPER");

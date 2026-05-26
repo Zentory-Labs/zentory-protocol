@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Script, console2} from "forge-std/Script.sol";
 import {ZENT} from "../src/ZENT.sol";
 import {ZENTVesting} from "../src/ZENTVesting.sol";
+import {requireChainFromEnv} from "./lib/ChainGuard.sol";
 
 /// @notice Deploys ZENT token and the team/backer vesting allocator.
 /// @dev Run standalone:
@@ -27,6 +28,10 @@ contract DeployCore is Script {
     uint256 constant BACKER_TOTAL = 150_000_000e18;
 
     function run() external {
+        // F-05: require EXPECTED_CHAIN_ID env var matches block.chainid.
+        // Aborts before any broadcast if the RPC points at the wrong chain.
+        requireChainFromEnv();
+
         uint256 key = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(key);
         address treasury = _must("TREASURY");

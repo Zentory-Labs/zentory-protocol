@@ -13,6 +13,15 @@ contract HyperCoreAdapter is AccessControl {
 
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
+    /// @notice Authorized to submit orders to HyperCore on the protocol's
+    ///         behalf. Audit-finding L-2: previously `sendLimitOrder` had no
+    ///         access control, making it a footgun once the adapter holds
+    ///         any HyperCore margin. The role is granted to the
+    ///         `StrategyExecutor` at deploy time so the executor remains the
+    ///         single authorized order path; the deployer + governor can
+    ///         rotate it via the standard AccessControl flow.
+    bytes32 public constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
+
     /// @notice CoreWriter precompile address (HyperEVM → HyperCore write bridge)
     address public constant CORE_WRITER = address(0x3333333333333333333333333333333333333333);
 
@@ -61,6 +70,11 @@ contract HyperCoreAdapter is AccessControl {
         require(governor_ != address(0), "HyperCoreAdapter: zero governor");
         _grantRole(DEFAULT_ADMIN_ROLE, governor_);
         _grantRole(GOVERNOR_ROLE, governor_);
+        // L-2: grant EXECUTOR_ROLE to the deployer so the deploy script can
+        // exercise the adapter immediately. Production deploy must then
+        // grantRole(EXECUTOR_ROLE, strategyExecutor) and renounce from the
+        // deployer — see DeployKeeper.s.sol.
+        _grantRole(EXECUTOR_ROLE, msg.sender);
 
         // Default: asset 0 = BTC perpetual (index 0 on mainnet, verified at deployment)
         assetConfigs[0] = AssetConfig({assetIndex: 0, szDecimals: 6, supported: true});
@@ -104,6 +118,7 @@ contract HyperCoreAdapter is AccessControl {
         uint128 cloid
     )
         external
+        onlyRole(EXECUTOR_ROLE) // L-2 fix
         returns (uint128 cloid_)
     {
         AssetConfig memory cfg = assetConfigs[localAsset];

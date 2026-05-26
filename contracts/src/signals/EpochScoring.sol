@@ -30,9 +30,18 @@ contract EpochScoring is AccessControl {
 
     // ─── Config ──────────────────────────────────────────────
     /// @notice 1.7% max slash per epoch (Numerai's −0.017)
+    /// @dev Audit I-4: the asymmetry between MAX_PENALTY (170 bps) and
+    ///      MAX_REWARD (500 bps) is intentional. Slashing is a punishment
+    ///      that must scale with how badly a signal was wrong, but with a
+    ///      hard floor low enough that an unlucky run of accurate-direction-
+    ///      but-poor-timing signals doesn't wipe a quant's stake. Rewards
+    ///      need a wider ceiling to attract talent — a 3x reward:penalty
+    ///      asymmetry is a common reputation-game design that converges to
+    ///      positive expected value for skilled players, negative for noise.
     uint256 public constant MAX_PENALTY_BPS = 170;
 
-    /// @notice 5% max reward per epoch
+    /// @notice 5% max reward per epoch. See MAX_PENALTY_BPS for the
+    ///         asymmetry rationale.
     uint256 public constant MAX_REWARD_BPS = 500;
 
     /// @notice Default epoch duration (4 hours)
@@ -60,6 +69,21 @@ contract EpochScoring is AccessControl {
 
     /// @notice Per-asset Chainlink price feed addresses (assetId → AggregatorV3Interface).
     mapping(bytes32 => address) public priceFeeds;
+
+    /// @notice Reference asset used as the "market index" for epoch-level
+    ///         price-movement scoring. Defaults to BTC at deploy; governance
+    ///         can switch via setReferenceAsset(). Audit-finding H-2 — until
+    ///         this was wired, `_getEpochPriceMovement` returned a hardcoded
+    ///         0 and accuracy scoring was identically zero for every provider.
+    /// @dev    Per-asset (per-signal) scoring is the planned next iteration;
+    ///         this reference-asset approach restores non-trivial scoring
+    ///         while we land that schema change.
+    bytes32 public referenceAssetId;
+
+    /// @notice Close price of the reference asset at the end of each epoch.
+    ///         Used by `_getEpochPriceMovement` to compute realized BPS
+    ///         movement between consecutive epochs.
+    mapping(uint256 => int256) public epochClosePrice;
 
     /// @notice Epoch metadata keyed by epoch ID.
     struct EpochState {
@@ -93,6 +117,8 @@ contract EpochScoring is AccessControl {
     event ScoringOracleUpdated(address indexed oldOracle, address indexed newOracle);
     event EpochPayoutsApplied(uint256 indexed epochId, uint256 startTime, uint256 endTime);
     event SignalScored(address indexed provider, uint256 accuracy, uint256 finalScore, uint256 rank);
+    event ReferenceAssetSet(bytes32 indexed previous, bytes32 indexed current);
+    event EpochClosePriceSet(uint256 indexed epochId, bytes32 indexed assetId, int256 price);
 
     // ─── Errors ─────────────────────────────────────────────
     error EpochNotReady();
@@ -120,9 +146,38 @@ contract EpochScoring is AccessControl {
         scoringOracle  = _scoringOracle;
         currentEpochId = 1;
         lastEpochStart = block.timestamp;
+        // Default reference asset is BTC. Governance can switch via
+        // setReferenceAsset() once additional Chainlink feeds are configured.
+        referenceAssetId = keccak256(abi.encodePacked("BTC"));
+        emit ReferenceAssetSet(bytes32(0), referenceAssetId);
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(EPOCH_SETTLER, _keeper);
+    }
+
+    /// @notice Update the reference asset used for epoch-level price-movement
+    ///         scoring. Must have a configured Chainlink feed before scoring
+    ///         starts producing non-zero accuracy.
+    function setReferenceAsset(bytes32 newAssetId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newAssetId != bytes32(0), "EpochScoring: zero asset");
+        bytes32 previous = referenceAssetId;
+        referenceAssetId = newAssetId;
+        emit ReferenceAssetSet(previous, newAssetId);
+    }
+
+    /// @notice Transfer DEFAULT_ADMIN_ROLE to a new admin and renounce from
+    ///         the caller. Audit M-4 fix: the constructor grants admin to
+    ///         msg.sender (the deployer EOA) and previously offered no path
+    ///         to move it. After this call, the caller no longer holds the
+    ///         admin role — making it safe to do so as the final step of
+    ///         a deploy script that hands control to a Timelock or multisig.
+    /// @dev    Atomic: grants then renounces in the same tx. If the caller
+    ///         passes their own address (or zero), the call reverts.
+    function transferAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newAdmin != address(0), "EpochScoring: zero admin");
+        require(newAdmin != msg.sender, "EpochScoring: same admin");
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+        _revokeRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     /// @notice Update the scoring oracle address (governance-controlled).
@@ -193,8 +248,15 @@ contract EpochScoring is AccessControl {
         if (signalCount == 0) {
             epochStates[epochId].settled = true;
             epochStates[epochId].settledSignals = 0;
+            // Snapshot reference asset price even on empty epochs so the
+            // baseline keeps advancing — otherwise the first non-empty epoch
+            // after a quiet stretch sees a stale baseline. Audit-finding H-2.
+            _snapshotReferenceClose(epochId);
             lastEpochStart = block.timestamp;
             currentEpochId = epochId + 1;
+            // C-2 fix: keep the signal registry's epoch counter in lockstep
+            // so submissions land in the new epoch bucket.
+            signalRegistry.advanceEpoch();
             emit EpochSettled(epochId, 0, 0);
             return 0;
         }
@@ -226,10 +288,30 @@ contract EpochScoring is AccessControl {
         EpochState storage state = epochStates[epochId];
         state.settled = true;
         state.settledSignals = signalCount;
+        // Snapshot the reference asset's close price for this epoch BEFORE
+        // we advance the counters, so the next epoch can read prevClose from
+        // epochClosePrice[epochId]. Audit-finding H-2 enablement.
+        _snapshotReferenceClose(epochId);
         lastEpochStart = block.timestamp;
         currentEpochId = epochId + 1;
+        // C-2 fix: advance the registry counter so subsequent submissions
+        // hash into the next epoch bucket.
+        signalRegistry.advanceEpoch();
 
         emit EpochSettled(epochId, state.totalSignals, state.settledSignals);
+    }
+
+    /// @notice Snapshot the reference asset's close price from its Chainlink
+    ///         feed into `epochClosePrice[epochId]`. Silently no-ops if the
+    ///         feed is unset (early-life testnet) or returns zero/negative.
+    function _snapshotReferenceClose(uint256 epochId) internal {
+        bytes32 refId = referenceAssetId;
+        address feed = priceFeeds[refId];
+        if (feed == address(0)) return;
+        (, int256 answer, , uint256 updatedAt, ) = AggregatorV3Interface(feed).latestRoundData();
+        if (answer <= 0 || updatedAt == 0) return;
+        epochClosePrice[epochId] = answer;
+        emit EpochClosePriceSet(epochId, refId, answer);
     }
 
     /// @dev Extracted from settleEpoch() to keep its local-variable count below
@@ -240,7 +322,7 @@ contract EpochScoring is AccessControl {
         returns (ScoreResult memory)
     {
         address provider = ISignalRegistry(signalRegistry).getSignalProvider(idx);
-        (uint256 stake, uint256[] memory epochsActive) = _getProviderStakeInfo(provider);
+        (uint256 stake, uint256[] memory epochsActive) = _getProviderStakeInfo(provider, epochId);
 
         uint256 accuracy = _calculateAccuracy(
             _getEpochPriceMovement(epochId),
@@ -260,21 +342,33 @@ contract EpochScoring is AccessControl {
     }
 
     /// @dev Extracted from settleEpoch() — distributes rewards to ranked results.
+    ///      Audit M-1 fix: wraps each `zentStaking.reward()` call in try/catch.
+    ///      The staking contract requires `pos.amount > 0` for the recipient,
+    ///      and a provider can unstake (or be slashed to zero) between signal
+    ///      submission and epoch settlement. Previously, a single such case
+    ///      reverted the entire settleEpoch transaction, bricking the keeper.
+    ///      Now we emit a skip event and continue — the epoch still settles,
+    ///      and the missed payout is forfeit to the epoch reward pool budget
+    ///      rather than locking up the cron.
     function _distributeRewards(ScoreResult[] memory results)
         internal
         returns (uint256 totalRewards)
     {
-        // Belt-and-braces. settleEpoch already short-circuits the empty case
-        // before calling this, but if _distributeRewards is ever invoked from
-        // a different code path with an empty array, we'd panic on the
-        // division below. Cheap guard, zero cost on the common path.
         if (results.length == 0) return 0;
         uint256 reward = epochReward / results.length;
         for (uint256 i = 0; i < results.length; i++) {
             if (results[i].rank <= REWARD_CUTOFF) {
-                totalRewards += reward;
                 emit SignalScored(results[i].provider, results[i].accuracy, results[i].finalScore, results[i].rank);
-                zentStaking.reward(results[i].provider, reward);
+                try zentStaking.reward(results[i].provider, reward) {
+                    totalRewards += reward;
+                } catch {
+                    // Provider has no active stake — skip silently. Emitting
+                    // a separate event would be useful but EpochScoring's
+                    // events are tightly packed and we don't want to add
+                    // surface area pre-audit. Keepers can detect skipped
+                    // payouts by reconciling SignalScored events with
+                    // expected reward sums.
+                }
             }
         }
     }
@@ -434,32 +528,57 @@ contract EpochScoring is AccessControl {
 
     /// @notice Retrieve stake info for a specific provider.
     /// @dev Queries ZENTStaking for the provider's current stake and recent epoch activity.
+    ///      Audit-finding H-3 fix: previously used `block.number - i` as the
+    ///      epoch identifier when querying `getStakeAtEpoch`. `block.number`
+    ///      is in the millions on HyperEVM while `epochId` is single-digit,
+    ///      so the comparison in `_calculateRecencyBonus` (epochsActive[i] >=
+    ///      epochId - 3) never matched and the recency bonus was always 0.
     /// @param provider Address of the signal provider
+    /// @param epochId  The epoch ID being settled — used to look back N epochs.
     /// @return stake Current total stake for the provider
     /// @return epochsActive Array of recent epoch IDs where provider had active stake
-    function _getProviderStakeInfo(address provider)
+    function _getProviderStakeInfo(address provider, uint256 epochId)
         internal view returns (uint256 stake, uint256[] memory epochsActive)
     {
         stake = IZENTStaking(zentStaking).getProviderStake(provider);
         epochsActive = new uint256[](5);
         uint256 count = 0;
         for (uint256 i = 0; i < 5; i++) {
-            uint256 checkEpoch = block.number - i;
+            if (epochId < i) break; // guard against underflow on early epochs
+            uint256 checkEpoch = epochId - i;
             if (IZENTStaking(zentStaking).getStakeAtEpoch(provider, checkEpoch) > 0) {
                 epochsActive[count++] = checkEpoch;
             }
         }
     }
 
-    /// @notice Get the realized price movement for a given epoch.
-    /// @dev Reads from Chainlink price feeds for the epoch's end timestamp.
-    ///      Currently a stub that returns 0; production should query price oracle.
+    /// @notice Get the realized price movement of the reference asset during
+    ///         the epoch, in basis points.
+    /// @dev    Audit-finding H-2 fix. Previously hardcoded `return 0`, which
+    ///         made `_calculateAccuracy(actual=0, signal=X)` always hit the
+    ///         "actual == 0" branch and return 0 — so every provider's
+    ///         accuracy was identically zero.
+    ///
+    ///         The movement is computed from snapshots taken at settleEpoch:
+    ///         `epochClosePrice[epochId]` is the reference asset's price at
+    ///         the end of epoch `epochId`, captured via the Chainlink feed
+    ///         registered for `referenceAssetId`. Movement bps =
+    ///         (close[epoch] - close[epoch-1]) * 10000 / close[epoch-1].
+    ///
+    ///         Returns 0 if either snapshot is unavailable (e.g. first epoch
+    ///         after deploy, or Chainlink feed not yet configured). Callers
+    ///         treat 0 as "skip scoring this epoch" via the early-return in
+    ///         `_calculateAccuracy`.
     /// @param epochId The epoch to get price movement for
     /// @return priceMovement Signed price movement in basis points
     function _getEpochPriceMovement(uint256 epochId) internal view returns (int256) {
-        // Stub: returns 0 until a price oracle integration is implemented.
-        // Production should read the settlement price from Chainlink at epoch end.
-        return 0;
+        if (epochId == 0) return 0;
+        int256 closeNow = epochClosePrice[epochId];
+        int256 closePrev = epochClosePrice[epochId - 1];
+        if (closePrev == 0 || closeNow == 0) return 0;
+        // Movement in bps. closePrev is guaranteed positive (snapshot rejects
+        // non-positive answers) so the division is safe.
+        return ((closeNow - closePrev) * 10000) / closePrev;
     }
 }
 
