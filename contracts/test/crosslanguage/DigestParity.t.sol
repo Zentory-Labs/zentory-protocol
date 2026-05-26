@@ -41,6 +41,10 @@ contract DigestParityTest is Test {
         adapter = new HyperCoreAdapter(address(this));
         executor = new StrategyExecutor(address(adapter), address(this));
         executor.setAuthorizedSigner(vm.addr(SIGNAL_SIGNER_KEY));
+        // L-2: HyperCoreAdapter.sendLimitOrder requires EXECUTOR_ROLE. The
+        // adapter constructor grants DEFAULT_ADMIN_ROLE to address(this), so
+        // we can authorize the executor to relay orders.
+        adapter.grantRole(adapter.EXECUTOR_ROLE(), address(executor));
     }
 
     // ─── Print test vector for Python signer comparison ───────────────────────

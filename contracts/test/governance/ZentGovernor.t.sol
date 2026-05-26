@@ -84,15 +84,16 @@ contract ZentGovernorTest is Test {
         // The test contract (ZentGovernorTest) is the proposer. It needs veBalance >= 1 wei.
         // Directly write a Position into ZENTStaking storage so veBalance works without
         // the approve/stake dance (Forge prank resets between setUp and tests).
-        // ZENTStaking storage layout:
-        //   slot 0: zent (address, 20 bytes, padded)
+        // ZENTStaking storage layout (AccessControl _roles occupies slot 0):
+        //   slot 0: _roles (AccessControl mapping)
         //   slot 1: minStake (uint256)
         //   slot 2: totalStaked (uint256)
         //   slot 3: totalVeSupply (uint256)
-        //   slot N+1: _positions[addr] = keccak256(abi.encode(addr, uint256(slot_of_positions)))
-        //              where slot_of_positions = 4 (5th state variable)
+        //   slot 4: insuranceFund (address) — added in audit H-4 fix
+        //   slot 5: _positions mapping base
+        //   _positions[addr] = keccak256(abi.encode(addr, uint256(5)))
         // Position (amount uint128 + lockEnd uint64) packs into 256 bits = 1 slot.
-        bytes32 posSlot = keccak256(abi.encode(address(this), uint256(4)));
+        bytes32 posSlot = keccak256(abi.encode(address(this), uint256(5)));
         uint256 lockEnd = block.timestamp + 730 days;
         // amount (uint128) in lower bits, lockEnd (uint64) in upper bits
         bytes32 packed = bytes32((uint256(200 ether) & ~uint128(0)) | (uint256(lockEnd) << 128));
