@@ -179,6 +179,26 @@ contract EpochScoring is AccessControl {
         uint256 signalCount = ISignalRegistry(signalRegistry).getSignalCount();
         epochStates[epochId].totalSignals = signalCount;
 
+        // Empty-epoch fast path. Without this guard, _distributeRewards
+        // divides epochReward by results.length and panics on zero, reverting
+        // the whole transaction. That locks the keeper out of every cron run
+        // until at least one quant submits a signal — which is exactly the
+        // bootstrap deadlock we saw on the redeployed contract (24h of
+        // settler-failure heartbeats before this fix landed).
+        //
+        // Marking the epoch settled + advancing the counter on the empty
+        // path is the correct semantic: an empty epoch is a settled epoch
+        // with zero scoring work. Quants who show up next epoch get the
+        // normal scoring flow.
+        if (signalCount == 0) {
+            epochStates[epochId].settled = true;
+            epochStates[epochId].settledSignals = 0;
+            lastEpochStart = block.timestamp;
+            currentEpochId = epochId + 1;
+            emit EpochSettled(epochId, 0, 0);
+            return 0;
+        }
+
         // Compute total stake across all providers for stake-weight normalization.
         totalStake = 0;
         for (uint256 i = 0; i < signalCount; i++) {
@@ -244,6 +264,11 @@ contract EpochScoring is AccessControl {
         internal
         returns (uint256 totalRewards)
     {
+        // Belt-and-braces. settleEpoch already short-circuits the empty case
+        // before calling this, but if _distributeRewards is ever invoked from
+        // a different code path with an empty array, we'd panic on the
+        // division below. Cheap guard, zero cost on the common path.
+        if (results.length == 0) return 0;
         uint256 reward = epochReward / results.length;
         for (uint256 i = 0; i < results.length; i++) {
             if (results[i].rank <= REWARD_CUTOFF) {
