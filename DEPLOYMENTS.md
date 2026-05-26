@@ -82,7 +82,7 @@ One `FeeDistributor` instance per vault. Each distributes the 15% performance fe
 | Contract | Address | Source |
 |---|---|---|
 | `SignalRegistry` (EIP-712 signed signals) | [`0x7745b22b2c73e422154fcd1ecd283765c4bf6e8c`](https://testnet.purrsec.com/address/0x7745b22b2c73e422154fcd1ecd283765c4bf6e8c) | [`contracts/src/signals/SignalRegistry.sol`](contracts/src/signals/SignalRegistry.sol) |
-| `EpochScoring` (4-hour epochs) | [`0xb6b206aaf3a482624238dd8292bb63edbaf59143`](https://testnet.purrsec.com/address/0xb6b206aaf3a482624238dd8292bb63edbaf59143) | [`contracts/src/signals/EpochScoring.sol`](contracts/src/signals/EpochScoring.sol) |
+| `EpochScoring` (4-hour epochs) | [`0xdcb2a366dcd5ee126793523b1befd78e32a1694d`](https://testnet.purrsec.com/address/0xdcb2a366dcd5ee126793523b1befd78e32a1694d) | [`contracts/src/signals/EpochScoring.sol`](contracts/src/signals/EpochScoring.sol) |
 | `SubscriptionVault` (ZENT-paid signal subs) | [`0xd7d346f6d1f2cecc3e67d9749b5121549f3dd80d`](https://testnet.purrsec.com/address/0xd7d346f6d1f2cecc3e67d9749b5121549f3dd80d) | [`contracts/src/signals/SubscriptionVault.sol`](contracts/src/signals/SubscriptionVault.sol) |
 
 ---

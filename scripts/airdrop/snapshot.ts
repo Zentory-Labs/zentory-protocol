@@ -62,7 +62,7 @@ const VAULTS = {
   zXRP: "0x8B15204D88a9Bb155bE6798522983A3B5F7d7cB0",
 } as const;
 
-const EPOCH_SCORING = "0xB6b206AaF3a482624238dD8292BB63EDBAf59143"; // redeployed 2026-05-25
+const EPOCH_SCORING = "0xDcB2a366dCD5eE126793523b1BeFd78E32A1694d"; // redeployed 2026-05-25
 
 // ─── Supabase fetches ───────────────────────────────────────────────────
 

@@ -90,7 +90,7 @@ Source of truth: `zentory-protocol/DEPLOYMENTS.md`. Mirror in `zentory-app/lib/c
 | Execution | HyperCoreAdapter | `0xdad9175f6d2da1709ba3f73711e69022538d21a7` |
 | Execution | StrategyExecutor | `0xacd862ef134d772b0ca53a97f53ccdd00abc05cf` |
 | Signals | SignalRegistry | `0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c` |
-| Signals | EpochScoring | `0xB6b206AaF3a482624238dD8292BB63EDBAf59143` *(redeployed 2026-05-25)* |
+| Signals | EpochScoring | `0xDcB2a366dCD5eE126793523b1BeFd78E32A1694d` *(redeployed 2026-05-25)* |
 | Signals | SubscriptionVault | `0xd7d346f6d1F2CEcc3E67d9749B5121549F3dd80d` |
 
 ---

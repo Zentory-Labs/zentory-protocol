@@ -199,7 +199,7 @@ Numerai-style scoring:
 | Contract       | Address                                    |
 |----------------|--------------------------------------------|
 | SignalRegistry | 0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c |
-| EpochScoring   | 0xB6b206AaF3a482624238dD8292BB63EDBAf59143 |
+| EpochScoring   | 0xDcB2a366dCD5eE126793523b1BeFd78E32A1694d |
 | ZENTStaking    | 0x4E2e7Fd3C85c05697b24743e580B03abCD6d0c65 |
 | ZENT Token     | 0x271cd48c1297CacCD810c7B1BCD904f459df7117 |
 
