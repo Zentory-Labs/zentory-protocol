@@ -126,6 +126,27 @@ New/changed members:
 - Cash asset: USDC (assume) — confirm the canonical testnet/mainnet USDC.
 - Migration mechanics for existing zBTC depositors (withdraw-redeposit vs scripted).
 
+## 7b. Deploy runbook (testnet, one vault) — READY
+
+`SpotVault` is built + oracle-hardened (Chainlink fail-closed guards). Deploy
+script: `contracts/script/DeploySpotVault.s.sol` (compiles, role-wiring inlined
+to avoid the bug that stalled the signal-network deploy). One-click:
+`contracts/deploy-spot-vault.ps1`.
+
+Prerequisites that must exist first (the real blockers):
+1. **CASH (USDC)** ERC-20 address on testnet.
+2. **ORACLE** — a Chainlink BTC/USD `AggregatorV3` feed on HyperEVM testnet (set
+   `MAX_ORACLE_STALENESS` to the feed's heartbeat).
+3. **SWAP_ADAPTER** — an `ISpotSwapAdapter`. Production = Hyperliquid spot via
+   CoreWriter (needs HyperCore docs + audit). For **shadow mode** (deposit/
+   withdraw/NAV verification, no real fills), deploy a mock adapter.
+
+Steps: fill the four addresses in `deploy-spot-vault.ps1` → run it → it prints
+`SPOT_VAULT=0x...`. Then: seed via a first deposit (inflation-attack invariant),
+add the address to the dApp, shadow-run against the `zentory_algo` curve, and
+only later transfer admin/RISK_COUNCIL to the multisig. The vault is the deployed
+ensemble→hysteresis signal's execution target.
+
 ## 8. Checklist
 - [ ] Pick withdraw model + execution venue + cash asset (§7).
 - [ ] `SpotExecutionAdapter` (spot swap + async-fill reconcile).
