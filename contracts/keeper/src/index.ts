@@ -166,7 +166,19 @@ async function main(): Promise<SettleResult> {
 
   if (!ready) {
     console.log(`${LOG_PREFIX} Epoch not ready yet, skipping this run.`);
-    throw new Error('EPOCH_NOT_READY');
+    // A "not ready" run means the keeper is alive and working correctly —
+    // it's not an error. Refresh the heartbeat so the monitor doesn't
+    // false-alarm during quiet windows (e.g. the 4h after a fresh deploy),
+    // then exit 0 cleanly instead of throwing (which previously logged at
+    // error severity and tripped exit code 1 every cron tick).
+    try {
+      const epochId = Number(await getCurrentEpochId());
+      await updateKeeperHeartbeat(epochId);
+    } catch (e) {
+      console.warn(`${LOG_PREFIX} Heartbeat update on skip failed: ${(e as Error).message}`);
+    }
+    console.log(JSON.stringify({ status: 'skipped', reason: 'epoch_not_ready' }));
+    process.exit(0);
   }
 
   console.log(`${LOG_PREFIX} Epoch is ready, beginning settlement...`);
