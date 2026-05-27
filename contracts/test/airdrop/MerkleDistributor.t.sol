@@ -45,10 +45,10 @@ contract MerkleDistributorTest is Test {
     function setUp() public {
         zent = new MockZENT();
 
-        // Leaf format must match the contract:
-        //   keccak256(abi.encodePacked(index, account, amount))
-        leafAlice = keccak256(abi.encodePacked(uint256(0), ALICE, ALICE_AMOUNT));
-        leafBob   = keccak256(abi.encodePacked(uint256(1), BOB,   BOB_AMOUNT));
+        // Leaf format must match the contract (audit M-8 double-hashed leaves):
+        //   keccak256(bytes.concat(keccak256(abi.encode(index, account, amount))))
+        leafAlice = keccak256(bytes.concat(keccak256(abi.encode(uint256(0), ALICE, ALICE_AMOUNT))));
+        leafBob   = keccak256(bytes.concat(keccak256(abi.encode(uint256(1), BOB,   BOB_AMOUNT))));
 
         // For a 2-leaf tree the root is keccak256(sorted_pair). Sort to
         // match OZ MerkleProof's verify path (it sorts at each hash step).

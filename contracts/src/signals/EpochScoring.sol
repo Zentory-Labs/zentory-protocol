@@ -231,7 +231,8 @@ contract EpochScoring is AccessControl {
         uint256 endTime   = block.timestamp;
         emit EpochStarted(epochId, startTime, endTime);
 
-        uint256 signalCount = ISignalRegistry(signalRegistry).getSignalCount();
+        // M-2: iterate only this epoch's signals, not the lifetime list.
+        uint256 signalCount = ISignalRegistry(signalRegistry).getEpochSignalCount(epochId);
         epochStates[epochId].totalSignals = signalCount;
 
         // Empty-epoch fast path. Without this guard, _distributeRewards
@@ -261,11 +262,12 @@ contract EpochScoring is AccessControl {
             return 0;
         }
 
-        // Compute total stake across all providers for stake-weight normalization.
+        // Compute total stake across this epoch's signal providers for
+        // stake-weight normalization. M-2: scoped to epoch signals.
         totalStake = 0;
         for (uint256 i = 0; i < signalCount; i++) {
             totalStake += IZENTStaking(zentStaking).getProviderStake(
-                ISignalRegistry(signalRegistry).getSignalProvider(i)
+                ISignalRegistry(signalRegistry).getEpochSignalProvider(epochId, i)
             );
         }
 
@@ -321,12 +323,15 @@ contract EpochScoring is AccessControl {
         view
         returns (ScoreResult memory)
     {
-        address provider = ISignalRegistry(signalRegistry).getSignalProvider(idx);
+        // M-2/M-3: resolve the provider + signal direction from this epoch's
+        // signal at position `idx`, so each signal is scored individually
+        // (not collapsed to the provider's last signal).
+        address provider = ISignalRegistry(signalRegistry).getEpochSignalProvider(epochId, idx);
         (uint256 stake, uint256[] memory epochsActive) = _getProviderStakeInfo(provider, epochId);
 
         uint256 accuracy = _calculateAccuracy(
             _getEpochPriceMovement(epochId),
-            ISignalRegistry(signalRegistry).getSignalReturn(provider, epochId)
+            ISignalRegistry(signalRegistry).getEpochSignalReturn(epochId, idx)
         );
 
         uint256 recencyBonus = _calculateRecencyBonus(provider, epochId, epochsActive);

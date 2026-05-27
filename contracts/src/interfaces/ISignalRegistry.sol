@@ -80,6 +80,16 @@ interface ISignalRegistry {
     /// @notice Returns the registry's current epoch counter.
     function currentEpochId() external view returns (uint256);
 
+    /// @notice Number of signals submitted during a given epoch (audit M-2).
+    function getEpochSignalCount(uint256 epochId) external view returns (uint256);
+
+    /// @notice Provider of the i-th signal submitted during a given epoch.
+    function getEpochSignalProvider(uint256 epochId, uint256 index) external view returns (address);
+
+    /// @notice Direction of the i-th signal submitted during a given epoch
+    ///         (audit M-3 — per-signal, not last-wins-per-provider).
+    function getEpochSignalReturn(uint256 epochId, uint256 index) external view returns (int256);
+
     /// @notice Advance the registry's epoch counter. Called by EpochScoring at
     ///         the end of settleEpoch so subsequent signal submissions land in
     ///         the next epoch bucket. Audit-finding C-2 fix.

@@ -68,7 +68,20 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     bytes32[] public signalIds;
 
     /// @notice Mapping from (provider, epochId) to signal return value.
+    /// @dev    Last-wins per (provider, epoch). Retained for backward
+    ///         compatibility, but EpochScoring now reads per-signal returns
+    ///         via getEpochSignalReturn (audit M-3) so multiple signals from
+    ///         the same provider in one epoch are each scored on their own
+    ///         merits rather than collapsing to the last one.
     mapping(address => mapping(uint256 => int256)) public signalReturns;
+
+    /// @notice Per-epoch list of signal IDs submitted during that epoch.
+    /// @dev    Audit M-2: EpochScoring previously iterated the lifetime
+    ///         `signalIds` array on every settlement — O(n) in total signals
+    ///         ever submitted, growing unbounded and re-scoring stale
+    ///         signals. This scopes settlement to the signals that actually
+    ///         belong to the epoch being settled.
+    mapping(uint256 => bytes32[]) public epochSignalIds;
 
     // ─── Errors ─────────────────────────────────────────────
     error SignalAlreadyExists(bytes32 signalId);
@@ -133,7 +146,10 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
 
         // Store signal return for scoring.
         uint256 epochId = currentEpochId;
-        signalReturns[provider][epochId] = direction;
+        signalReturns[provider][epochId] = direction; // last-wins (legacy)
+        // M-2/M-3: append to the per-epoch signal list so settlement iterates
+        // only this epoch's signals and scores each one individually.
+        epochSignalIds[epochId].push(signalId);
 
         emit SignalTypes.SignalSubmitted(
             signalId, provider, assetClass, assetId, direction, confidence, expiresAt
@@ -297,6 +313,23 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     /// @inheritdoc ISignalRegistry
     function getSignalReturn(address provider, uint256 epochId) external view returns (int256 signalReturn) {
         return signalReturns[provider][epochId];
+    }
+
+    /// @inheritdoc ISignalRegistry
+    function getEpochSignalCount(uint256 epochId) external view returns (uint256) {
+        return epochSignalIds[epochId].length;
+    }
+
+    /// @inheritdoc ISignalRegistry
+    function getEpochSignalProvider(uint256 epochId, uint256 index) external view returns (address) {
+        bytes32 id = epochSignalIds[epochId][index];
+        return signals[id].provider;
+    }
+
+    /// @inheritdoc ISignalRegistry
+    function getEpochSignalReturn(uint256 epochId, uint256 index) external view returns (int256) {
+        bytes32 id = epochSignalIds[epochId][index];
+        return signals[id].direction;
     }
 
     /// @notice Advance the epoch counter by 1. Called by EpochScoring at the end

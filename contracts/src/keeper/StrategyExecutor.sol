@@ -389,6 +389,16 @@ contract StrategyExecutor is AccessControl {
 
         if (v != 27 && v != 28) revert InvalidSignature();
 
+        // Audit L-7: reject the high-s half of the curve to block signature
+        // malleability. A malleable signature (s, 65-byte form) can be flipped
+        // to (n - s) and still recover the same signer, producing a second
+        // valid signature for the same message. We bind nonces per vault so
+        // replay is already blocked, but enforcing low-s is the EIP-2 / OZ
+        // ECDSA standard and removes the malleable variant entirely.
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+            revert InvalidSignature();
+        }
+
         address signer = ecrecover(digest, v, r, s);
         if (signer == address(0)) revert InvalidSignature();
         if (signer != authorizedSigner) revert InvalidSignature();

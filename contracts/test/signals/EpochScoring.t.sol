@@ -48,6 +48,12 @@ contract MockSignalRegistry {
     // Mock tracks its own counter so tests can assert it gets bumped.
     uint256 public currentEpochId;
     function advanceEpoch() external { currentEpochId += 1; }
+
+    // Audit M-2/M-3: per-epoch signal accessors. Empty by default (the
+    // empty-epoch boundary tests rely on getEpochSignalCount == 0).
+    function getEpochSignalCount(uint256) external pure returns (uint256) { return 0; }
+    function getEpochSignalProvider(uint256, uint256) external pure returns (address) { return address(0); }
+    function getEpochSignalReturn(uint256, uint256) external pure returns (int256) { return 0; }
 }
 
 /// @notice Minimum-viable mock for IZENTStaking. Empty-epoch path doesn't

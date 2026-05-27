@@ -17,6 +17,7 @@ contract ProtocolTreasury is Ownable(msg.sender) {
     uint256 public constant BUYBACK_SHARE_BPS = 5000; // 50%
 
     event Sweep(address indexed token, uint256 toBuyback, uint256 toOperations);
+    event Rescued(address indexed token, address indexed to, uint256 amount);
 
     constructor(address _buyback, address _operations) {
         require(_buyback != address(0), "ProtocolTreasury: zero buyback");
@@ -38,5 +39,18 @@ contract ProtocolTreasury is Ownable(msg.sender) {
         IERC20(token).safeTransfer(operations, opsAmount);
 
         emit Sweep(token, buybackAmount, opsAmount);
+    }
+
+    /// @notice Owner-only escape hatch for tokens misrouted to this contract
+    ///         that should NOT flow through the 50/50 buyback/ops split
+    ///         (e.g. an airdrop or a vault fee sent to the wrong address).
+    /// @dev    Audit M-7: `sweep` is permissionless by design, so anything
+    ///         that lands here is normally force-split. This gives governance
+    ///         a way to recover genuinely misrouted assets to a chosen
+    ///         recipient before they're swept. Owner should be the multisig.
+    function rescue(address token, address to, uint256 amount) external onlyOwner {
+        require(to != address(0), "ProtocolTreasury: zero recipient");
+        IERC20(token).safeTransfer(to, amount);
+        emit Rescued(token, to, amount);
     }
 }

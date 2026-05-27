@@ -59,8 +59,8 @@ contract MerkleDistributor is AccessControl {
 
     // ─── Constructor ────────────────────────────────────────────────────
     /// @param token_         ZENT token contract
-    /// @param merkleRoot_    Pre-computed root over leaf =
-    ///                       keccak256(abi.encodePacked(index, account, amount))
+    /// @param merkleRoot_    Pre-computed root over double-hashed leaf =
+    ///                       keccak256(bytes.concat(keccak256(abi.encode(index, account, amount))))
     /// @param claimDeadline_ Unix timestamp after which sweep() is allowed.
     ///                       Recommended: 90 days post-deploy.
     /// @param admin_         Holder of DEFAULT_ADMIN_ROLE + SWEEPER_ROLE.
@@ -106,8 +106,11 @@ contract MerkleDistributor is AccessControl {
         if (block.timestamp > claimDeadline) revert ClaimWindowClosed();
         if (isClaimed(index)) revert AlreadyClaimed(index);
 
-        // Verify proof.
-        bytes32 leaf = keccak256(abi.encodePacked(index, account, amount));
+        // Verify proof. Audit M-8: use double-hashed leaves (the
+        // OpenZeppelin / Uniswap standard) so a crafted internal tree node
+        // can never be replayed as a valid leaf. abi.encode (not
+        // encodePacked) avoids any ambiguity across the fixed-width fields.
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(index, account, amount))));
         if (!MerkleProof.verify(merkleProof, merkleRoot, leaf)) revert InvalidProof();
 
         // Mark claimed.

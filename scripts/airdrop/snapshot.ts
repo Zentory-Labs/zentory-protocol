@@ -31,7 +31,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { createPublicClient, http, formatUnits, keccak256, encodePacked } from "viem";
+import { createPublicClient, http, formatUnits, keccak256, encodePacked, encodeAbiParameters } from "viem";
 
 // ─── Configuration ──────────────────────────────────────────────────────
 
@@ -173,23 +173,38 @@ function distribute(
 // ─── Merkle tree (simplified — production should use OZ MerkleProof) ────
 
 /**
- * Build a Merkle tree of (wallet, amount) leaves. Each leaf hash is
- * keccak256(abi.encodePacked(wallet, amount)) — matches OZ's
- * MerkleDistributor expectation. Returns root + proofs per wallet.
+ * Build a Merkle tree whose leaves match MerkleDistributor.sol exactly:
+ *   leaf = keccak256(bytes.concat(keccak256(abi.encode(index, account, amount))))
+ * i.e. double-hashed (audit M-8), ABI-encoded over (uint256 index, address
+ * account, uint256 amount). `index` is the wallet's position in the sorted
+ * wallet list — the same value passed to claim(index, account, amount, proof).
  *
- * Note: production deploys should use @openzeppelin/merkle-tree which
- * handles edge cases (uneven trees, sorting, duplicate detection). This is
- * a reference implementation for review; replace with the library before
- * a real distributor goes live.
+ * Returns root + per-wallet proofs + per-wallet index. Internal nodes are
+ * sorted-pair hashed to match OpenZeppelin MerkleProof.verify.
+ *
+ * Note: production deploys should use @openzeppelin/merkle-tree which handles
+ * edge cases (uneven trees, sorting, duplicate detection). This is a reference
+ * implementation for review; replace with the library before a real
+ * distributor goes live.
  */
 function buildMerkleTree(allocations: Map<string, bigint>): {
   root: `0x${string}`;
   proofs: Map<string, `0x${string}`[]>;
+  indices: Map<string, number>;
 } {
   const wallets = [...allocations.keys()].sort();
-  const leaves = wallets.map(
-    (w) => keccak256(encodePacked(["address", "uint256"], [w as `0x${string}`, allocations.get(w)!]))
-  );
+  const indices = new Map<string, number>();
+  wallets.forEach((w, i) => indices.set(w, i));
+  const leaves = wallets.map((w, i) => {
+    const inner = keccak256(
+      encodeAbiParameters(
+        [{ type: "uint256" }, { type: "address" }, { type: "uint256" }],
+        [BigInt(i), w as `0x${string}`, allocations.get(w)!]
+      )
+    );
+    // Double-hash: keccak256 of the 32-byte inner hash (== bytes.concat(inner)).
+    return keccak256(inner);
+  });
 
   if (leaves.length === 0) {
     return { root: ("0x" + "00".repeat(32)) as `0x${string}`, proofs: new Map() };
@@ -231,7 +246,7 @@ function buildMerkleTree(allocations: Map<string, bigint>): {
     proofs.set(wallets[i], proof);
   }
 
-  return { root, proofs };
+  return { root, proofs, indices };
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────
@@ -276,7 +291,7 @@ async function main(): Promise<void> {
   console.log(`  total allocated: ${formatUnits([...totals.values()].reduce((a, b) => a + b, 0n), 18)} ZENT`);
 
   // Build Merkle tree
-  const { root, proofs } = buildMerkleTree(totals);
+  const { root, proofs, indices } = buildMerkleTree(totals);
   console.log(`  merkle root: ${root}`);
 
   // Write output
@@ -293,6 +308,8 @@ async function main(): Promise<void> {
       quant: formatUnits(buckets.quant, 18),
     },
     allocations: [...totals.entries()].map(([wallet, total]) => ({
+      // index is the value passed to MerkleDistributor.claim(index, ...).
+      index: indices.get(wallet)!,
       wallet,
       faucet: (faucetAllocs.get(wallet) ?? 0n).toString(),
       depositor: (depositorAllocs.get(wallet) ?? 0n).toString(),
