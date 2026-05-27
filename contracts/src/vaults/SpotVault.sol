@@ -17,11 +17,14 @@ interface ISpotSwapAdapter {
         returns (uint256 amountOut);
 }
 
-/// @notice Minimal Chainlink-style oracle: USD price of one whole underlying unit,
-///         scaled to `decimals()` (typically 8). Cash asset is assumed ~= $1.
-interface ISpotPriceOracle {
-    function priceUsd() external view returns (uint256);
+/// @notice Chainlink-compatible price feed: USD price of one whole underlying
+///         unit, scaled to `decimals()` (typically 8). Cash asset assumed ~= $1.
+interface AggregatorV3Interface {
     function decimals() external view returns (uint8);
+    function latestRoundData()
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 }
 
 /// @title SpotVault (BaseVault v2 — spot, in-vault execution)
@@ -38,8 +41,9 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
     bytes32 public constant RISK_COUNCIL_ROLE = keccak256("RISK_COUNCIL_ROLE");
 
-    IERC20 public immutable cashAsset;          // e.g. USDC
-    ISpotPriceOracle public immutable oracle;   // underlying/USD
+    IERC20 public immutable cashAsset;              // e.g. USDC
+    AggregatorV3Interface public immutable oracle;  // underlying/USD
+    uint256 public immutable maxOracleStaleness;    // seconds; reverts if feed older
     ISpotSwapAdapter public swapAdapter;
 
     uint8 internal immutable _assetDec;
@@ -61,11 +65,14 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
 
     error CircuitBreakerActive();
     error BadWeight();
+    error StaleOracle(uint256 updatedAt, uint256 nowTs);
+    error InvalidOraclePrice(int256 answer);
 
     constructor(
         address asset_,
         address cashAsset_,
         address oracle_,
+        uint256 maxOracleStaleness_,
         string memory name_,
         string memory symbol_,
         uint16 rebalanceThresholdBps_,
@@ -77,12 +84,14 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         require(asset_ != address(0) && cashAsset_ != address(0) && oracle_ != address(0), "zero addr");
         require(feeRecipient_ != address(0) && admin_ != address(0), "zero addr");
         require(rebalanceThresholdBps_ <= 10000 && maxSlippageBps_ <= 10000 && performanceFeeBps_ <= 10000, "bad bps");
+        require(maxOracleStaleness_ > 0, "zero staleness");
 
         cashAsset = IERC20(cashAsset_);
-        oracle = ISpotPriceOracle(oracle_);
+        oracle = AggregatorV3Interface(oracle_);
+        maxOracleStaleness = maxOracleStaleness_;
         _assetDec = IERC20Metadata(asset_).decimals();
         _cashDec = IERC20Metadata(cashAsset_).decimals();
-        _priceDec = ISpotPriceOracle(oracle_).decimals();
+        _priceDec = AggregatorV3Interface(oracle_).decimals();
 
         rebalanceThresholdBps = rebalanceThresholdBps_;
         maxSlippageBps = maxSlippageBps_;
@@ -100,16 +109,33 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
 
     // ─── Oracle valuation helpers ──────────────────────────────────────────
 
+    /// @notice Read the price feed with fail-closed safety checks. Reverts on a
+    ///         non-positive answer, an incomplete round, or a stale update. NAV
+    ///         (and thus deposit/withdraw/rebalance) reverts rather than transact
+    ///         on a bad price — the conservative choice. Operational outages are
+    ///         handled by the circuit breaker, not by trusting a dead feed.
+    function _oraclePrice() internal view returns (uint256) {
+        (uint80 roundId, int256 answer, , uint256 updatedAt, uint80 answeredInRound) =
+            oracle.latestRoundData();
+        if (answer <= 0) revert InvalidOraclePrice(answer);
+        if (answeredInRound < roundId) revert StaleOracle(updatedAt, block.timestamp);
+        if (updatedAt == 0 || block.timestamp - updatedAt > maxOracleStaleness) {
+            revert StaleOracle(updatedAt, block.timestamp);
+        }
+        return uint256(answer);
+    }
+
     /// @notice Value `cashAmt` (raw cash units) in underlying units.
     function cashToAsset(uint256 cashAmt) public view returns (uint256) {
-        uint256 p = oracle.priceUsd();
-        require(p > 0, "oracle price 0");
+        if (cashAmt == 0) return 0;   // fully-long vault needs no oracle
+        uint256 p = _oraclePrice();
         return (cashAmt * (10 ** _assetDec) * (10 ** _priceDec)) / ((10 ** _cashDec) * p);
     }
 
     /// @notice Value `assetAmt` (raw underlying units) in cash units.
     function assetToCash(uint256 assetAmt) public view returns (uint256) {
-        uint256 p = oracle.priceUsd();
+        if (assetAmt == 0) return 0;
+        uint256 p = _oraclePrice();
         return (assetAmt * (10 ** _cashDec) * p) / ((10 ** _assetDec) * (10 ** _priceDec));
     }
 

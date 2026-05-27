@@ -4,14 +4,25 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {SpotVault, ISpotSwapAdapter, ISpotPriceOracle} from "../../src/vaults/SpotVault.sol";
+import {SpotVault, ISpotSwapAdapter, AggregatorV3Interface} from "../../src/vaults/SpotVault.sol";
 import {MockERC20} from "../invariants/mocks/MockERC20.sol";
 
-contract MockOracle is ISpotPriceOracle {
-    uint256 public priceUsd;          // USD per 1 whole underlying, 8 decimals
+/// @dev Chainlink-style mock feed with settable answer + updatedAt (for staleness).
+contract MockOracle is AggregatorV3Interface {
+    int256 public answer;
+    uint256 public updatedAt;
     uint8 public constant decimals = 8;
-    constructor(uint256 p) { priceUsd = p; }
-    function setPrice(uint256 p) external { priceUsd = p; }
+
+    constructor(int256 a) { answer = a; updatedAt = block.timestamp; }
+    function setPrice(int256 a) external { answer = a; updatedAt = block.timestamp; }
+    function setUpdatedAt(uint256 t) external { updatedAt = t; }   // for staleness tests
+    function setAnswer(int256 a) external { answer = a; }          // without refreshing time
+
+    function latestRoundData()
+        external view returns (uint80, int256, uint256, uint256, uint80)
+    {
+        return (1, answer, updatedAt, updatedAt, 1);
+    }
 }
 
 /// @dev Perfect-fill spot venue priced off the oracle (no slippage), for tests.
@@ -32,7 +43,7 @@ contract MockSpotAdapter is ISpotSwapAdapter {
         external returns (uint256 out)
     {
         IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
-        uint256 p = oracle.priceUsd();
+        uint256 p = uint256(oracle.answer());
         if (tokenIn == asset && tokenOut == cash) {
             out = (amountIn * (10 ** cDec) * p) / ((10 ** aDec) * (10 ** pDec));
         } else if (tokenIn == cash && tokenOut == asset) {
@@ -53,18 +64,20 @@ contract SpotVaultTest is Test {
     SpotVault vault;
 
     address alice = makeAddr("alice");
-    uint256 constant PRICE_50K = 50_000 * 1e8;
-    uint256 constant PRICE_25K = 25_000 * 1e8;
+    int256 constant PRICE_50K = 50_000 * 1e8;
+    int256 constant PRICE_25K = 25_000 * 1e8;
     uint256 constant TEN_BTC = 10 * 1e8;
+    uint256 constant MAX_STALE = 1 hours;
 
     function setUp() public {
+        vm.warp(1_700_000_000); // a sane non-zero timestamp
         wbtc = new MockERC20("Wrapped BTC", "WBTC", 8);
         usdc = new MockERC20("USD Coin", "USDC", 6);
         oracle = new MockOracle(PRICE_50K);
         adapter = new MockSpotAdapter(address(wbtc), address(usdc), address(oracle));
 
         vault = new SpotVault(
-            address(wbtc), address(usdc), address(oracle),
+            address(wbtc), address(usdc), address(oracle), MAX_STALE,
             "Zentory BTC Vault", "zBTC",
             0,      // rebalanceThresholdBps (0 = always rebalance, for the test)
             100,    // maxSlippageBps (1%)
@@ -74,11 +87,8 @@ contract SpotVaultTest is Test {
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
 
-        // Fund the venue deeply so swaps always fill.
         wbtc.mint(address(adapter), 1_000 * 1e8);
         usdc.mint(address(adapter), 100_000_000 * 1e6);
-
-        // Alice's capital.
         wbtc.mint(alice, TEN_BTC);
     }
 
@@ -89,45 +99,63 @@ contract SpotVaultTest is Test {
         vm.stopPrank();
     }
 
-    /// The core proof: by sitting in cash through a 50% drawdown and rebuying
-    /// lower, the vault ends with ~2x the underlying per share — beating a
-    /// passive HOLDer who still has 10 BTC.
     function test_NavMovesWithPnL_andBeatsHoldInUnderlying() public {
         uint256 shares = _deposit();
         assertApproxEqRel(vault.convertToAssets(shares), TEN_BTC, 1e12, "start = 10 BTC");
 
-        // FLAT at $50k: sell all BTC -> USDC. NAV in BTC unchanged at same price.
         vault.rebalanceTo(0);
         assertApproxEqRel(vault.totalAssets(), TEN_BTC, 1e12, "flat: value preserved in BTC");
         assertEq(wbtc.balanceOf(address(vault)), 0, "no BTC while flat");
 
-        // Price halves to $25k while the vault sits in USDC.
-        oracle.setPrice(PRICE_25K);
-
-        // The cash now buys 2x BTC -> NAV in BTC ~doubles.
+        oracle.setPrice(PRICE_25K); // 50% drop while in cash
         assertApproxEqRel(vault.totalAssets(), 2 * TEN_BTC, 1e12, "flat through drop: 2x BTC value");
 
-        // LONG at $25k: rebuy BTC with the cash -> ~20 BTC held.
         vault.rebalanceTo(10000);
         assertApproxEqRel(wbtc.balanceOf(address(vault)), 2 * TEN_BTC, 1e12, "long: ~20 BTC");
 
-        // Alice redeems: receives ~20 BTC vs the 10 BTC a HOLDer would have.
         vm.prank(alice);
         uint256 received = vault.redeem(shares, alice, alice);
         assertApproxEqRel(received, 2 * TEN_BTC, 1e12, "depositor doubled their BTC");
         assertGt(received, TEN_BTC, "beats passive HOLD in underlying");
     }
 
-    /// Withdrawals are honoured even when the vault is flat (in cash): it swaps
-    /// USDC -> WBTC to pay out the underlying.
     function test_WithdrawWhileFlat() public {
         uint256 shares = _deposit();
-        vault.rebalanceTo(0); // go to cash
+        vault.rebalanceTo(0);
         assertEq(wbtc.balanceOf(address(vault)), 0, "flat");
-
         vm.prank(alice);
         uint256 received = vault.redeem(shares, alice, alice);
-        // Same price as deposit -> ~10 BTC back.
         assertApproxEqRel(received, TEN_BTC, 1e12, "withdraw while flat returns underlying");
+    }
+
+    // ─── Oracle safety (the #1 NAV risk) ─────────────────────────────────────
+
+    function test_StaleOracleReverts_whenHoldingCash() public {
+        _deposit();
+        vault.rebalanceTo(0);                 // now holds USDC -> NAV needs the oracle
+        vm.warp(block.timestamp + MAX_STALE + 1);   // feed goes stale
+        vm.expectRevert();                    // fail-closed: NAV reverts on stale feed
+        vault.totalAssets();
+    }
+
+    function test_FullyLongNeedsNoOracle_evenIfStale() public {
+        _deposit();                           // fully long (all WBTC), no cash leg
+        vm.warp(block.timestamp + MAX_STALE + 1);
+        // NAV is just the WBTC balance -> no oracle call -> does not revert.
+        assertApproxEqRel(vault.totalAssets(), TEN_BTC, 1e12, "long NAV oracle-independent");
+    }
+
+    function test_InvalidPriceReverts() public {
+        _deposit();
+        vault.rebalanceTo(0);                 // holds cash
+        oracle.setAnswer(0);                  // bad feed value (no time refresh)
+        vm.expectRevert();
+        vault.totalAssets();
+    }
+
+    function test_ConstructorRejectsZeroStaleness() public {
+        vm.expectRevert(bytes("zero staleness"));
+        new SpotVault(address(wbtc), address(usdc), address(oracle), 0,
+            "x", "x", 0, 100, 0, address(this), address(this));
     }
 }
