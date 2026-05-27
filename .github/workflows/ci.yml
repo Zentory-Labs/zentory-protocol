@@ -5,6 +5,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+# NOTE: This repo (zentory-protocol) is the public contracts repo. The engine
+# (Python) and dApp frontend (Next.js) live in separate repos
+# (zentory-engine, zentory-app) with their own CI. The old monorepo
+# `engine` and `frontend` jobs were removed after the repo split — they
+# referenced working directories that don't exist here and failed on every
+# push. The cross-language signer parity test in the Foundry job auto-skips
+# when the (gitignored / separate-repo) engine signer is absent.
+
 env:
   FOUNDRY_PROFILE: ci
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -25,17 +33,6 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Setup Python (for vm.ffi tests)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install engine signer deps (for vm.ffi)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install eth-account "eth-hash[pycryptodome]"
-          python -c "from eth_account import Account; import eth_hash.auto; print('python ffi deps ok')"
 
       - name: Forge build
         run: forge build --sizes
@@ -71,115 +68,19 @@ jobs:
       - name: Install Slither
         run: python -m pip install --upgrade pip slither-analyzer
 
+      # Slither is advisory — it never blocks CI. The analysis runs with
+      # continue-on-error and the report upload tolerates a missing file so a
+      # Slither crash or unsupported-feature error cannot turn the pipeline red.
       - name: Run Slither (JSON report)
         continue-on-error: true
         run: |
           mkdir -p ../docs/reports
-          slither . --exclude-dependencies --filter-paths "lib" --json ../docs/reports/slither-ci.json
+          slither . --exclude-dependencies --filter-paths "lib" --json ../docs/reports/slither-ci.json || true
 
       - name: Upload Slither report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: slither-report
           path: docs/reports/slither-ci.json
-
-  engine:
-    name: Engine (pytest)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: engine
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install engine
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
-
-      - name: Run pytest
-        run: python -m pytest -q
-
-  frontend:
-    name: Frontend (build + Playwright smoke)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    defaults:
-      run:
-        working-directory: frontend
-    env:
-      NEXT_PUBLIC_HYPEREVM_RPC: https://rpc.hyperliquid-testnet.xyz/evm
-      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: 8e44bbe4865b02bd238ca5d49e454c41
-      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Install Playwright (Chromium)
-        run: npx playwright install --with-deps chromium
-
-      - name: Start server
-        run: |
-          nohup npm run start -- -p 3000 > server.log 2>&1 &
-          for i in {1..60}; do
-            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then
-              echo "Server is up"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "Server did not start"
-          cat server.log || true
-          exit 1
-
-      - name: Playwright smoke
-        run: npm run test:e2e
-
-      - name: Deploy to Vercel (Preview)
-        if: github.event_name == 'pull_request'
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: frontend
-          scope: ${{ secrets.VERCEL_ORG_ID }}
-
-      - name: Comment PR with Preview URL
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const previewUrl = `https://${process.env.VERCEL_URL}`;
-            github.rest.issues.createComment({
-              issue_number: context.payload.pull_request.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## Preview Deployment\n\n:rocket: Preview URL: ${previewUrl}\n\n:Vercel: Deployed by \`${process.env.VERCEL_GITHUB_COMMIT_MESSAGE || 'GitHub Action'}\``
-            });
-
+          if-no-files-found: ignore

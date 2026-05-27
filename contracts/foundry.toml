@@ -9,15 +9,21 @@ via_ir = true
 ffi = true
 fuzz.runs = 256
 fuzz.max_test_rejects = 65536
+# Allow read access to the (gitignored / separate-repo) engine dir so the
+# cross-language ffi parity test can detect whether the Python signer is
+# present and vm.skip() when it isn't (e.g. in the public-repo CI checkout).
+fs_permissions = [{ access = "read", path = "../engine" }]
 # Increase gas limit for complex deployment transactions
 block_gas_limit = 30000000
 
 [profile.ci]
 fuzz.runs = 1000
-# Disable via_ir in CI to avoid stack-too-deep Yul errors from the IR pipeline.
-# Production deployments should use the default profile with via_ir = true for
-# better gas optimization, but CI needs faster, more reliable builds.
-via_ir = false
+# CI inherits via_ir = true from [profile.default]. We deliberately do NOT
+# override it to false here: production deploys use via_ir = true, so CI must
+# compile the same bytecode. The earlier via_ir = false workaround (for an old
+# EpochScoring IR stack-too-deep, since resolved) caused the OPPOSITE problem —
+# legacy codegen hit stack-too-deep in StrategyExecutor.executeSignal once the
+# leverage + low-s checks were added. Keep CI on the IR pipeline.
 
 # ─── Chain RPC URLs ─────────────────────────────────────────────────────────
 # HyperEVM Testnet (Hyperliquid Blaze Testnet)
