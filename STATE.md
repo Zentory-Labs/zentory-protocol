@@ -89,9 +89,9 @@ Source of truth: `zentory-protocol/DEPLOYMENTS.md`. Mirror in `zentory-app/lib/c
 | Governance | ZentGovernor | `0x21ba1F7C028B1ADc78e75Ac187B08b1BDd567118` |
 | Execution | HyperCoreAdapter | `0xdad9175f6d2da1709ba3f73711e69022538d21a7` |
 | Execution | StrategyExecutor | `0xacd862ef134d772b0ca53a97f53ccdd00abc05cf` |
-| Signals | SignalRegistry | `0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c` |
-| Signals | EpochScoring | `0xDcB2a366dCD5eE126793523b1BeFd78E32A1694d` *(redeployed 2026-05-25)* |
-| Signals | SubscriptionVault | `0xd7d346f6d1F2CEcc3E67d9749B5121549F3dd80d` |
+| Signals | SignalRegistry | `0xd743381782707d86C6d679779fD71b962ae10658` *(redeployed 2026-05-27)* |
+| Signals | EpochScoring | `0xbA31Cf18fA442f21F70EaB7452B67231fbf6ec2a` *(redeployed 2026-05-27 — unblocks keeper loop)* |
+| Signals | SubscriptionVault | `0x2D71aa478b9e267e41168f3f4f2AF79009924C54` *(redeployed 2026-05-27)* |
 
 ---
 
