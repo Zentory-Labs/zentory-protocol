@@ -461,7 +461,17 @@ contract StrategyExecutorTest is Test {
     ///      (DigestParity.t.sol::test_digestParity_soliditySignVerify) still runs
     ///      everywhere and proves the digest construction.
     function test_pythonSignerDigestParity() external {
-        if (!vm.exists("../engine/scripts/sign_trade_signal.py")) {
+        // Opt-in only. This test shells out (vm.ffi) to the EIP-712 signer that
+        // lives in the separate, gitignored `engine` repo, which is NOT present
+        // in the public-repo CI checkout. We gate on an env flag rather than
+        // vm.exists("../engine/...") because Foundry canonicalizes fs_permissions
+        // paths, and canonicalization THROWS (instead of returning false) when
+        // ../engine is absent — so the old vm.exists guard reverted in CI rather
+        // than skipping. Run locally with `RUN_PYTHON_PARITY=true forge test`
+        // once the engine repo is checked out alongside zentory-protocol.
+        // (Pure-Solidity digest/domain parity is already covered, unconditionally,
+        // by test/crosslanguage/DigestParity.t.sol.)
+        if (!vm.envOr("RUN_PYTHON_PARITY", false)) {
             vm.skip(true);
             return;
         }
