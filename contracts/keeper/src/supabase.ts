@@ -17,12 +17,21 @@ export async function getActiveSignalsForEpoch(
   startTime: number,
   endTime: number
 ): Promise<Signal[]> {
+  // The signals table has no `submitted_at` column — the submission time is
+  // `created_at` (timestamptz). The previous query referenced a non-existent
+  // column AND compared a timestamptz against raw unix-second strings, so the
+  // keeper crashed on every run ("column signals.submitted_at does not exist")
+  // and never reached settleEpoch — leaving the epoch loop stalled. Convert
+  // the unix-second epoch bounds to ISO timestamps for the timestamptz column.
+  const startIso = new Date(startTime * 1000).toISOString();
+  const endIso = new Date(endTime * 1000).toISOString();
+
   const { data, error } = await supabase
     .from('signals')
     .select('*')
     .eq('status', 'Active')
-    .gte('submitted_at', startTime.toString())
-    .lt('submitted_at', endTime.toString());
+    .gte('created_at', startIso)
+    .lt('created_at', endIso);
 
   if (error) {
     throw new Error(`Failed to fetch signals: ${error.message}`);
@@ -126,7 +135,7 @@ export async function getUnsettledSignals(limit = 100): Promise<Signal[]> {
     .from('signals')
     .select('*')
     .eq('status', 'Active')
-    .order('submitted_at', { ascending: true })
+    .order('created_at', { ascending: true }) // no submitted_at column — see getActiveSignalsForEpoch
     .limit(limit);
 
   if (error) {
