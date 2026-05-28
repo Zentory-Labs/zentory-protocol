@@ -503,9 +503,15 @@ contract EpochScoring is AccessControl {
         uint256 epochId,
         uint256[] memory epochsActive
     ) internal pure returns (uint256) {
+        // Look back AT MOST 3 epochs. Clamp the window start at 0 to avoid the
+        // `epochId - 3` underflow panic (Solidity 0.8 checked math) that would
+        // brick recency-bonus scoring for the protocol's first three epochs
+        // (epochId = 0, 1, 2). Found in pre-mainnet code review; regression test
+        // in contracts/test/EpochScoring.recencyEarlyEpochs.t.sol.
+        uint256 windowStart = epochId > 3 ? epochId - 3 : 0;
         uint256 recentCount = 0;
         for (uint256 i = 0; i < epochsActive.length; i++) {
-            if (epochsActive[i] >= epochId - 3 && epochsActive[i] <= epochId) {
+            if (epochsActive[i] >= windowStart && epochsActive[i] <= epochId) {
                 recentCount++;
             }
         }
