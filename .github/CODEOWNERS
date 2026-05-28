@@ -1,0 +1,24 @@
+# Code owners — every PR auto-requests review from these handles, and (when
+# branch protection's "Require review from Code Owners" is enabled) cannot
+# merge without their approval. THIS IS LOAD-BEARING SECURITY: it is the
+# difference between an attacker's drive-by PR being a curiosity and being
+# an unreviewed merge.
+#
+# Replace @edgeza with the maintainer's real GitHub handle(s). Add co-founders
+# as additional owners over time so a single compromised account cannot merge.
+
+# Everything in this repo
+*                                                           @edgeza
+
+# Especially load-bearing paths — duplicate so the owner is asked twice if
+# something here changes. Branch protection's "require codeowner review" rule
+# will enforce that ANY change here needs the listed owner to sign off.
+/.github/                                                   @edgeza
+/.github/workflows/                                         @edgeza
+/contracts/foundry.toml                                     @edgeza
+/contracts/remappings.txt                                   @edgeza
+/contracts/script/                                          @edgeza
+/contracts/src/                                             @edgeza
+/contracts/keeper/                                          @edgeza
+/SECURITY.md                                                @edgeza
+/SECURITY_HARDENING.md                                      @edgeza
