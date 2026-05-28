@@ -44,9 +44,13 @@ layers:
    strategies + audited mandates. Once a vault has $X in deposits and a
    12-month track record, switching to a fresh competitor protocol means
    restarting the entire trust loop.
-3. **Distribution moat.** Subscription revenue from signal feeds funds
-   buyback-burn of ZENT, which compounds for early holders. The flywheel
-   is structural, not promotional.
+3. **Supply-discipline moat.** A portion of protocol fees is automatically
+   used to repurchase and permanently burn ZENT, scaled by real protocol
+   usage (see `BUYBACK_DESIGN.md`). This is a **supply-management policy
+   of the utility-token economy, not a distribution to holders**: ZENT
+   holders have no claim on, and no enforceable right to, protocol revenue
+   or any asset. The defensibility comes from the protocol's adoption and
+   signal volume, not from any promise about ZENT's price.
 
 ## How does the protocol make money?
 
