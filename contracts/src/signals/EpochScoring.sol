@@ -505,7 +505,7 @@ contract EpochScoring is AccessControl {
     ) internal pure returns (uint256) {
         uint256 recentCount = 0;
         for (uint256 i = 0; i < epochsActive.length; i++) {
-            if (epochsActive[i] >= epochId - 3 && epochsActive[i] <= epochId) {
+            if (epochsActive[i] <= epochId && epochsActive[i] >= (epochId > 3 ? epochId - 3 : 0)) {
                 recentCount++;
             }
         }
