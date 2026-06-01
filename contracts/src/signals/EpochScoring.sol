@@ -397,9 +397,16 @@ contract EpochScoring is AccessControl {
         SignalTypes.Signal memory sig = signalRegistry.getSignal(signalId);
         uint256 accuracyBps = accuracyCache[signalId];
 
-        // Numerai-style payout clip:
+        // Numerai-style payout clip (whitepaper §6.4 / §7.2):
         // payout_factor = (accuracyBps / 10000) × 2 − 1  → ranges [−1, +1]
-        // raw_payout    = payout_factor × 0.3            → scaled by 3/1000
+        // raw_payout    = payout_factor × 0.3            → clipped to [−1.7%, +5.0%]
+        //
+        // `payoutFactor` here is the linear term scaled ×10000 (so 10000 == 1.0),
+        // and the final payout consumes rawPayout as bps-of-stake (line below:
+        // stake × rawPayout / 10000). The documented ×0.3 therefore maps to
+        // `payoutFactor × 3 / 10`, giving an unclipped range of [−3000, +3000]
+        // bps so the MAX_PENALTY_BPS (170 = 1.7%) / MAX_REWARD_BPS (500 = 5.0%)
+        // clips actually bind, exactly as the whitepaper promises.
         //
         // SECURITY FIX (disclosure 2026-05-31, A. Deev): rawPayout previously
         // multiplied by `accuracyBps` a SECOND time, making the curve quadratic
@@ -407,12 +414,16 @@ contract EpochScoring is AccessControl {
         // Effect: the worst possible signal (accuracy=0) was slashed LESS than
         // a merely-bad one (payout(0)=0 > payout(2500)<0), so noise/garbage
         // providers paid no penalty — defeating the slashing half of the
-        // incentive design and contradicting whitepaper §6.4. The fix removes
-        // the duplicated `accuracyBps` so payout is linear in payoutFactor,
-        // exactly as the comment above and the whitepaper specify. Monotonicity
-        // is now pinned by test/signals/PayoutCurve.t.sol.
+        // incentive design and contradicting whitepaper §6.4.
+        //
+        // SCALE FIX (spec-conformance audit, finding #2): the earlier scale was
+        // `× 3 / 1000` (= ×0.003), ~100× below the documented ×0.3, which made
+        // the [−1.7%, +5.0%] clips unreachable dead code (realized payouts only
+        // spanned ±0.3%). Corrected to `× 3 / 10` so the documented clips bind.
+        // Monotonicity AND the clip endpoints are pinned by
+        // test/signals/PayoutCurve.t.sol.
         int256 payoutFactor = (int256(accuracyBps) * 20000 / 10000) - 10000;
-        int256 rawPayout    = payoutFactor * 3 / 1000;
+        int256 rawPayout    = payoutFactor * 3 / 10;
 
         // Clip to configured max/min
         int256 maxPenalty = -int256(MAX_PENALTY_BPS);
