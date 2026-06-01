@@ -130,6 +130,25 @@ contract PayoutCurveTest is Test {
         assertLt(worst, best, "perfect accuracy must out-earn worst accuracy");
     }
 
+    // ─── Clip endpoints bind at the documented bounds (finding #2) ──────
+
+    /// @notice With the corrected ×3/10 scale, the documented MAX_REWARD_BPS
+    ///         (+5.0%) and MAX_PENALTY_BPS (−1.7%) clips must actually bind at
+    ///         the accuracy extremes, matching the whitepaper. Under the
+    ///         pre-fix ×3/1000 scale, realized payouts only spanned ±0.3% and
+    ///         these clips were unreachable dead code.
+    function test_clipsBind_atDocumentedBounds() external {
+        // accuracy=0 -> payoutFactor=-10000 -> rawPayout=-3000 -> clipped to
+        // -170 bps -> -1.7% of stake.
+        int256 worst = _payoutAt(bytes32(uint256(20)), 0);
+        assertEq(worst, -int256(STAKE * 170 / 10000), "worst signal slashes exactly -1.7% of stake");
+
+        // accuracy=10000 -> payoutFactor=+10000 -> rawPayout=+3000 -> clipped to
+        // +500 bps -> +5.0% of stake.
+        int256 best = _payoutAt(bytes32(uint256(21)), 10000);
+        assertEq(best, int256(STAKE * 500 / 10000), "perfect signal rewards exactly +5.0% of stake");
+    }
+
     // ─── Monotonicity across a swept ladder ─────────────────────────────
 
     /// @notice Walk accuracy 0..10000 in steps of 250 and assert the payout
