@@ -148,11 +148,23 @@ contract ZENTVesting {
 
     function _vestedTotal(VestingSchedule memory s, uint256 timestamp) internal pure returns (uint256) {
         uint256 cliffEnd = uint256(s.startTime) + s.cliffDuration;
+        // Nothing is claimable until the cliff is reached.
         if (timestamp < cliffEnd) return 0;
 
-        uint256 elapsed = timestamp - cliffEnd;
-        if (elapsed >= s.vestDuration) return s.totalAmount;
+        // SPEC-CONFORMANCE FIX (audit finding #5): vest LINEARLY FROM startTime
+        // over the full period (cliffDuration + vestDuration), gated until the
+        // cliff. At the cliff, the portion accrued during the cliff
+        // (cliffDuration / total) unlocks at once as a lump, then vesting
+        // continues linearly to 100% at the SAME end date as before
+        // (startTime + cliffDuration + vestDuration). Previously the curve was
+        // re-anchored at cliffEnd (linear from zero with no lump), so a
+        // documented "25% release at the 12-month cliff" actually vested 0 —
+        // contradicting the TGE schedule. End date is unchanged; only the shape
+        // between the cliff and the end (and the cliff lump) changes.
+        uint256 totalPeriod = uint256(s.cliffDuration) + s.vestDuration;
+        uint256 elapsedFromStart = timestamp - s.startTime;
+        if (elapsedFromStart >= totalPeriod) return s.totalAmount;
 
-        return (uint256(s.totalAmount) * elapsed) / s.vestDuration;
+        return (uint256(s.totalAmount) * elapsedFromStart) / totalPeriod;
     }
 }

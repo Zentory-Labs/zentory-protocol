@@ -126,9 +126,10 @@ contract FeeDistributorTest is Test {
 
         // 50% buyback: 5_000_000 sats
         assertEq(wbtc.balanceOf(address(distributor)), fee - fee / 2);
-        assertEq(wbtc.balanceOf(gpEngine), fee * 25 / 100); // 25% → 2_500_000
+        // Finding #9: treasury now gets 25%, gp/ops engine gets 10% (swapped).
+        assertEq(wbtc.balanceOf(protocolTreasury), fee * 25 / 100); // 25% → 2_500_000
         assertEq(wbtc.balanceOf(insurance), fee * 15 / 100); // 15% → 1_500_000
-        assertEq(wbtc.balanceOf(protocolTreasury), fee * 10 / 100); // 10% → 1_000_000
+        assertEq(wbtc.balanceOf(gpEngine), fee * 10 / 100); // 10% → 1_000_000
 
         assertEq(distributor.pendingFees(vault), 0);
     }
@@ -144,9 +145,9 @@ contract FeeDistributorTest is Test {
         vm.expectEmit();
         emit IFeeDistributor.FeesDistributed(
             fee * 50 / 100, // buyback stays in distributor
-            fee * 25 / 100, // gpEngine
+            fee * 10 / 100, // gpEngineAmount (ops/research engine) — finding #9
             fee * 15 / 100, // insurance
-            fee * 10 / 100 // protocolTreasury
+            fee * 25 / 100 // treasuryAmount → Protocol Treasury — finding #9
         );
         distributor.distribute(vault);
     }
@@ -226,8 +227,9 @@ contract FeeDistributorTest is Test {
         assertEq(wbtc.balanceOf(gpEngine), gpBalanceBefore + 500_000);
     }
 
-    // Treasury (10%) is sent directly to ProtocolTreasury during distribute()
-    // and is no longer withdrawable via withdrawTo() — it is swept by ProtocolTreasury.sweep()
+    // Treasury (25%, finding #9) is sent directly to ProtocolTreasury during
+    // distribute() and is not withdrawable via withdrawTo() — it is swept by
+    // ProtocolTreasury.sweep().
     function test_distributeSendsTreasuryToProtocolTreasury() external {
         uint256 fee = 10_000_000;
         vm.startPrank(vault);
@@ -240,7 +242,7 @@ contract FeeDistributorTest is Test {
         vm.prank(stranger);
         distributor.distribute(vault);
 
-        assertEq(wbtc.balanceOf(protocolTreasury), protocolTreasuryBalanceBefore + fee * 10 / 100);
+        assertEq(wbtc.balanceOf(protocolTreasury), protocolTreasuryBalanceBefore + fee * 25 / 100);
     }
 
     function test_withdrawToRejectsFromBuybackPool() external {
