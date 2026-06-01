@@ -286,7 +286,7 @@ This is supply management, not a yield distribution. Here's the difference and w
 
 **Content beats:**
 
-1. The flow: vault yield → 15% performance fee → `FeeDistributor` → 50% buyback.
+1. The flow: vault yield → 20% performance fee → `FeeDistributor` → 50% buyback.
 2. Why "buyback" ≠ "share buyback" in the equity sense (no claim on revenue per token).
 3. Why this avoids the Howey test on the utility design.
 4. CTA: link to `docs/BUYBACK_DESIGN.md`.

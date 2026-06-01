@@ -46,7 +46,7 @@ A social exchange for quant research. Quants stake ZENT on their own signals (Co
 ## The Products
 
 ### Alpha Vaults
-Non-custodial, ERC-4626 vaults (zBTC, zETH, zSOL, zXRP) on HyperEVM. Depositors earn yield from the trading system's execution. **Revenue:** 15% performance fee on vault yield.
+Non-custodial, ERC-4626 vaults (zBTC, zETH, zSOL, zXRP) on HyperEVM. Depositors earn yield from the trading system's execution. **Revenue:** 20% performance fee on vault yield.
 
 ### Ghost Portfolio *(unique to ZENTORY)*
 The only on-chain verifiable proof of what following signals would have returned. Three lines: HOLD the asset, FOLLOW quant signals (ghost), ACTUAL vault performance. This is the product demo that drives organic shares.
@@ -69,7 +69,7 @@ Non-custodial copy trading. Follow a quant → your vault balance mirrors their 
 
 | Revenue Stream | Rate | Description |
 |---|---|---|
-| Vault performance fee | 15% | Charged on vault yield; auto-collected by protocol |
+| Vault performance fee | 20% | Charged on vault yield; auto-collected by protocol |
 | ZENT buyback & burn | 50% of fees | Deflationary pressure on ZENT supply |
 | Protocol treasury | 50% of fees | Funds quant competitions, grants, operations |
 | Signal subscriptions | TBD | Tiered access to premium quant research |
