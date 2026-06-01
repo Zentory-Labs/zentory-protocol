@@ -8,9 +8,10 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IFeeDistributor} from "../interfaces/IFeeDistributor.sol";
 
 /// @title FeeDistributor
-/// @notice Routes performance fees from vaults into four pools:
-///         buyback (50%), GP engine (25%), insurance (15%), treasury (10%).
-///         Permissionless accumulate + distribute; buyback trigger restricted to governor.
+/// @notice Routes performance fees from vaults into four destinations:
+///         buyback (50%), Protocol Treasury (25%), insurance (15%),
+///         GP/ops engine (10%). Permissionless accumulate + distribute;
+///         buyback trigger restricted to governor.
 contract FeeDistributor is AccessControl, IFeeDistributor {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -96,10 +97,15 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
 
         delete pendingFees[vault];
 
+        // SPEC-CONFORMANCE FIX (audit finding #9): the whitepaper routes the
+        // 25% slice to the Protocol Treasury and 10% to the ops/research-engine
+        // bucket. The code had these swapped (25% → gpEngine, 10% → treasury).
+        // Corrected per founder decision: treasury gets 25%, gpEngine (the
+        // ops/research-engine destination) gets 10%. Split stays 50/25/15/10.
         uint256 buyback = accumulated * 50 / 100;
-        uint256 gpAmount = accumulated * 25 / 100;
+        uint256 treasuryAmount = accumulated * 25 / 100;
         uint256 insuranceAmount = accumulated * 15 / 100;
-        uint256 treasuryAmount = accumulated * 10 / 100;
+        uint256 gpAmount = accumulated * 10 / 100;
 
         pools[POOL_BUYBACK] += buyback;
         pools[POOL_GP_ENGINE] += gpAmount;
@@ -110,7 +116,7 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
 
         if (gpAmount > 0) asset.safeTransfer(gpEngine, gpAmount);
         if (insuranceAmount > 0) asset.safeTransfer(insurance, insuranceAmount);
-        // Treasury (10%) flows to ProtocolTreasury which splits 50/50 to ZENTBuyback + operations
+        // Treasury (25%) flows to ProtocolTreasury (quant grants, competitions, ops).
         if (treasuryAmount > 0) asset.safeTransfer(protocolTreasury, treasuryAmount);
     }
 

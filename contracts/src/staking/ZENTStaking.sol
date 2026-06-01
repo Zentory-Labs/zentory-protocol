@@ -136,7 +136,18 @@ contract ZENTStaking is AccessControl, IZENTStaking {
         uint64 oldLockEnd = pos.lockEnd;
         require(newLockEnd > oldLockEnd, "ZENTStaking: not extending");
 
+        // SECURITY FIX (spec-conformance audit, finding #4): maintain the
+        // documented invariant `totalVeSupply == sum of veBalance across all
+        // positions`. extendLock raises a position's veBalance (longer
+        // remaining lock) but previously left totalVeSupply stale, understating
+        // it — which understates ZentGovernor.quorum (= totalVeSupply *
+        // quorumBps / 10000) and can make an individual's veBalance exceed
+        // totalVeSupply. Mirror the oldVe/newVe recompute that stake(),
+        // increaseAmount(), withdraw(), slash(), and reward() already perform.
+        uint256 oldVe = _veAt(pos.amount, oldLockEnd, uint64(block.timestamp));
         pos.lockEnd = newLockEnd;
+        uint256 newVe = _veAt(pos.amount, newLockEnd, uint64(block.timestamp));
+        totalVeSupply = totalVeSupply - oldVe + newVe;
         emit Extended(msg.sender, oldLockEnd, newLockEnd);
     }
 

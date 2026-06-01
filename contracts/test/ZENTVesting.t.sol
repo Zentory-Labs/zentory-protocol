@@ -70,22 +70,52 @@ contract ZENTVestingTest is Test {
 
     function test_revokePreservesVestedButUnclaimedTokens() external {
         uint64 start = uint64(block.timestamp);
-        _fundSingle(beneficiary, 100e18, 10 days, 100 days, true);
+        // cliff 10d + vest 90d = 100d total. Linear-from-start (finding #5):
+        // at start+60d, vested = 100e18 * 60/100 = 60e18.
+        _fundSingle(beneficiary, 100e18, 10 days, 90 days, true);
 
         vm.warp(start + 60 days);
-        assertEq(vesting.vestedAmount(beneficiary), 50e18);
+        assertEq(vesting.vestedAmount(beneficiary), 60e18);
 
         uint256 deployerBalanceBefore = zent.balanceOf(address(this));
         vesting.revoke(beneficiary);
 
-        assertEq(zent.balanceOf(address(this)), deployerBalanceBefore + 50e18);
-        assertEq(vesting.vestedAmount(beneficiary), 50e18);
+        // Unvested (40e18) returns to the deployer; vested (60e18) is preserved.
+        assertEq(zent.balanceOf(address(this)), deployerBalanceBefore + 40e18);
+        assertEq(vesting.vestedAmount(beneficiary), 60e18);
 
         vm.prank(beneficiary);
         vesting.claim();
 
-        assertEq(zent.balanceOf(beneficiary), 50e18);
+        assertEq(zent.balanceOf(beneficiary), 60e18);
         assertEq(vesting.vestedAmount(beneficiary), 0);
+    }
+
+    /// @notice Spec-conformance audit finding #5: a cliff must produce a lump
+    ///         unlock. Linear-from-start over (cliff + vest) means at the cliff
+    ///         the accrued portion (cliff / total) unlocks at once. Pre-fix the
+    ///         curve re-anchored at the cliff end, so the documented cliff
+    ///         release vested 0.
+    function test_lumpUnlocksAtCliff() external {
+        uint64 start = uint64(block.timestamp);
+        // cliff 25d + vest 75d = 100d total -> 25% unlocks at the cliff.
+        _fundSingle(beneficiary, 100e18, 25 days, 75 days, false);
+
+        // Just before the cliff: nothing is claimable.
+        vm.warp(start + 25 days - 1);
+        assertEq(vesting.vestedAmount(beneficiary), 0, "nothing vests before the cliff");
+
+        // At the cliff: the 25% lump unlocks at once (pre-fix this was 0).
+        vm.warp(start + 25 days);
+        assertEq(vesting.vestedAmount(beneficiary), 25e18, "25% lump unlocks at the cliff");
+
+        // Partway through: linear from start (75/100 at 75 days).
+        vm.warp(start + 75 days);
+        assertEq(vesting.vestedAmount(beneficiary), 75e18, "linear from start after the cliff");
+
+        // At the end: fully vested.
+        vm.warp(start + 100 days);
+        assertEq(vesting.vestedAmount(beneficiary), 100e18, "fully vested at the end");
     }
 
     function test_fundRejectsZeroDuration() external {

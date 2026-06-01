@@ -93,6 +93,12 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     error ArraysLengthMismatch();
     error BatchSizeExceeded(uint256 size, uint256 max);
     error ExpiryTooFar(uint256 expiresAt, uint256 maxExpiry);
+    // Spec-conformance audit, finding #17: the documented ranges
+    // (direction ∈ [-10000, +10000], confidence ∈ [0, 10000]) were never
+    // enforced on submission — out-of-range values were accepted, signed into
+    // the EIP-712 digest, and scored as-is.
+    error InvalidDirection(int256 direction);
+    error ConfidenceTooHigh(uint256 confidence);
 
     // ─── Constructor ─────────────────────────────────────────
     constructor(address _stakingContract, address _scoringOracle) EIP712("ZentorySignalRegistry", VERSION) {
@@ -177,6 +183,10 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
         returns (bytes32 signalId)
     {
         if (confidence == 0) revert ZeroConfidence();
+        // Finding #17: enforce the documented bounds before the value is signed
+        // into the digest and stored.
+        if (confidence > 10000) revert ConfidenceTooHigh(confidence);
+        if (direction < -10000 || direction > 10000) revert InvalidDirection(direction);
         if (block.timestamp > expiresAt) revert SignatureExpired(expiresAt, block.timestamp);
         if (expiresAt > block.timestamp + MAX_EXPIRY) revert ExpiryTooFar(expiresAt, block.timestamp + MAX_EXPIRY);
 
@@ -218,6 +228,9 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
             SignalTypes.Signal calldata s = batch[i];
             // Re-validate each signal before internal submission
             if (s.confidence == 0) revert ZeroConfidence();
+            // Finding #17: same documented-bound enforcement as submitSignal.
+            if (s.confidence > 10000) revert ConfidenceTooHigh(s.confidence);
+            if (s.direction < -10000 || s.direction > 10000) revert InvalidDirection(s.direction);
             if (block.timestamp > s.expiresAt) revert SignatureExpired(s.expiresAt, block.timestamp);
             if (s.expiresAt > block.timestamp + MAX_EXPIRY) revert ExpiryTooFar(s.expiresAt, block.timestamp + MAX_EXPIRY);
 

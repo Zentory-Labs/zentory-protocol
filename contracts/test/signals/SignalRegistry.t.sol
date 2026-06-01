@@ -117,4 +117,51 @@ contract SignalRegistryTest is Test {
         vm.expectRevert();
         registry.advanceEpoch();
     }
+
+    // ─── Spec-conformance audit, finding #17: documented bound enforcement ───
+    // direction ∈ [-10000, +10000], confidence ∈ [1, 10000]. Bound checks fire
+    // before signature recovery, so a signed-but-out-of-range submission reverts
+    // at the bound check.
+
+    // The bound checks run BEFORE signature recovery, so these call
+    // submitSignal directly with a dummy signature and place expectRevert
+    // immediately before it (the _submit helper makes a providerNonce view call
+    // first, which would otherwise consume the expectRevert).
+
+    function test_submitSignal_rejectsDirectionAboveMax() external {
+        bytes32 btc = SignalTypes.cryptoId("BTC");
+        uint256 exp = block.timestamp + 1 hours;
+        vm.expectRevert(abi.encodeWithSelector(SignalRegistry.InvalidDirection.selector, int256(10001)));
+        registry.submitSignal(alice, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(10001), 8000, exp, "");
+    }
+
+    function test_submitSignal_rejectsDirectionBelowMin() external {
+        bytes32 btc = SignalTypes.cryptoId("BTC");
+        uint256 exp = block.timestamp + 1 hours;
+        vm.expectRevert(abi.encodeWithSelector(SignalRegistry.InvalidDirection.selector, int256(-10001)));
+        registry.submitSignal(alice, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(-10001), 8000, exp, "");
+    }
+
+    function test_submitSignal_acceptsDirectionAtBounds() external {
+        bytes32 btc = SignalTypes.cryptoId("BTC");
+        uint256 exp = block.timestamp + 1 hours;
+        // The documented endpoints ±10000 must be accepted (inclusive bounds).
+        _submit(ALICE_KEY, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(10000), 8000, exp);
+        _submit(BOB_KEY,   SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(-10000), 8000, exp);
+        assertEq(registry.getEpochSignalCount(0), 2, "both boundary signals accepted");
+    }
+
+    function test_submitSignal_rejectsConfidenceAboveMax() external {
+        bytes32 btc = SignalTypes.cryptoId("BTC");
+        uint256 exp = block.timestamp + 1 hours;
+        vm.expectRevert(abi.encodeWithSelector(SignalRegistry.ConfidenceTooHigh.selector, uint256(10001)));
+        registry.submitSignal(alice, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(5000), 10001, exp, "");
+    }
+
+    function test_submitSignal_acceptsMaxConfidence() external {
+        bytes32 btc = SignalTypes.cryptoId("BTC");
+        uint256 exp = block.timestamp + 1 hours;
+        _submit(ALICE_KEY, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(5000), 10000, exp);
+        assertEq(registry.getEpochSignalCount(0), 1, "confidence=10000 accepted");
+    }
 }
