@@ -416,12 +416,14 @@ The ZENTORY Protocol consists of three layers:
 
 ### 6.2 Deflation Mechanism
 
-50% of all vault performance fees are used to buy back ZENT from the market and burn it (send to 0xdead). This creates deflationary pressure proportional to protocol usage. The other 50% flows to the protocol treasury.
+50% of all vault performance fees are used to buy back ZENT from the market and burn it (send to 0xdead). This creates deflationary pressure proportional to protocol usage. The remaining 50% is split between the Protocol Treasury (25%), the Insurance Fund (15%), and Operations (10%) — see §6.4 for the full routing.
 
 ```
 Vault generates $100 in performance fees:
   → $50 → ZENT buyback → burn (0xdead)
-  → $50 → Protocol treasury → quant grants, operations, treasury
+  → $25 → Protocol Treasury → quant grants, competitions
+  → $15 → Insurance Fund
+  → $10 → Operations
 ```
 
 ### 6.3 Supply Allocation (TBD — pre-mainnet disclosure)
