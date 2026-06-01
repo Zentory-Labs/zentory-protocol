@@ -59,20 +59,41 @@ contract EpochScoringRecencyEarlyEpochsTest is Test {
         assertEq(harness.exposed_calculateRecencyBonus(PROVIDER, 1, active), 33);
     }
 
-    /// Epoch 5 with the same window math (epochId > 3 branch) -- regression
-    /// guard for the non-edge case so the underflow fix didn't break it.
+    /// Epoch 5, active in all three epochs of the documented "last 3 epochs"
+    /// window [epochId-2, epochId] = [3,5] -> max bonus 100.
+    /// Spec-conformance audit finding #20: the window is now 3 epochs wide
+    /// (was [epochId-3, epochId] = 4 epochs, which let the bonus reach 133).
     function test_epochFive_normalWindow() public view {
         uint256[] memory active = new uint256[](3);
-        active[0] = 2; active[1] = 3; active[2] = 4;
-        // windowStart = 2; all three active in [2,5] -> recentCount = 3 -> bonus = 100.
+        active[0] = 3; active[1] = 4; active[2] = 5;
+        // windowStart = 3; all three active in [3,5] -> recentCount = 3 -> bonus = 100.
         assertEq(harness.exposed_calculateRecencyBonus(PROVIDER, 5, active), 100);
+    }
+
+    /// Finding #20 regression: epoch 2 is now correctly OUTSIDE the 3-epoch
+    /// window at epochId=5, so [2,3,4] yields recentCount=2 -> bonus=66, not the
+    /// pre-fix 100 from the over-wide 4-epoch window.
+    function test_epochFive_excludesEpochTwo_postFix() public view {
+        uint256[] memory active = new uint256[](3);
+        active[0] = 2; active[1] = 3; active[2] = 4;
+        // windowStart = 3; epoch 2 excluded; 3,4 count -> recentCount = 2 -> 66.
+        assertEq(harness.exposed_calculateRecencyBonus(PROVIDER, 5, active), 66);
+    }
+
+    /// Bonus can never exceed the documented max of 100, even if the provider
+    /// is "active" in more epochs than the window (extra entries are ignored).
+    function test_recencyBonus_neverExceeds100() public view {
+        uint256[] memory active = new uint256[](5);
+        active[0] = 1; active[1] = 2; active[2] = 3; active[3] = 4; active[4] = 5;
+        // window [3,5]: 3,4,5 count -> recentCount = 3 -> bonus = 100 (capped).
+        assertLe(harness.exposed_calculateRecencyBonus(PROVIDER, 5, active), 100);
     }
 
     /// Out-of-window epochs are excluded (epoch 1 too old when epochId = 5).
     function test_epochFive_excludesOutOfWindow() public view {
         uint256[] memory active = new uint256[](2);
         active[0] = 1; active[1] = 4;
-        // windowStart = 2; only epoch 4 counts -> recentCount = 1 -> bonus = 33.
+        // windowStart = 3; only epoch 4 counts -> recentCount = 1 -> bonus = 33.
         assertEq(harness.exposed_calculateRecencyBonus(PROVIDER, 5, active), 33);
     }
 }

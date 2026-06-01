@@ -271,6 +271,19 @@ contract EpochScoring is AccessControl {
             );
         }
 
+        // SECURITY FIX (spec-conformance audit, finding #3): snapshot the
+        // reference close price BEFORE scoring reads it. _scoreProvider ->
+        // _getEpochPriceMovement(epochId) reads epochClosePrice[epochId];
+        // previously the snapshot ran AFTER this loop (further down), so the
+        // read saw 0 and _calculateAccuracy returned 0 for every provider every
+        // epoch — silently re-introducing the H-2 "accuracy is identically
+        // zero" no-op the surrounding comments claim was fixed. The Chainlink
+        // feed returns the same end-of-epoch price regardless of where in
+        // settleEpoch it is read, so moving the snapshot earlier only corrects
+        // the read-before-write ordering; it does not change which price is
+        // stored.
+        _snapshotReferenceClose(epochId);
+
         // Score each provider into results[]. Loop body extracted into
         // _scoreProvider() to keep settleEpoch under Yul's stack-depth limit.
         ScoreResult[] memory results = new ScoreResult[](signalCount);
@@ -290,10 +303,9 @@ contract EpochScoring is AccessControl {
         EpochState storage state = epochStates[epochId];
         state.settled = true;
         state.settledSignals = signalCount;
-        // Snapshot the reference asset's close price for this epoch BEFORE
-        // we advance the counters, so the next epoch can read prevClose from
-        // epochClosePrice[epochId]. Audit-finding H-2 enablement.
-        _snapshotReferenceClose(epochId);
+        // Reference close was already snapshotted above (before the scoring
+        // loop) so _getEpochPriceMovement could read it this epoch — see the
+        // finding #3 fix. Do NOT snapshot again here.
         lastEpochStart = block.timestamp;
         currentEpochId = epochId + 1;
         // C-2 fix: advance the registry counter so subsequent submissions
@@ -519,7 +531,13 @@ contract EpochScoring is AccessControl {
         // brick recency-bonus scoring for the protocol's first three epochs
         // (epochId = 0, 1, 2). Found in pre-mainnet code review; regression test
         // in contracts/test/EpochScoring.recencyEarlyEpochs.t.sol.
-        uint256 windowStart = epochId > 3 ? epochId - 3 : 0;
+        // SECURITY FIX (spec-conformance audit, finding #20): a [epochId-3,
+        // epochId] window spans FOUR epochs, so recentCount could reach 4 and
+        // the bonus (recentCount*100/3) reach 133 — exceeding the documented
+        // max of 100. The NatSpec specifies the "last 3 epochs"; use a 3-wide
+        // inclusive window [epochId-2, epochId] so recentCount maxes at 3 and
+        // the bonus maxes at exactly 100.
+        uint256 windowStart = epochId > 2 ? epochId - 2 : 0;
         uint256 recentCount = 0;
         for (uint256 i = 0; i < epochsActive.length; i++) {
             if (epochsActive[i] >= windowStart && epochsActive[i] <= epochId) {

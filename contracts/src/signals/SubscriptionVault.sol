@@ -170,7 +170,13 @@ contract SubscriptionVault is ReentrancyGuard {
         if (sub.subscriber != msg.sender) revert NotOwnerOfToken(tokenId);
         if (sub.expiration == 0) revert SubscriptionExpired(tokenId);
 
-        Tier memory tier = _getTierForBitmap(sub.assetClassBitmap);
+        // SECURITY FIX (spec-conformance audit, finding #1): price the renewal
+        // from the subscription's STORED tier, not a bitmap reverse-lookup.
+        // _getTierForBitmap tested bitwise OVERLAP, and ELITE's bitmap (0x1F)
+        // overlaps every tier's bitmap, so it always returned ELITE — BASIC/PRO
+        // renewals were billed at 2000 ZENT/mo (20x / 4x overcharge) and DoS'd
+        // subscribers who had only approved their real tier price.
+        Tier memory tier = tiers[sub.tierId];
         uint256 cost = tier.monthlyPriceZENT * months;
 
         // Extend from current expiry (or now if already expired) for continuity
@@ -346,16 +352,10 @@ contract SubscriptionVault is ReentrancyGuard {
         return (bitmap & uint8(bit)) != 0;
     }
 
-    /// @notice Return the highest tier that matches the given asset class bitmap.
-    /// @dev    Iterates ELITE → PRO → BASIC. Explicit unroll instead of a
-    ///         `for (uint256 i = 2; i >= 0; i--)` loop which would underflow on
-    ///         the i==0 decrement and trigger panic 0x11 — bricking renewals.
-    function _getTierForBitmap(uint8 bitmap) internal view returns (Tier memory tier) {
-        if (uint8(uint256(tiers[2].assetClassBitmap) & bitmap) != 0) return tiers[2];
-        if (uint8(uint256(tiers[1].assetClassBitmap) & bitmap) != 0) return tiers[1];
-        if (uint8(uint256(tiers[0].assetClassBitmap) & bitmap) != 0) return tiers[0];
-        return tiers[0];
-    }
+    // _getTierForBitmap removed (spec-conformance audit, finding #1): its
+    // bitwise-overlap reverse-lookup always resolved to ELITE and was the
+    // source of the all-tiers-charged-at-ELITE bug. Renewals now price from the
+    // subscription's stored tierId, so no bitmap reverse-lookup is needed.
 
     /// @notice ERC-721 mint — assigns ownership and increments balance.
     function _mint(address to, uint256 tokenId) internal {

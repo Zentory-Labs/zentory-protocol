@@ -152,6 +152,37 @@ contract ZENTStakingTest is Test {
         vm.stopPrank();
     }
 
+    /// @notice Spec-conformance audit finding #4: extendLock must keep
+    ///         totalVeSupply in lockstep with the sum of veBalance. Pre-fix it
+    ///         raised the user's veBalance (longer remaining lock) but left
+    ///         totalVeSupply stale, understating governance quorum and letting
+    ///         an individual's veBalance exceed totalVeSupply.
+    function test_extendLock_updatesTotalVeSupply() external {
+        uint256 amount = 5_000 ether;
+
+        vm.startPrank(alice);
+        zent.approve(address(staking), amount);
+        staking.stake(amount, 100 days);
+        vm.stopPrank();
+
+        uint256 veBefore = staking.veBalance(alice);
+        uint256 totalBefore = staking.totalVeSupply();
+        // Single staker: the documented invariant means total == individual.
+        assertEq(totalBefore, veBefore, "precondition: total == sole staker's ve");
+
+        vm.prank(alice);
+        staking.extendLock(300 days);
+
+        uint256 veAfter = staking.veBalance(alice);
+        uint256 totalAfter = staking.totalVeSupply();
+
+        assertGt(veAfter, veBefore, "extending the lock must raise veBalance");
+        // The fix: totalVeSupply tracks the new sum. Pre-fix totalAfter stayed
+        // at totalBefore (== veBefore != veAfter), failing both asserts below.
+        assertEq(totalAfter, veAfter, "totalVeSupply must equal sum of veBalance after extendLock");
+        assertGt(totalAfter, totalBefore, "totalVeSupply must rise with the extension");
+    }
+
     // ─── veBalance ─────────────────────────────────────────────────────────
 
     function test_veBalanceMaxAtFullLock() external {
