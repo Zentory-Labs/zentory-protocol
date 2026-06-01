@@ -89,9 +89,9 @@ Source of truth: `zentory-protocol/DEPLOYMENTS.md`. Mirror in `zentory-app/lib/c
 | Governance | ZentGovernor | `0x21ba1F7C028B1ADc78e75Ac187B08b1BDd567118` |
 | Execution | HyperCoreAdapter | `0xdad9175f6d2da1709ba3f73711e69022538d21a7` |
 | Execution | StrategyExecutor | `0xacd862ef134d772b0ca53a97f53ccdd00abc05cf` |
-| Signals | SignalRegistry | `0xd743381782707d86C6d679779fD71b962ae10658` *(redeployed 2026-05-27)* |
-| Signals | EpochScoring | `0xbA31Cf18fA442f21F70EaB7452B67231fbf6ec2a` *(redeployed 2026-05-27 — unblocks keeper loop)* |
-| Signals | SubscriptionVault | `0x2D71aa478b9e267e41168f3f4f2AF79009924C54` *(redeployed 2026-05-27)* |
+| Signals | SignalRegistry | `0x9685F25E75758E18b2b109be64271102497D800e` *(redeployed 2026-06-01 — audit fixes)* |
+| Signals | EpochScoring | `0x31b7082f1e1B3cC373dE3d9c3575701b9aa24538` *(redeployed 2026-06-01 — payout/scoring/recency fixes)* |
+| Signals | SubscriptionVault | `0xb053b9a1A82D57B2BEa7cC4a472924Fb6926933E` *(redeployed 2026-06-01 — ELITE-pricing fix)* |
 
 ---
 
