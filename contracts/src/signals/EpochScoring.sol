@@ -399,9 +399,20 @@ contract EpochScoring is AccessControl {
 
         // Numerai-style payout clip:
         // payout_factor = (accuracyBps / 10000) × 2 − 1  → ranges [−1, +1]
-        // raw_payout    = stake × payout_factor × 0.3   → scaled by 3/1000
+        // raw_payout    = payout_factor × 0.3            → scaled by 3/1000
+        //
+        // SECURITY FIX (disclosure 2026-05-31, A. Deev): rawPayout previously
+        // multiplied by `accuracyBps` a SECOND time, making the curve quadratic
+        // and symmetric about accuracy=5000 instead of linear and monotonic.
+        // Effect: the worst possible signal (accuracy=0) was slashed LESS than
+        // a merely-bad one (payout(0)=0 > payout(2500)<0), so noise/garbage
+        // providers paid no penalty — defeating the slashing half of the
+        // incentive design and contradicting whitepaper §6.4. The fix removes
+        // the duplicated `accuracyBps` so payout is linear in payoutFactor,
+        // exactly as the comment above and the whitepaper specify. Monotonicity
+        // is now pinned by test/signals/PayoutCurve.t.sol.
         int256 payoutFactor = (int256(accuracyBps) * 20000 / 10000) - 10000;
-        int256 rawPayout    = int256(accuracyBps) * payoutFactor / 10000 * 3 / 1000;
+        int256 rawPayout    = payoutFactor * 3 / 1000;
 
         // Clip to configured max/min
         int256 maxPenalty = -int256(MAX_PENALTY_BPS);
