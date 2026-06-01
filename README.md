@@ -232,7 +232,7 @@ ZENT is a **fixed-supply utility and governance** token. Fixed at **1,000,000,00
 
 ### Fee → token loop
 
-Vault performance fees (per whitepaper v2 §6: **15%** on yield) route through [`FeeDistributor.sol`](contracts/src/fees/FeeDistributor.sol). The current split in §6.4 of the whitepaper allocates:
+Vault performance fees (per whitepaper v2 §6: **20%** on yield) route through [`FeeDistributor.sol`](contracts/src/fees/FeeDistributor.sol). The current split in §6.4 of the whitepaper allocates:
 
 - 50% → **buyback and burn** ZENT
 - 25% → treasury (quant grants, audits)
