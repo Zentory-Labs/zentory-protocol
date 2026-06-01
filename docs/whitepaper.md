@@ -64,7 +64,7 @@ ZENT is the **utility token** governing both layers. It is not a security, does 
 | ZENT Token Supply | 1,000,000,000 (fixed, 18 decimals) |
 | Blockchain | HyperEVM (Chain ID: 998 — testnet) |
 | Vault Assets | zBTC, zETH, zSOL, zXRP |
-| Vault Performance Fee | 15% of yield generated |
+| Vault Performance Fee | 20% of yield generated |
 | Signal Epoch | 4 hours |
 | Quant Slash (max) | 1.7% of staked ZENT per epoch |
 | Quant Reward (max) | 5.0% of staked ZENT per epoch |
