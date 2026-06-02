@@ -92,6 +92,12 @@ Source of truth: `zentory-protocol/DEPLOYMENTS.md`. Mirror in `zentory-app/lib/c
 | Signals | SignalRegistry | `0x9685F25E75758E18b2b109be64271102497D800e` *(redeployed 2026-06-01 — audit fixes)* |
 | Signals | EpochScoring | `0x31b7082f1e1B3cC373dE3d9c3575701b9aa24538` *(redeployed 2026-06-01 — payout/scoring/recency fixes)* |
 | Signals | SubscriptionVault | `0xb053b9a1A82D57B2BEa7cC4a472924Fb6926933E` *(redeployed 2026-06-01 — ELITE-pricing fix)* |
+| Shadow (testnet) | SpotVault | `0x504E998B32D165cfd6470a8a0000235550C33cBc` *(deployed 2026-06-02 — oracle-valued BTC long/flat research vault)* |
+| Shadow (testnet) | ShadowSpotAdapter | `0x385Ba1f9A9d74A28974C8F6c03762D03B0e4a00c` |
+| Shadow (testnet) | ShadowPriceOracle | `0x46a7c01424229CB5B2C9FF069e6b0eab07490Fd4` |
+| Shadow (testnet) | ShadowUSDC (sUSDC) | `0x2DF6A937da1430B4B593fE3EB2C9AB986cC3AF9e` |
+
+> **Shadow stack = testnet only.** Self-contained swap venue + mock cash + push oracle so the SpotVault loop runs end-to-end without a real Hyperliquid spot integration. Bring-up after deploy: `finalize-spot-vault.ps1`. Never ships to mainnet (real USDC + audited CoreWriter adapter there).
 
 ---
 
