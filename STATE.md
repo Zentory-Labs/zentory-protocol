@@ -97,7 +97,7 @@ Source of truth: `zentory-protocol/DEPLOYMENTS.md`. Mirror in `zentory-app/lib/c
 | Shadow (testnet) | ShadowPriceOracle | `0x46a7c01424229CB5B2C9FF069e6b0eab07490Fd4` |
 | Shadow (testnet) | ShadowUSDC (sUSDC) | `0x2DF6A937da1430B4B593fE3EB2C9AB986cC3AF9e` |
 
-> **Shadow stack = testnet only.** Self-contained swap venue + mock cash + push oracle so the SpotVault loop runs end-to-end without a real Hyperliquid spot integration. Bring-up after deploy: `finalize-spot-vault.ps1`. Never ships to mainnet (real USDC + audited CoreWriter adapter there).
+> **Shadow stack = testnet only.** Self-contained swap venue + mock cash + push oracle so the SpotVault loop runs end-to-end without a real Hyperliquid spot integration. The deploy self-finalizes (role + reserves + seed); `finalize-spot-vault.ps1` is an idempotent reserve top-up tool. **Verified LIVE 2026-06-02:** NAV/share = 1.00, keeper can rebalance, oracle-priced swap loop executes. Never ships to mainnet (real USDC + audited CoreWriter adapter there).
 
 ---
 

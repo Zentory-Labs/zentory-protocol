@@ -1,9 +1,12 @@
-# Finalize the SHADOW-mode SpotVault so deposits/redeems + the signal-driven
-# rebalance loop work end-to-end. Run ONCE, after deploy-spot-vault.ps1.
-# Does three things in a single broadcast (PRIVATE_KEY read from contracts\.env):
-#   1. grants VAULT_ROLE on the adapter -> the SpotVault
-#   2. funds both adapter reserve legs (sUSDC + WBTC)
-#   3. seeds the first deposit (anchors the ERC4626 share price)
+# Idempotent bring-up / RESERVE TOP-UP for the SHADOW-mode SpotVault.
+# NOTE: deploy-spot-vault.ps1 already finalizes a fresh deploy (grants VAULT_ROLE,
+# funds both reserve legs, seeds the first deposit), so on a fresh vault this is a
+# no-op. Its ongoing use is topping the adapter reserves back up as rebalances
+# consume them. Each step is conditional (PRIVATE_KEY read from contracts\.env):
+#   1. grant VAULT_ROLE on the adapter -> the SpotVault   (skipped if already held)
+#   2. top up each adapter reserve leg to its floor        (mints only the shortfall)
+#   3. seed the first deposit                              (only if vault has no shares)
+# Safe to run any number of times.
 #
 # (If scripts are disabled: Set-ExecutionPolicy -Scope Process Bypass -Force)
 

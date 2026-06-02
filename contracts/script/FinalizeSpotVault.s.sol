@@ -6,25 +6,23 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 /// @title FinalizeSpotVault
-/// @notice One-shot bring-up for a freshly deployed SHADOW-mode SpotVault. Run
-///         once, AFTER DeploySpotVault, with the deployer key (admin on the
-///         adapter + open-mint on the testnet mocks). It performs the three
-///         steps the vault needs before deposits work end-to-end:
+/// @notice Idempotent bring-up / reserve top-up for a SHADOW-mode SpotVault.
 ///
-///           1. grantRole(VAULT_ROLE) on the adapter -> the vault (so the vault
-///              is the only caller allowed to drive swaps; without it every
-///              rebalance reverts onlyRole).
-///           2. Fund BOTH adapter reserve legs (sUSDC + WBTC) so it can fill
-///              long->flat (pay cash) AND flat->long (pay asset).
-///           3. Seed the first deposit so the ERC4626 share price is anchored
-///              (belt-and-suspenders over the virtual-shares inflation guard).
+///         NOTE: DeploySpotVault already performs first-time finalize (grants
+///         VAULT_ROLE, funds both adapter reserve legs, seeds the first deposit),
+///         so on a fresh deploy this script is a no-op that just confirms state.
+///         Its real ongoing use is RESERVE TOP-UP: every rebalance consumes one
+///         adapter leg (long→flat drains WBTC into the vault as cash; flat→long
+///         drains the cash leg), so re-run this to mint each leg back up to its
+///         floor. Safe to run any number of times — each step is conditional:
 ///
-/// Idempotency: the seed step reverts if the vault already has shares, so a
-/// double-run can't silently re-seed. Reserves can be topped up later with a
-/// plain `cast send <token> "mint(address,uint256)" <adapter> <amt>`.
+///           1. grant VAULT_ROLE on the adapter -> vault   (skipped if already held)
+///           2. top up each adapter reserve leg to its floor (mints only the
+///              shortfall; skipped if already at/above floor)
+///           3. seed the first deposit                      (only if vault has no shares)
 ///
-/// TESTNET ONLY. The mocks (ShadowUSDC, WBTC mock) have open mints; mainnet
-/// uses real USDC + a real audited spot adapter and this script does not apply.
+/// TESTNET ONLY. The mocks (ShadowUSDC, WBTC mock) have open mints; mainnet uses
+/// real USDC + a real audited spot adapter and this script does not apply.
 contract FinalizeSpotVault is Script {
     bytes32 internal constant VAULT_ROLE = keccak256("VAULT_ROLE");
 
@@ -39,46 +37,44 @@ contract FinalizeSpotVault is Script {
         address cash    = vm.envAddress("CASH");          // sUSDC (6 dec)
         address under   = vm.envAddress("UNDERLYING");    // WBTC mock (8 dec) = vault asset
 
-        // Reserve + seed sizing, env-overridable. Defaults sized for a ~$70k BTC
-        // testnet demo: enough cash to buy the whole vault out of WBTC and enough
-        // WBTC to sell back, with a tiny first deposit.
-        uint256 cashReserve  = vm.envOr("CASH_RESERVE",  uint256(50_000_000) * 1e6); // 50,000,000 sUSDC
-        uint256 underReserve = vm.envOr("UNDER_RESERVE", uint256(1_000) * 1e8);      // 1,000 WBTC
-        uint256 seed         = vm.envOr("SEED_ASSETS",   uint256(1e6));              // 0.01 WBTC (8 dec)
+        // Reserve floors + seed size, env-overridable. Defaults sized for a ~$70k
+        // BTC testnet demo: enough cash to buy the vault fully out of WBTC and
+        // enough WBTC to sell back, with a tiny first deposit.
+        uint256 cashFloor  = vm.envOr("CASH_RESERVE",  uint256(50_000_000) * 1e6); // 50,000,000 sUSDC
+        uint256 underFloor = vm.envOr("UNDER_RESERVE", uint256(1_000) * 1e8);      // 1,000 WBTC
+        uint256 seed       = vm.envOr("SEED_ASSETS",   uint256(1e6));              // 0.01 WBTC (8 dec)
 
-        require(
-            IERC20Min(vault).totalSupply() == 0,
-            "FinalizeSpotVault: vault already seeded (totalSupply != 0) - aborting to avoid double-seed"
-        );
+        // Decide what (if anything) needs doing — read-only.
+        bool needRole = !IAccessControl(adapter).hasRole(VAULT_ROLE, vault);
+        uint256 cashBal  = IERC20(cash).balanceOf(adapter);
+        uint256 underBal = IERC20(under).balanceOf(adapter);
+        uint256 cashTopUp  = cashBal  < cashFloor  ? cashFloor  - cashBal  : 0;
+        uint256 underTopUp = underBal < underFloor ? underFloor - underBal : 0;
+        bool needSeed = IERC20Min(vault).totalSupply() == 0;
 
-        console2.log("== Inputs ==");
-        console2.log("deployer:", deployer);
-        console2.log("vault:   ", vault);
-        console2.log("adapter: ", adapter);
+        console2.log("== Plan ==");
+        console2.log("grant VAULT_ROLE -> vault:", needRole);
+        console2.log("sUSDC reserve top-up:", cashTopUp);
+        console2.log("WBTC reserve top-up: ", underTopUp);
+        console2.log("seed first deposit:  ", needSeed);
 
         vm.startBroadcast(pk);
 
-        // 1) let the vault drive the adapter
-        IAccessControl(adapter).grantRole(VAULT_ROLE, vault);
-
-        // 2) fund BOTH legs
-        IMintable(cash).mint(adapter, cashReserve);
-        IMintable(under).mint(adapter, underReserve);
-
-        // 3) seed the first deposit
-        IMintable(under).mint(deployer, seed);
-        IERC20(under).approve(vault, seed);
-        uint256 shares = IERC4626Min(vault).deposit(seed, deployer);
+        if (needRole) IAccessControl(adapter).grantRole(VAULT_ROLE, vault);
+        if (cashTopUp  > 0) IMintable(cash).mint(adapter, cashTopUp);
+        if (underTopUp > 0) IMintable(under).mint(adapter, underTopUp);
+        if (needSeed) {
+            IMintable(under).mint(deployer, seed);
+            IERC20(under).approve(vault, seed);
+            IERC4626Min(vault).deposit(seed, deployer);
+        }
 
         vm.stopBroadcast();
 
-        console2.log("== Logs ==");
-        console2.log("VAULT_ROLE -> vault granted on adapter");
-        console2.log("adapter sUSDC reserve:", cashReserve);
-        console2.log("adapter WBTC reserve: ", underReserve);
-        console2.log("seed assets (WBTC):   ", seed);
-        console2.log("seed shares minted:   ", shares);
-        console2.log("SpotVault is LIVE: deposits/redeems + signal-driven rebalance loop enabled.");
+        console2.log("== Done ==");
+        if (!needRole && cashTopUp == 0 && underTopUp == 0 && !needSeed) {
+            console2.log("Nothing to do: vault finalized + reserves at/above floor. SpotVault is LIVE.");
+        }
     }
 }
 
