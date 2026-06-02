@@ -7,15 +7,15 @@
 $env:PATH += ";$env:USERPROFILE\.foundry\bin"
 $env:EXPECTED_CHAIN_ID = "998"
 
-# ─── REQUIRED — fill these in ────────────────────────────────────────────────
-# $env:UNDERLYING   = "0x08890A5B7D6D157Da65C04C19150fF7d124eaE40"  # testnet WBTC mock (zBTC underlying)
-# $env:CASH         = "0x..."   # USDC ERC-20 (cash leg)
-# $env:ORACLE       = "0x..."   # Chainlink BTC/USD AggregatorV3 feed
-# $env:SWAP_ADAPTER = "0x..."   # ISpotSwapAdapter (use a MOCK for shadow mode)
+# ─── REQUIRED — shadow-stack addresses (deployed 2026-06-02, on-chain verified) ──
+$env:UNDERLYING   = "0x08890A5B7D6D157Da65C04C19150fF7d124eaE40"  # testnet WBTC mock (zBTC underlying)
+$env:CASH         = "0x2DF6A937da1430B4B593fE3EB2C9AB986cC3AF9e"  # ShadowUSDC (sUSDC, 6 dec)
+$env:ORACLE       = "0x46a7c01424229CB5B2C9FF069e6b0eab07490Fd4"  # ShadowPriceOracle (BTC/USD, push-updated)
+$env:SWAP_ADAPTER = "0x385Ba1f9A9d74A28974C8F6c03762D03B0e4a00c"  # ShadowSpotAdapter
 
 # ─── OPTIONAL (sensible defaults in the script) ──────────────────────────────
 $env:KEEPER_ADDRESS        = "0x2251F2D8541f5D5263316E2921611c74D6d30D94"
-$env:MAX_ORACLE_STALENESS  = "3600"   # MATCH the Chainlink feed heartbeat
+$env:MAX_ORACLE_STALENESS  = "86400"  # 24h — generous for the testnet shadow oracle (pushed ~4-hourly); a 1h staleness would make a flat vault revert. Mainnet: match the real Chainlink feed heartbeat.
 $env:REBALANCE_THRESHOLD_BPS = "200"
 $env:MAX_SLIPPAGE_BPS      = "100"
 $env:PERFORMANCE_FEE_BPS   = "2000"   # 20%
