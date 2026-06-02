@@ -6,11 +6,11 @@ $env:PATH += ";$env:USERPROFILE\.foundry\bin"
 $env:EXPECTED_CHAIN_ID = "998"
 
 # ─── REQUIRED ────────────────────────────────────────────────────────────────
-# $env:UNDERLYING = "0x08890A5B7D6D157Da65C04C19150fF7d124eaE40"  # testnet WBTC mock
+$env:UNDERLYING = "0x08890A5B7D6D157Da65C04C19150fF7d124eaE40"  # testnet WBTC mock (zBTC underlying)
 
 # ─── OPTIONAL ────────────────────────────────────────────────────────────────
 $env:KEEPER_ADDRESS         = "0x2251F2D8541f5D5263316E2921611c74D6d30D94"
-$env:INITIAL_PRICE_USD_8DEC = "10500000000000"   # $105,000 (BTC) -- set close to current
+$env:INITIAL_PRICE_USD_8DEC = "7000000000000"    # ~$70,000 (BTC) -- near current; oracle-pusher updates it after deploy
 $env:SIMULATED_SLIPPAGE_BPS = "10"
 
 if (-not $env:UNDERLYING) {
