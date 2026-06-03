@@ -56,6 +56,26 @@ contract SignalNetworkDeployTest is Test {
         // 4b/4c. keeper roles
         registry.grantRole(registry.SCORING_ORACLE(), keeper);
         scoring.grantRole(scoring.EPOCH_SETTLER(), keeper);
+        // 4d. Drop the deployer's bootstrap SCORING_ORACLE (least privilege) —
+        //     mirrors deploy_signal_network.s.sol step 4d. deployer != keeper here,
+        //     so the keeper's intended grant survives.
+        registry.revokeRole(registry.SCORING_ORACLE(), deployer);
+    }
+
+    /// @notice Least-privilege guard: the bootstrap SCORING_ORACLE the registry
+    /// constructor grants the deployer EOA MUST be revoked after wiring. An EOA
+    /// holding SCORING_ORACLE can call advanceEpoch() out of band and re-introduce
+    /// the registry/scoring off-by-one. Only the EpochScoring contract (and the
+    /// keeper, by design) should hold it post-deploy.
+    function test_deployerDoesNotRetainBootstrapScoringOracle() external view {
+        assertFalse(
+            registry.hasRole(registry.SCORING_ORACLE(), deployer),
+            "deployer must NOT retain bootstrap SCORING_ORACLE"
+        );
+        assertTrue(
+            registry.hasRole(registry.SCORING_ORACLE(), address(scoring)),
+            "EpochScoring contract must hold SCORING_ORACLE"
+        );
     }
 
     function test_emptyEpochSettles_andAdvancesBothCounters() external {
