@@ -106,6 +106,15 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
         if (_scoringOracle == address(0)) revert StakingContractNotSet();
         stakingContract = _stakingContract;
 
+        // Start at epoch 1 to match EpochScoring's constructor (currentEpochId = 1).
+        // Both advance in lockstep (EpochScoring.settleEpoch increments its own
+        // counter AND calls advanceEpoch here), so they MUST start equal — otherwise
+        // settleEpoch(E) reads epochSignalIds[E] while submitSignal filed signals in
+        // bucket E-1, and every epoch hits the empty fast-path → nothing is ever
+        // scored. Leaving this at the default 0 caused exactly that off-by-one on the
+        // 2026-06 testnet deploy (fixed live via a one-time advanceEpoch re-sync).
+        currentEpochId = 1;
+
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(SCORING_ORACLE, _scoringOracle);
     }
