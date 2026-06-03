@@ -89,6 +89,23 @@ contract DeploySignalNetwork is Script {
         //     safe and covers the keeper != deployer case).
         scoring.grantRole(scoring.EPOCH_SETTLER(), keeper);
 
+        // 4d. Drop the registry's BOOTSTRAP SCORING_ORACLE from the deployer EOA.
+        //     The constructor (step 1) granted it to the deployer only because
+        //     EpochScoring didn't exist yet at registry-construction time. Now
+        //     that the EpochScoring CONTRACT (4a) holds it, the deployer's grant
+        //     is unnecessary and dangerous: any EOA with SCORING_ORACLE can call
+        //     advanceEpoch() out of band and desync the registry counter from
+        //     EpochScoring — the exact off-by-one that silently disabled scoring
+        //     on the 2026-06 testnet deploy. Least privilege: revoke it. Guard on
+        //     deployer != keeper so we don't strip the keeper's intended grant
+        //     (4b) when KEEPER_ADDRESS is unset and keeper defaults to deployer.
+        if (deployer != keeper) {
+            signalRegistry.revokeRole(signalRegistry.SCORING_ORACLE(), deployer);
+            console2.log("Revoked bootstrap SCORING_ORACLE from deployer EOA (least privilege)");
+        } else {
+            console2.log("deployer == keeper: keeping SCORING_ORACLE (set KEEPER_ADDRESS to separate them)");
+        }
+
         vm.stopBroadcast();
 
         console2.log("");
