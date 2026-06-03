@@ -74,48 +74,61 @@ contract SignalRegistryTest is Test {
         bytes32 btc = SignalTypes.cryptoId("BTC");
         uint256 exp = block.timestamp + 1 hours;
 
-        // Epoch 0: alice submits twice (long then short), bob once.
+        // Bucket under whatever the live epoch is (1 post-fix; not a magic 0).
+        uint256 e = registry.currentEpochId();
+        // alice submits twice (long then short), bob once.
         _submit(ALICE_KEY, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(10000), 8000, exp);
         _submit(ALICE_KEY, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(-10000), 6000, exp);
         _submit(BOB_KEY,   SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(5000),  7000, exp);
 
-        // M-2: epoch 0 has exactly 3 signals (not collapsed per-provider).
-        assertEq(registry.getEpochSignalCount(0), 3, "epoch 0 should hold 3 signals");
+        // M-2: the current epoch has exactly 3 signals (not collapsed per-provider).
+        assertEq(registry.getEpochSignalCount(e), 3, "current epoch should hold 3 signals");
 
         // M-3: each signal's direction is individually queryable, including
         // alice's two opposite-direction signals (last-wins would lose the first).
-        assertEq(registry.getEpochSignalProvider(0, 0), alice);
-        assertEq(registry.getEpochSignalReturn(0, 0), int256(10000), "first signal: long");
-        assertEq(registry.getEpochSignalProvider(0, 1), alice);
-        assertEq(registry.getEpochSignalReturn(0, 1), int256(-10000), "second signal: short (not lost)");
-        assertEq(registry.getEpochSignalProvider(0, 2), bob);
-        assertEq(registry.getEpochSignalReturn(0, 2), int256(5000));
+        assertEq(registry.getEpochSignalProvider(e, 0), alice);
+        assertEq(registry.getEpochSignalReturn(e, 0), int256(10000), "first signal: long");
+        assertEq(registry.getEpochSignalProvider(e, 1), alice);
+        assertEq(registry.getEpochSignalReturn(e, 1), int256(-10000), "second signal: short (not lost)");
+        assertEq(registry.getEpochSignalProvider(e, 2), bob);
+        assertEq(registry.getEpochSignalReturn(e, 2), int256(5000));
     }
 
     function test_epochSignalList_isolatesEpochs() external {
         bytes32 eth = SignalTypes.cryptoId("ETH");
         uint256 exp = block.timestamp + 1 hours;
 
+        uint256 e0 = registry.currentEpochId();
         _submit(ALICE_KEY, SignalTypes.AssetClass.CRYPTO_PERP, eth, int256(3000), 5000, exp);
-        assertEq(registry.getEpochSignalCount(0), 1);
+        assertEq(registry.getEpochSignalCount(e0), 1);
 
         // Scoring oracle advances the epoch.
         vm.prank(scoringOracle);
         registry.advanceEpoch();
-        assertEq(registry.currentEpochId(), 1);
+        uint256 e1 = registry.currentEpochId();
+        assertEq(e1, e0 + 1, "advanceEpoch bumps by exactly 1");
 
-        // New submission lands in epoch 1, leaving epoch 0 untouched.
+        // New submission lands in the next epoch, leaving the prior one untouched.
         _submit(BOB_KEY, SignalTypes.AssetClass.CRYPTO_PERP, eth, int256(-2000), 4000, exp);
-        assertEq(registry.getEpochSignalCount(0), 1, "epoch 0 unchanged");
-        assertEq(registry.getEpochSignalCount(1), 1, "epoch 1 has the new signal");
-        assertEq(registry.getEpochSignalProvider(1, 0), bob);
-        assertEq(registry.getEpochSignalReturn(1, 0), int256(-2000));
+        assertEq(registry.getEpochSignalCount(e0), 1, "prior epoch unchanged");
+        assertEq(registry.getEpochSignalCount(e1), 1, "new epoch has the new signal");
+        assertEq(registry.getEpochSignalProvider(e1, 0), bob);
+        assertEq(registry.getEpochSignalReturn(e1, 0), int256(-2000));
     }
 
     function test_advanceEpoch_onlyScoringOracle() external {
         vm.prank(makeAddr("attacker"));
         vm.expectRevert();
         registry.advanceEpoch();
+    }
+
+    /// @notice REGRESSION (epoch off-by-one): the registry MUST construct at
+    /// epoch 1, equal to EpochScoring's constructor. If it defaults to 0 again,
+    /// settleEpoch(E) reads epochSignalIds[E] while submitSignal files under
+    /// bucket E-1, every epoch hits the empty fast-path, and nothing is ever
+    /// scored. Pin the start value so a future refactor can't silently regress it.
+    function test_constructor_startsAtEpochOne() external view {
+        assertEq(registry.currentEpochId(), 1, "registry must start at epoch 1 to align with EpochScoring");
     }
 
     // ─── Spec-conformance audit, finding #17: documented bound enforcement ───
@@ -146,9 +159,10 @@ contract SignalRegistryTest is Test {
         bytes32 btc = SignalTypes.cryptoId("BTC");
         uint256 exp = block.timestamp + 1 hours;
         // The documented endpoints ±10000 must be accepted (inclusive bounds).
+        uint256 e = registry.currentEpochId();
         _submit(ALICE_KEY, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(10000), 8000, exp);
         _submit(BOB_KEY,   SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(-10000), 8000, exp);
-        assertEq(registry.getEpochSignalCount(0), 2, "both boundary signals accepted");
+        assertEq(registry.getEpochSignalCount(e), 2, "both boundary signals accepted");
     }
 
     function test_submitSignal_rejectsConfidenceAboveMax() external {
@@ -161,7 +175,8 @@ contract SignalRegistryTest is Test {
     function test_submitSignal_acceptsMaxConfidence() external {
         bytes32 btc = SignalTypes.cryptoId("BTC");
         uint256 exp = block.timestamp + 1 hours;
+        uint256 e = registry.currentEpochId();
         _submit(ALICE_KEY, SignalTypes.AssetClass.CRYPTO_PERP, btc, int256(5000), 10000, exp);
-        assertEq(registry.getEpochSignalCount(0), 1, "confidence=10000 accepted");
+        assertEq(registry.getEpochSignalCount(e), 1, "confidence=10000 accepted");
     }
 }

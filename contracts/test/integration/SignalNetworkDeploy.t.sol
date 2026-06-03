@@ -59,8 +59,18 @@ contract SignalNetworkDeployTest is Test {
     }
 
     function test_emptyEpochSettles_andAdvancesBothCounters() external {
+        // REGRESSION (epoch off-by-one): registry and scoring MUST start equal.
+        // The registry previously defaulted currentEpochId to 0 while scoring
+        // started at 1, so settleEpoch(E) read epochSignalIds[E] while submitSignal
+        // filed under bucket E-1 — every epoch hit the empty fast-path and NOTHING
+        // was ever scored. SignalRegistry now inits currentEpochId = 1 to match.
         assertEq(scoring.currentEpochId(), 1, "scoring starts at epoch 1");
-        assertEq(registry.currentEpochId(), 0, "registry starts at epoch 0");
+        assertEq(registry.currentEpochId(), 1, "registry starts at epoch 1 (aligned with scoring)");
+        assertEq(
+            registry.currentEpochId(),
+            scoring.currentEpochId(),
+            "registry/scoring epoch counters MUST start equal or scoring never fires"
+        );
 
         // Move past the epoch window for realism (settleEpoch itself doesn't
         // gate on time, but performUpkeep does).
@@ -74,8 +84,14 @@ contract SignalNetworkDeployTest is Test {
         assertEq(rewards, 0, "empty epoch distributes nothing");
         assertEq(scoring.currentEpochId(), 2, "EpochScoring epoch advanced");
         // The advanceEpoch() call (gated by SCORING_ORACLE on the registry,
-        // caller = EpochScoring contract) must have succeeded.
-        assertEq(registry.currentEpochId(), 1, "registry epoch advanced via advanceEpoch");
+        // caller = EpochScoring contract) must have succeeded — and the two
+        // counters must REMAIN equal after settlement (lockstep invariant).
+        assertEq(registry.currentEpochId(), 2, "registry epoch advanced via advanceEpoch");
+        assertEq(
+            registry.currentEpochId(),
+            scoring.currentEpochId(),
+            "counters stay in lockstep after settlement"
+        );
 
         (uint256 total, uint256 settled, bool isSettled) = scoring.epochStates(1);
         assertEq(total, 0);
