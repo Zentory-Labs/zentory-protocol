@@ -46,7 +46,7 @@ Each vault is non-custodial: shares are minted to the depositor and redeemable o
 
 | Contract | Address | Source |
 |---|---|---|
-| `ZENTStaking` (veZENT) | [`0x4e2e7fd3c85c05697b24743e580b03abcd6d0c65`](https://testnet.purrsec.com/address/0x4e2e7fd3c85c05697b24743e580b03abcd6d0c65) | [`contracts/src/staking/ZENTStaking.sol`](contracts/src/staking/ZENTStaking.sol) |
+| `ZENTStaking` (veZENT) | [`0x93A14D1c60e054038980965CF3CAa50CEB848de9`](https://testnet.purrsec.com/address/0x93A14D1c60e054038980965CF3CAa50CEB848de9) | [`contracts/src/staking/ZENTStaking.sol`](contracts/src/staking/ZENTStaking.sol) |
 | `ModelBonding` | [`0x15f6c4bf4000747e0fdd85b33998a36f5bdf5007`](https://testnet.purrsec.com/address/0x15f6c4bf4000747e0fdd85b33998a36f5bdf5007) | [`contracts/src/staking/ModelBonding.sol`](contracts/src/staking/ModelBonding.sol) |
 
 ## Fee Distribution

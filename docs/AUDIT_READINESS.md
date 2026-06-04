@@ -327,7 +327,7 @@ published only after this audit + the Q4 2026 mainnet gate.
 ### Staking & Bonding
 | Contract | Address |
 |---|---|
-| `ZENTStaking` (veZENT) | `0x4e2e7fd3c85c05697b24743e580b03abcd6d0c65` |
+| `ZENTStaking` (veZENT) | `0x93A14D1c60e054038980965CF3CAa50CEB848de9` |
 | `ModelBonding` | `0x15f6c4bf4000747e0fdd85b33998a36f5bdf5007` |
 
 ### Fee Distribution (one instance per vault)

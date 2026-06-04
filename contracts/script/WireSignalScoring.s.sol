@@ -23,7 +23,7 @@ contract WireSignalScoring is Script {
         require(block.chainid == 998, "WireSignalScoring: not HyperEVM testnet (998)");
 
         uint256 pk = vm.envUint("PRIVATE_KEY");
-        address epoch  = vm.envOr("EPOCH_SCORING", address(0x31b7082f1e1B3cC373dE3d9c3575701b9aa24538));
+        address epoch  = vm.envOr("EPOCH_SCORING", address(0x659569A6f195698745779E59fef88e3B5Fe0484A));
         address oracle = vm.envOr("ORACLE",        address(0x46a7c01424229CB5B2C9FF069e6b0eab07490Fd4));
 
         IEpochScoringAdmin es = IEpochScoringAdmin(epoch);
