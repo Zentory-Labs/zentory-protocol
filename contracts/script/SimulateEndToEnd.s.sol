@@ -43,7 +43,7 @@ contract SimulateEndToEnd is Script {
     // Must be valid checksummed address literal for Solidity 0.8.28+
     address constant WXRP           = 0xe1Fe75622Bd5D962c72c1D0A621e5fa6656a4371;
     address constant WSOL           = 0x2b9d5bBD8C5FEfc71E985d993C13db2770469972;
-    address constant ZENT_STAKING  = 0x4E2e7Fd3C85c05697b24743e580B03abCD6d0c65;
+    address constant ZENT_STAKING  = 0x93A14D1c60e054038980965CF3CAa50CEB848de9;
     address constant zETH           = 0xbe8a9d22560A1b126554b70Aaca2D763B2E70C4e;
     address constant zBTC           = 0x93669daC07321FF397cf5734Ae8364EA24addF45;
     address constant zXRP           = 0x8B15204D88a9Bb155bE6798522983A3B5F7d7cB0;

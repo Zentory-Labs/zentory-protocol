@@ -108,7 +108,7 @@ contract RotateDeployer is Script {
         _add(_addr("0x8B15204D88a9Bb155bE6798522983A3B5F7d7cB0"), "zXRPVault");
 
         // Staking + bonding
-        _add(_addr("0x4E2e7Fd3C85c05697b24743e580B03abCD6d0c65"), "ZENTStaking");
+        _add(_addr("0x93A14D1c60e054038980965CF3CAa50CEB848de9"), "ZENTStaking");
         _add(_addr("0x15f6c4bf4000747E0fDd85B33998A36F5BdF5007"), "ModelBonding");
 
         // Fee distributors (one per vault)
