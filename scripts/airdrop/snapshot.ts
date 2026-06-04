@@ -2,7 +2,7 @@
 /**
  * Airdrop snapshot generator (M9).
  *
- * Pulls testnet participation data from Supabase + on-chain reads, scores
+ * Pulls testnet participation data from ON-CHAIN EVENTS (no Supabase), scores
  * each wallet across three contribution tracks, emits a Merkle tree we can
  * feed into MerkleDistributor on mainnet day 1.
  *
@@ -25,19 +25,50 @@
  *
  * Run as: ZENT_TOTAL_AIRDROP=20000000 npx tsx scripts/airdrop/snapshot.ts
  *
- * SAFETY: this script READS only. It does not write anything on-chain or
- * to Supabase. The output is reviewed before any MerkleDistributor deploy.
+ * SAFETY: this script READS only (eth_getLogs). It writes nothing on-chain.
+ * The output is reviewed before any MerkleDistributor deploy.
  */
 
 import * as fs from "fs";
 import * as path from "path";
-import { createPublicClient, http, formatUnits, keccak256, encodePacked, encodeAbiParameters } from "viem";
+import {
+  createPublicClient,
+  http,
+  formatUnits,
+  keccak256,
+  encodePacked,
+  encodeAbiParameters,
+  parseAbiItem,
+  getAddress,
+  zeroAddress,
+  type PublicClient,
+  type AbiEvent,
+} from "viem";
 
 // ─── Configuration ──────────────────────────────────────────────────────
+//
+// DATA SOURCE (2026-06-04 rewrite): eligibility is derived ENTIRELY from
+// on-chain events — the prior Supabase tables (faucet_drips / vault_share_events
+// / provider_stats) were wiped, so this no longer depends on them. The three
+// tracks now scan:
+//   1. faucet  → ERC-20 Transfer mints (from == 0x0) on the 4 testnet mock tokens
+//   2. deposit → ERC-4626 Deposit events on the 4 vaults (summed shares per owner)
+//   3. quant   → SignalScored events on EpochScoring (summed accuracy per provider)
+//
+// ⚠️ VERIFY BEFORE USE: this is a run-once tool whose JSON output is reviewed
+//    before any MerkleDistributor deploy (see header). Set SNAPSHOT_FROM_BLOCK to
+//    the earliest relevant contract-deploy block and SNAPSHOT_TO_BLOCK to the
+//    snapshot block, then run `npx tsx scripts/airdrop/snapshot.ts` and sanity-
+//    check the printed counts + total before deploying.
 
-const SUPABASE_URL = process.env.SUPABASE_URL ?? "";
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const HYPEREVM_RPC = process.env.HYPEREVM_RPC_URL ?? "https://rpc.hyperliquid-testnet.xyz/evm";
+
+// Block window to scan. FROM must cover the earliest contract deploy you want to
+// credit; TO is the snapshot block (defaults to latest at run time).
+const SNAPSHOT_FROM_BLOCK = BigInt(process.env.SNAPSHOT_FROM_BLOCK ?? "0");
+const SNAPSHOT_TO_BLOCK = process.env.SNAPSHOT_TO_BLOCK ? BigInt(process.env.SNAPSHOT_TO_BLOCK) : undefined;
+const MAX_BLOCK_RANGE = BigInt(process.env.MAX_BLOCK_RANGE ?? "1000"); // public HyperEVM eth_getLogs cap
+const CHUNK_DELAY_MS = Number(process.env.CHUNK_DELAY_MS ?? "250");
 
 /** Total ZENT allocated to the airdrop (in whole tokens, multiplied by 1e18 later). */
 const TOTAL_AIRDROP = BigInt(process.env.ZENT_TOTAL_AIRDROP ?? "20000000"); // 2% of 1B supply default
@@ -62,91 +93,124 @@ const VAULTS = {
   zXRP: "0x8B15204D88a9Bb155bE6798522983A3B5F7d7cB0",
 } as const;
 
-const EPOCH_SCORING = "0xDcB2a366dCD5eE126793523b1BeFd78E32A1694d"; // redeployed 2026-05-25
+// Canonical 2026-06-04 signal stack (EpochScoring redeployed; the prior
+// 0xDcB2a366 was a dead 2026-05-25 deploy).
+const EPOCH_SCORING = "0x659569A6f195698745779E59fef88e3B5Fe0484A";
 
-// ─── Supabase fetches ───────────────────────────────────────────────────
+// Testnet mock ERC-20s the faucet mints (Track 1 = anyone who minted any of them).
+const FAUCET_TOKENS = {
+  WBTC: "0x08890A5B7D6D157Da65C04C19150fF7d124eaE40",
+  WETH: "0x80F727AF3f7932718fEb25FC28818Ad103040BD2",
+  WSOL: "0x2b9d5bBD8C5FEfc71E985d993C13db2770469972",
+  WXRP: "0xe1Fe75622Bd5D962c72c1D0A621e5fa6656a4371",
+} as const;
 
-type SupabaseResp<T> = { data: T[] | null; error: unknown };
+// ─── On-chain log scanning (replaces Supabase) ───────────────────────────
 
-async function supaSelect<T>(table: string, query = "*"): Promise<T[]> {
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-    return [];
+const client: PublicClient = createPublicClient({ transport: http(HYPEREVM_RPC) });
+
+const EV_TRANSFER = parseAbiItem(
+  "event Transfer(address indexed from, address indexed to, uint256 value)",
+) as AbiEvent;
+const EV_DEPOSIT = parseAbiItem(
+  "event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares)",
+) as AbiEvent;
+const EV_SIGNAL_SCORED = parseAbiItem(
+  "event SignalScored(address indexed provider, uint256 accuracy, uint256 finalScore, uint256 rank)",
+) as AbiEvent;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * eth_getLogs over [from, to] in MAX_BLOCK_RANGE chunks, with patient retries on
+ * the public RPC's rate-limit (-32005). Mirrors the engine indexer's proven
+ * pattern. `args` filters indexed topics (e.g. { from: zeroAddress } for mints).
+ */
+async function getLogsChunked(
+  address: `0x${string}`,
+  event: AbiEvent,
+  args: Record<string, unknown> | undefined,
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<any[]> {
+  const out: any[] = [];
+  for (let start = fromBlock; start <= toBlock; start += MAX_BLOCK_RANGE) {
+    const end = start + MAX_BLOCK_RANGE - 1n > toBlock ? toBlock : start + MAX_BLOCK_RANGE - 1n;
+    let attempt = 0;
+    for (;;) {
+      try {
+        const logs = await client.getLogs({ address, event, args: args as any, fromBlock: start, toBlock: end });
+        out.push(...logs);
+        break;
+      } catch (err: any) {
+        attempt++;
+        const msg = String(err?.message ?? err);
+        const rateLimited = msg.includes("-32005") || msg.toLowerCase().includes("rate");
+        if (attempt > 20 || !rateLimited) throw err;
+        await sleep(Math.min(30_000, 500 * 2 ** attempt));
+      }
+    }
+    if (CHUNK_DELAY_MS) await sleep(CHUNK_DELAY_MS);
   }
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(query)}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-    },
-  });
-  if (!res.ok) {
-    console.error(`Supabase ${table} fetch failed: ${res.status}`);
-    return [];
-  }
-  return (await res.json()) as T[];
+  return out;
 }
 
-// ─── Track 1: faucet users ──────────────────────────────────────────────
+async function resolveToBlock(): Promise<bigint> {
+  return SNAPSHOT_TO_BLOCK ?? (await client.getBlockNumber());
+}
+
+// ─── Track 1: faucet users (on-chain ERC-20 mint events) ─────────────────
 
 async function gatherFaucetUsers(): Promise<Map<string, number>> {
-  // Source: `faucet_drips` table mirrored from the dApp faucet endpoint, OR
-  // alternatively we scan the testnet mock-ERC20 mint events. For now,
-  // assume the dApp logged to Supabase. Each wallet gets a flat score = 1.
-  const drips = await supaSelect<{ wallet: string }>("faucet_drips", "wallet");
+  // Anyone who minted any of the 4 testnet mock tokens (Transfer from 0x0).
+  // Flat score = 1 per unique wallet.
   const score = new Map<string, number>();
-  for (const row of drips) {
-    const w = row.wallet?.toLowerCase();
-    if (w) score.set(w, 1);
+  const to = await resolveToBlock();
+  for (const [sym, addr] of Object.entries(FAUCET_TOKENS)) {
+    const logs = await getLogsChunked(getAddress(addr), EV_TRANSFER, { from: zeroAddress }, SNAPSHOT_FROM_BLOCK, to);
+    for (const lg of logs) {
+      const recipient = (lg.args?.to as string | undefined)?.toLowerCase();
+      if (recipient && recipient !== zeroAddress) score.set(recipient, 1);
+    }
+    console.log(`    faucet ${sym}: ${logs.length} mint logs`);
   }
   return score;
 }
 
-// ─── Track 2: vault depositors ──────────────────────────────────────────
+// ─── Track 2: vault depositors (on-chain ERC-4626 Deposit events) ────────
 
 async function gatherDepositors(): Promise<Map<string, bigint>> {
-  // Score = sum across vaults of (peak_share_balance × time_held_seconds).
-  // We pull from Supabase `vault_nav_history` which the indexer mirrors.
-  // This is a starter heuristic — a real scoring algorithm would also weight
-  // for early-deposit-bonus (first 100 depositors get 2x).
-  const events = await supaSelect<{
-    wallet: string;
-    vault_symbol: string;
-    shares: string;
-    timestamp: number;
-  }>("vault_share_events", "wallet,vault_symbol,shares,timestamp");
-
+  // Score = total shares minted to the owner across all 4 vaults (summed over
+  // every Deposit). Simple + sybil-resistant-enough; a future version could
+  // weight by time-in-vault or peak balance.
   const score = new Map<string, bigint>();
-  for (const e of events) {
-    if (!e.wallet) continue;
-    const w = e.wallet.toLowerCase();
-    const shares = BigInt(e.shares ?? "0");
-    score.set(w, (score.get(w) ?? 0n) + shares);
+  const to = await resolveToBlock();
+  for (const [sym, addr] of Object.entries(VAULTS)) {
+    const logs = await getLogsChunked(getAddress(addr), EV_DEPOSIT, undefined, SNAPSHOT_FROM_BLOCK, to);
+    for (const lg of logs) {
+      const owner = (lg.args?.owner as string | undefined)?.toLowerCase();
+      const shares = (lg.args?.shares as bigint | undefined) ?? 0n;
+      if (owner) score.set(owner, (score.get(owner) ?? 0n) + shares);
+    }
+    console.log(`    vault ${sym}: ${logs.length} deposit logs`);
   }
   return score;
 }
 
-// ─── Track 3: quant contributors ────────────────────────────────────────
+// ─── Track 3: quant contributors (on-chain SignalScored events) ──────────
 
 async function gatherQuants(): Promise<Map<string, bigint>> {
-  // Score = lifetime ZENT-bps accuracy summed across all settled signals.
-  // Provider stats live in Supabase `provider_stats` written by the keeper.
-  const stats = await supaSelect<{
-    provider: string;
-    accuracy_bps: number;
-    payout_zent: string;
-  }>("provider_stats", "provider,accuracy_bps,payout_zent");
-
+  // Score = summed accuracy (bps) across all scored signals, per provider —
+  // read from EpochScoring's SignalScored events (same source the indexer uses).
   const score = new Map<string, bigint>();
-  for (const row of stats) {
-    if (!row.provider) continue;
-    const w = row.provider.toLowerCase();
-    // Quant score = accuracy_bps × payout magnitude. Accuracy alone undercounts
-    // quants with high stake-density; payout alone undercounts quants with many
-    // small accurate calls.
-    const accuracyComponent = BigInt(row.accuracy_bps ?? 0);
-    const payoutComponent = BigInt(row.payout_zent ?? "0") / 10n ** 14n; // scale down
-    score.set(w, (score.get(w) ?? 0n) + accuracyComponent + payoutComponent);
+  const to = await resolveToBlock();
+  const logs = await getLogsChunked(getAddress(EPOCH_SCORING), EV_SIGNAL_SCORED, undefined, SNAPSHOT_FROM_BLOCK, to);
+  for (const lg of logs) {
+    const provider = (lg.args?.provider as string | undefined)?.toLowerCase();
+    const accuracy = (lg.args?.accuracy as bigint | undefined) ?? 0n;
+    if (provider) score.set(provider, (score.get(provider) ?? 0n) + accuracy);
   }
+  console.log(`    SignalScored: ${logs.length} logs`);
   return score;
 }
 
@@ -262,12 +326,12 @@ async function main(): Promise<void> {
     quant: (totalScaled * BigInt(Math.floor(TRACK_WEIGHTS.quant * 10000))) / 10000n,
   };
 
-  // Gather scores in parallel
-  const [faucetScores, depositorScores, quantScores] = await Promise.all([
-    gatherFaucetUsers(),
-    gatherDepositors(),
-    gatherQuants(),
-  ]);
+  // Gather scores SEQUENTIALLY — three parallel chunked scans would thrash the
+  // rate-limited public RPC. Each prints its per-source log counts.
+  console.log(`Scanning on-chain events from block ${SNAPSHOT_FROM_BLOCK} (set SNAPSHOT_FROM_BLOCK/TO_BLOCK to bound)...`);
+  const faucetScores = await gatherFaucetUsers();
+  const depositorScores = await gatherDepositors();
+  const quantScores = await gatherQuants();
 
   console.log(`  faucet users: ${faucetScores.size}`);
   console.log(`  depositors:   ${depositorScores.size}`);
