@@ -254,19 +254,13 @@ Two broader internal review passes preceded this readiness package:
 
 ## 4. Test coverage
 
-> **Environment note (factual):** `forge test` could **not** be executed in the
-> environment that authored this document — shell command execution (Bash and
-> PowerShell) was unavailable to the tooling. The figures below are therefore a
-> **static count of declared test functions**, not the output of a live run.
-> The CI workflows (§3.3) run the full suite on every push, and the maintainer
-> should paste the live `forge test` tail here. The static count aligns with the
-> historically reported pass count.
+> **Live run (2026-06-04):** `forge test` executed against `main` →
+> **287 passed, 0 failed, 1 skipped** (288 total) across 28 suites, ~20s wall.
+> This is an actual run, not a static count. The single skip is an intentional
+> gated test. Re-run before freezing the audit branch and paste the fresh tail.
 
-- **Static count:** **286 test functions** (matching `function test*`,
-  `function testFuzz*`, `function invariant*`) across **27 test files** under
-  `contracts/test/`.
-- **Expected live result:** ~285 passing (the team's standing figure; the most
-  recent recorded run is 257/258 in `ROADMAP.md`, and the suite has grown since).
+- **Latest live result:** **287 passed / 0 failed / 1 skipped** (2026-06-04, on `main`).
+- **Static count:** **286+ test functions** across 28 test files under `contracts/test/`.
   To reproduce:
   ```bash
   cd contracts
@@ -401,7 +395,7 @@ within budget).
 |---|---|
 | Frozen audit commit | `git rev-parse main` on a frozen `audit/2026-Qx-<firm>` branch |
 | Scope + threat model | `docs/SECURITY_AUDIT_BRIEF.md` (§4 threat model) + §1–§2 above |
-| Existing tests | 27 forge test files / 286 test functions (§4) |
+| Existing tests | 28 forge test suites / 287 passing, 0 failing, 1 skipped — live run 2026-06-04 (§4) |
 | Static analysis history | `docs/reports/slither-2026-04-26.json`, CI slither job |
 | Pentest history | `docs/reports/pentest-2026-04-26.md` |
 | Prior internal audits | `AUDIT_REPORT.md`, `AUDIT_SPEC_CONFORMANCE.md` (workspace root) |
