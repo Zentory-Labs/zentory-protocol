@@ -81,8 +81,8 @@ One `FeeDistributor` instance per vault. Each distributes the 15% performance fe
 
 | Contract | Address | Source |
 |---|---|---|
-| `SignalRegistry` (EIP-712 signed signals) | [`0x9685F25E75758E18b2b109be64271102497D800e`](https://testnet.purrsec.com/address/0x9685F25E75758E18b2b109be64271102497D800e) | [`contracts/src/signals/SignalRegistry.sol`](contracts/src/signals/SignalRegistry.sol) |
-| `EpochScoring` (4-hour epochs) | [`0x31b7082f1e1B3cC373dE3d9c3575701b9aa24538`](https://testnet.purrsec.com/address/0x31b7082f1e1B3cC373dE3d9c3575701b9aa24538) | [`contracts/src/signals/EpochScoring.sol`](contracts/src/signals/EpochScoring.sol) |
+| `SignalRegistry` (EIP-712 signed signals) | [`0xA71cfdA74fc0BB7bE3f95aB806197286549e82e7`](https://testnet.purrsec.com/address/0xA71cfdA74fc0BB7bE3f95aB806197286549e82e7) | [`contracts/src/signals/SignalRegistry.sol`](contracts/src/signals/SignalRegistry.sol) |
+| `EpochScoring` (4-hour epochs) | [`0x659569A6f195698745779E59fef88e3B5Fe0484A`](https://testnet.purrsec.com/address/0x659569A6f195698745779E59fef88e3B5Fe0484A) | [`contracts/src/signals/EpochScoring.sol`](contracts/src/signals/EpochScoring.sol) |
 | `SubscriptionVault` (ZENT-paid signal subs) | [`0xb053b9a1A82D57B2BEa7cC4a472924Fb6926933E`](https://testnet.purrsec.com/address/0xb053b9a1A82D57B2BEa7cC4a472924Fb6926933E) | [`contracts/src/signals/SubscriptionVault.sol`](contracts/src/signals/SubscriptionVault.sol) |
 
 ## Shadow Stack — SpotVault research vault (testnet only)

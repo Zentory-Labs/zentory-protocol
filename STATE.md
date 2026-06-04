@@ -82,15 +82,15 @@ Source of truth: `zentory-protocol/DEPLOYMENTS.md`. Mirror in `zentory-app/lib/c
 | Vaults | zETHVault | `0xbe8a9d22560A1b126554b70Aaca2D763B2E70C4e` |
 | Vaults | zSOLVault | `0xb62BA9d0a14aC9f9601891179B3Da52bE71Ce052` |
 | Vaults | zXRPVault | `0x8B15204D88a9Bb155bE6798522983A3B5F7d7cB0` |
-| Staking | ZENTStaking | `0x4E2e7Fd3C85c05697b24743e580B03abCD6d0c65` |
+| Staking | ZENTStaking | `0x93A14D1c60e054038980965CF3CAa50CEB848de9` |
 | Staking | ModelBonding | `0x15f6c4bf4000747E0fDd85B33998A36F5BdF5007` |
 | Governance | Timelock | `0x1504cA3C050C88CcCa67696d642F634fc381fD03` |
 | Governance | Zentroller | `0x24f9401284CE16CFe61e40C1F9e3fb37d15B878E` |
 | Governance | ZentGovernor | `0x21ba1F7C028B1ADc78e75Ac187B08b1BDd567118` |
 | Execution | HyperCoreAdapter | `0xdad9175f6d2da1709ba3f73711e69022538d21a7` |
 | Execution | StrategyExecutor | `0xacd862ef134d772b0ca53a97f53ccdd00abc05cf` |
-| Signals | SignalRegistry | `0x9685F25E75758E18b2b109be64271102497D800e` *(redeployed 2026-06-01 — audit fixes)* |
-| Signals | EpochScoring | `0x31b7082f1e1B3cC373dE3d9c3575701b9aa24538` *(redeployed 2026-06-01 — payout/scoring/recency fixes)* |
+| Signals | SignalRegistry | `0xA71cfdA74fc0BB7bE3f95aB806197286549e82e7` *(redeployed 2026-06-01 — audit fixes)* |
+| Signals | EpochScoring | `0x659569A6f195698745779E59fef88e3B5Fe0484A` *(redeployed 2026-06-01 — payout/scoring/recency fixes)* |
 | Signals | SubscriptionVault | `0xb053b9a1A82D57B2BEa7cC4a472924Fb6926933E` *(redeployed 2026-06-01 — ELITE-pricing fix)* |
 | Shadow (testnet) | SpotVault | `0x504E998B32D165cfd6470a8a0000235550C33cBc` *(deployed 2026-06-02 — oracle-valued BTC long/flat research vault)* |
 | Shadow (testnet) | ShadowSpotAdapter | `0x385Ba1f9A9d74A28974C8F6c03762D03B0e4a00c` |

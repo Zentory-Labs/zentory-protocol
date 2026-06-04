@@ -358,8 +358,8 @@ published only after this audit + the Q4 2026 mainnet gate.
 ### Signal Arena
 | Contract | Address |
 |---|---|
-| `SignalRegistry` | `0x9685F25E75758E18b2b109be64271102497D800e` |
-| `EpochScoring` | `0x31b7082f1e1B3cC373dE3d9c3575701b9aa24538` |
+| `SignalRegistry` | `0xA71cfdA74fc0BB7bE3f95aB806197286549e82e7` |
+| `EpochScoring` | `0x659569A6f195698745779E59fef88e3B5Fe0484A` |
 | `SubscriptionVault` | `0xb053b9a1A82D57B2BEa7cC4a472924Fb6926933E` |
 
 ### Shadow Stack — testnet only (OUT OF SCOPE, see §2)
