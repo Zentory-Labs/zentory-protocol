@@ -11,7 +11,12 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 /// !!! NOT FOR MAINNET. Anyone can mint. Drop in real USDC for production.
 /// ============================================================================
 contract ShadowUSDC is ERC20 {
-    constructor() ERC20("Zentory Shadow USDC", "sUSDC") {}
+    constructor() ERC20("Zentory Shadow USDC", "sUSDC") {
+        // Defense-in-depth (audit NEW-1): TESTNET-ONLY mock with an open mint.
+        // Hard-block deployment to HyperEVM mainnet (chain 999) to prevent
+        // unlimited token inflation if accidentally deployed to production.
+        require(block.chainid != 999, "ShadowUSDC: mainnet forbidden");
+    }
     function decimals() public pure override returns (uint8) { return 6; }
     function mint(address to, uint256 amount) external { _mint(to, amount); }
 }

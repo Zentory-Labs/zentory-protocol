@@ -26,6 +26,11 @@ contract ShadowPriceOracle is AccessControl, AggregatorV3Interface {
     event PriceUpdated(int256 answer, uint256 updatedAt, uint80 round);
 
     constructor(uint8 decimals_, int256 initialPrice, address admin) {
+        // Defense-in-depth (audit NEW-1): TESTNET-ONLY shadow oracle with an
+        // unbounded setPrice. Hard-block deployment to HyperEVM mainnet (chain
+        // 999) so an accidental mainnet deploy can never enable oracle
+        // manipulation. Testnet (998) and local test chains are unaffected.
+        require(block.chainid != 999, "ShadowPriceOracle: mainnet forbidden");
         require(decimals_ > 0 && decimals_ <= 18, "bad decimals");
         require(initialPrice > 0, "bad initial price");
         require(admin != address(0), "zero admin");

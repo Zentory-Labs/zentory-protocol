@@ -249,6 +249,11 @@ contract SubscriptionVault is ReentrancyGuard {
     function hasAccess(address subscriber, uint8 assetClass)
         external view returns (bool hasAccess_)
     {
+        // Bound assetClass to the valid AssetClass enum range (0–4) (audit
+        // SIGNAL-005); out-of-range values would wrap in the uint8 bitmap cast
+        // and silently mis-evaluate access.
+        require(assetClass < 5, "SubscriptionVault: invalid assetClass");
+
         // O(1) check: if latest expiration has passed, no active subscription exists
         if (latestExpiration[subscriber] < uint32(block.timestamp)) return false;
 
