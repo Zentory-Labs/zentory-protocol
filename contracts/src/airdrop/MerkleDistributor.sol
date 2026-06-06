@@ -134,6 +134,7 @@ contract MerkleDistributor is AccessControl {
     ///         claim deadline. Only callable by SWEEPER_ROLE — should
     ///         be the protocol multisig.
     function sweep(address recipient) external onlyRole(SWEEPER_ROLE) {
+        require(recipient != address(0), "MerkleDistributor: zero recipient"); // audit AIRDROP-1
         if (block.timestamp <= claimDeadline) revert SweepBeforeDeadline();
         uint256 balance = token.balanceOf(address(this));
         if (balance == 0) return;

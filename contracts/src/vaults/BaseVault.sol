@@ -215,8 +215,14 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         }
     }
 
+    /// @notice Emitted when the performance-fee recipient is changed. Lets
+    ///         off-chain monitoring alert on any admin/governance fee re-routing
+    ///         (audit VAULT-4 observability gap).
+    event FeeRecipientChanged(address indexed oldRecipient, address indexed newRecipient);
+
     function setFeeRecipient(address newRecipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newRecipient != address(0), "BaseVault: zero fee recipient");
+        emit FeeRecipientChanged(feeRecipient, newRecipient);
         feeRecipient = newRecipient;
     }
 

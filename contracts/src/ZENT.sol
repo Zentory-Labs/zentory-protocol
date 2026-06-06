@@ -65,4 +65,13 @@ contract ZENT is ERC20Votes, ERC20Permit {
     function nonces(address owner) public view override(ERC20Permit, Nonces) returns (uint256) {
         return super.nonces(owner);
     }
+
+    /// @dev Enforce the published 1B CAP as the ERC20Votes supply ceiling
+    ///      (audit TOKEN-001/TOKEN-002). ERC20Votes defaults _maxSupply() to
+    ///      type(uint208).max; overriding to CAP makes _update revert on any
+    ///      mint that would push totalSupply past CAP, hard-enforcing the cap
+    ///      invariant programmatically (including the testnet mint path).
+    function _maxSupply() internal pure override returns (uint256) {
+        return CAP;
+    }
 }
