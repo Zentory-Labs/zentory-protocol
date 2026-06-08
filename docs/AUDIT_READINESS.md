@@ -319,12 +319,16 @@ third-party push feed is an alternative `SpotVault.oracle` can point at.
 > Re-run before freezing the audit branch and paste the fresh tail.
 
 - **Latest live result:** **327 passed / 0 failed / 1 skipped** (2026-06-08, on `main`).
-- **Static count:** **286+ test functions** across 28 test files under `contracts/test/`.
+- **Static count:** **328 test functions** across 33 test files under `contracts/test/`.
   To reproduce:
   ```bash
   cd contracts
   export PATH="$PATH:$HOME/.foundry/bin"
-  forge test 2>&1 | tail -5
+  forge test 2>&1 | tail -4
+  ```
+  Actual tail (2026-06-08, the frozen audit commit):
+  ```
+  Ran 33 test suites in 20.77s (224.28s CPU time): 327 tests passed, 0 failed, 1 skipped (328 total tests)
   ```
 
 **Test directories (`contracts/test/`):**
