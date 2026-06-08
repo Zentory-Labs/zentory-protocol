@@ -74,8 +74,20 @@ under the closest domain and flagged.
 
 | Contract | File | LOC | Purpose |
 |---|---|---:|---|
-| `StrategyExecutor` | `keeper/StrategyExecutor.sol` | 407 | Permissioned keeper validating EIP-712-signed GP-engine trade signals and executing via the adapter; mandate-bounded by per-vault `maxPositionSize` / `maxLeverageBPS`; `KEEPER_ROLE` / `GUARDIAN_ROLE` (pause) / `GOVERNOR_ROLE`; per-vault nonce replay protection. |
+| `StrategyExecutor` | `keeper/StrategyExecutor.sol` | 488 | Permissioned keeper validating EIP-712-signed GP-engine signals. Two signed paths: `executeSignal` (perp `TradeSignal`, mandate-bounded by per-vault `maxPositionSize`/`maxLeverageBPS`) and **`executeRebalance` (NEW 2026-06 — signed `Rebalance(vault,targetWeightBps,nonce,expiry)` target-weight path driving `SpotVault.rebalanceTo`; long/flat 0..10000, no leverage)**. Shared per-vault nonce (cross-action replay blocked); low-s EIP-712 verify vs `authorizedSigner`; `KEEPER_ROLE` / `GUARDIAN_ROLE` (pause) / `GOVERNOR_ROLE`. |
 | `HyperCoreAdapter` | `keeper/HyperCoreAdapter.sol` | 240 | Sends order actions to HyperCore via the CoreWriter precompile (`0x3333…3333`); `EXECUTOR_ROLE`-gated order path (granted to `StrategyExecutor`). |
+
+### Adapters
+
+| Contract | File | LOC | Purpose |
+|---|---|---:|---|
+| `HyperSwapRouterAdapter` | `adapters/HyperSwapRouterAdapter.sol` | 140 | **NEW 2026-06 — production v1 `ISpotSwapAdapter`.** Atomic spot swap for `SpotVault`'s asset⇄cash rebalances via a Uniswap-V3-style HyperEVM DEX router (`exactInputSingle`, fixed fee tier, `minOut` enforced in-tx + re-asserted, approvals cleared). `VAULT_ROLE`-gated; output routed to the vault. Replaces the testnet `ShadowSpotAdapter`; venue-pluggable via `SpotVault.setSwapAdapter` (a CoreWriter spot adapter is the v2 option). |
+
+### Oracle
+
+| Contract | File | LOC | Purpose |
+|---|---|---:|---|
+| `MedianOracle` | `oracle/MedianOracle.sol` | 150 | **NEW 2026-06 — production NAV price oracle.** Chainlink-compatible (`AggregatorV3`) feed whose answer is the MEDIAN of fresh reports from a set of independent updater keys; manipulation-resistant by design (a minority of compromised updaters cannot move the median). Per-report `[minAnswer,maxAnswer]` bounds; `latestRoundData` reverts unless ≥ `minQuorum` reports are fresh (within `maxStaleness`) and returns the oldest contributing timestamp. Replaces the single-key testnet `ShadowPriceOracle`. (A third-party push feed — Chainlink/Stork/RedStone on HyperEVM — may be used instead by pointing `SpotVault.oracle` at it.) |
 
 ### Fees
 
@@ -84,12 +96,13 @@ under the closest domain and flagged.
 | `FeeDistributor` | `fees/FeeDistributor.sol` | 187 | Routes performance fees per the whitepaper §6.4 split — 50% buyback, 25% Protocol Treasury, 15% insurance, 10% ops/GP engine; permissionless accumulate/distribute, governor-gated buyback trigger. One instance per vault. |
 | `IFeeDistributor` | `interfaces/IFeeDistributor.sol` | 30 | FeeDistributor interface. |
 
-**In-scope source total:** 27 `.sol` files under `contracts/src/` (excluding the
+**In-scope source total:** 29 `.sol` files under `contracts/src/` (excluding the
 3 shadow contracts in §2). Non-interface, non-shadow implementation contracts
 account for the bulk of the auditable surface; the largest single contracts are
-`EpochScoring` (649), `SignalRegistry` (421), `StrategyExecutor` (407),
-`SubscriptionVault` (374), `BaseVault` (304), `ZENTStaking` (273), and
-`SpotVault` (250).
+`EpochScoring` (649), `StrategyExecutor` (488, incl. `executeRebalance`),
+`SignalRegistry` (421), `SubscriptionVault` (374), `BaseVault` (304),
+`ZENTStaking` (273), `SpotVault` (250), the new `MedianOracle` (150), and
+`HyperSwapRouterAdapter` (140).
 
 ---
 
@@ -125,10 +138,16 @@ Additionally out of scope:
   (separate `zentory-app` repo). The Hyperliquid L1 precompiles that
   `HyperCoreAdapter` writes to are external infrastructure, not Zentory code.
 
-The production replacements for the shadow stack — real USDC, a real Chainlink
-feed, and a CoreWriter spot adapter — are **not yet in this repo** and will need
-their own audit coverage once written. `DEPLOYMENTS.md` and the SpotVault
-NatSpec both state this explicitly.
+**Update (2026-06):** the production **v1 spot adapter now EXISTS and is in scope** —
+`adapters/HyperSwapRouterAdapter.sol` (atomic UniV3-style DEX router), replacing the
+testnet `ShadowSpotAdapter`. The new signed `executeRebalance` path on
+`StrategyExecutor` and `script/DeploySpotStack.s.sol` (which wires the full loop) are
+likewise in scope (see §3.5). The production **NAV oracle now EXISTS and is in scope** —
+`oracle/MedianOracle.sol` (multi-signer median, replacing the single-key shadow oracle);
+a third-party push feed (Chainlink/Stork/RedStone) remains an alternative the vault can
+point at. The remaining production replacements still pending: **real USDC** (canonical
+mainnet token) and the optional **CoreWriter spot adapter (v2)** for deeper native
+liquidity.
 
 ---
 
@@ -250,16 +269,56 @@ Two broader internal review passes preceded this readiness package:
 - **No mainnet admin mint.** `ZENT.mintForTestnet` reverts on any chain other
   than 998 and is one-shot.
 
+### 3.5 New spot-execution surface (2026-06-08) — priority review area
+
+This session added the production-grade, signed spot-execution loop that makes a
+`SpotVault` depositor's shares actually move with strategy PnL (previously NAV was
+decoupled from signals). **Auditors should treat this as the highest-priority new
+surface.** Components and how they compose:
+
+- `StrategyExecutor.executeRebalance` — the signed `Rebalance` target-weight path (§1).
+- `adapters/HyperSwapRouterAdapter.sol` — the atomic v1 spot venue (§1).
+- `script/DeploySpotStack.s.sol` — one-broadcast deploy wiring adapter `VAULT_ROLE`→vault,
+  `setSwapAdapter`, vault `KEEPER_ROLE`→`StrategyExecutor`, risk council; post-deploy asserts.
+- **Path:** `executeRebalance` → `SpotVault.rebalanceTo` (`nonReentrant`) → `_swap`
+  (`forceApprove` + `minOut`) → `HyperSwapRouterAdapter.swap` → DEX router (output → vault).
+- Off-chain counterpart (separate `zentory-engine` repo; out of contract scope but
+  relevant): `sign_rebalance` produces the byte-identical EIP-712 digest the contract verifies.
+
+Coverage: `test/keeper/ExecuteRebalance.t.sol` (11), `test/adapters/HyperSwapRouterAdapter.t.sol`
+(8), `test/integration/SpotRebalanceLoop.t.sol` (2, end-to-end through the signed path), plus a
+cross-language digest-parity test in the engine repo.
+
+**Internal adversarial pre-review (2026-06-08, completed):** a 5-dimension adversarial
+review of exactly this surface (executeRebalance, HyperSwapRouterAdapter, DeploySpotStack,
+SpotVault composition, engine signer) with 3-vote verification. **Result: 0 confirmed
+high/critical findings.** The high/critical candidates raised were dispositioned as
+non-exploitable (the `vault==address(0)` and `swapAdapter==0` paths require the trusted
+`authorizedSigner` to sign a no-op command or an admin mis-wire, and revert safely; the
+fee-on-transfer/rebasing concerns do not apply to the standard WBTC/WETH/USDC/WSOL
+assets). Three were nonetheless closed pre-audit as cheap defense-in-depth and are now
+in source: `require(vault != address(0))` in `executeRebalance`,
+`require(address(swapAdapter) != address(0))` in `SpotVault._swap`, and a post-swap
+`balanceOf(this)==0` residual-token assert in `HyperSwapRouterAdapter` (rejects
+fee-on-transfer / partial-fill routers rather than stranding funds). Auditors should
+still review independently — this is prior work, not a clearance.
+
+**Deferred-by-design (not findings):** the native HyperCore CoreWriter spot path is
+intentionally NOT used in v1 — it is async/non-atomic and its abstraction tooling is
+unaudited; the atomic DEX-router adapter was chosen for v1 and CoreWriter is a v2 option.
+The production NAV oracle is `oracle/MedianOracle.sol` (multi-signer median); a
+third-party push feed is an alternative `SpotVault.oracle` can point at.
+
 ---
 
 ## 4. Test coverage
 
-> **Live run (2026-06-04):** `forge test` executed against `main` →
-> **287 passed, 0 failed, 1 skipped** (288 total) across 28 suites, ~20s wall.
-> This is an actual run, not a static count. The single skip is an intentional
-> gated test. Re-run before freezing the audit branch and paste the fresh tail.
+> **Live run (2026-06-08):** `forge test` against `main` →
+> **327 passed, 0 failed, 1 skipped** (328 total) across 33 suites, ~15s wall.
+> An actual run, not a static count. The single skip is an intentional gated test.
+> Re-run before freezing the audit branch and paste the fresh tail.
 
-- **Latest live result:** **287 passed / 0 failed / 1 skipped** (2026-06-04, on `main`).
+- **Latest live result:** **327 passed / 0 failed / 1 skipped** (2026-06-08, on `main`).
 - **Static count:** **286+ test functions** across 28 test files under `contracts/test/`.
   To reproduce:
   ```bash
@@ -278,9 +337,11 @@ Two broader internal review passes preceded this readiness package:
 | `test/fees/` | `FeeDistributor` |
 | `test/fuzz/` | `BaseVault.fuzz`, `StrategyExecutor.fuzz` |
 | `test/governance/` | `ZentGovernor` |
-| `test/integration/` | `SignalNetworkDeploy` |
+| `test/adapters/` | `HyperSwapRouterAdapter` (production v1 spot adapter) |
+| `test/integration/` | `SignalNetworkDeploy`, `SpotRebalanceLoop` (signed spot loop, end-to-end) |
 | `test/invariants/` | `BaseVault.inv`, `StrategyExecutor.inv` (+ `mocks/MockERC20`) |
-| `test/keeper/` | `StrategyExecutor` |
+| `test/keeper/` | `StrategyExecutor`, `ExecuteRebalance` (signed rebalance path) |
+| `test/oracle/` | `MedianOracle` (multi-signer median NAV oracle) |
 | `test/script/` | `MainnetDeployVaults` |
 | `test/shadow/` | `ShadowStack` (testnet harness) |
 | `test/signals/` | `EpochScoring`, `EpochScoringSnapshotOrder`, `PayoutCurve`, `SignalRegistry`, `SubscriptionVaultRenewal` |
@@ -395,7 +456,7 @@ within budget).
 |---|---|
 | Frozen audit commit | `git rev-parse main` on a frozen `audit/2026-Qx-<firm>` branch |
 | Scope + threat model | `docs/SECURITY_AUDIT_BRIEF.md` (§4 threat model) + §1–§2 above |
-| Existing tests | 28 forge test suites / 287 passing, 0 failing, 1 skipped — live run 2026-06-04 (§4) |
+| Existing tests | 33 forge test suites / 327 passing, 0 failing, 1 skipped — live run 2026-06-08 (§4) |
 | Static analysis history | `docs/reports/slither-2026-04-26.json`, CI slither job |
 | Pentest history | `docs/reports/pentest-2026-04-26.md` |
 | Prior internal audits | `AUDIT_REPORT.md`, `AUDIT_SPEC_CONFORMANCE.md` (workspace root) |

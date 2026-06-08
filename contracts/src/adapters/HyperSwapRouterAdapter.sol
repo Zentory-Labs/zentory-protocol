@@ -124,6 +124,12 @@ contract HyperSwapRouterAdapter is AccessControl, ISpotSwapAdapter {
         // non-standard router implementation failed to.
         if (amountOut < minOut) revert SlippageExceeded(amountOut, minOut);
 
+        // An exact-input swap must consume the entire pulled amount. If any tokenIn
+        // remains, the input token took a transfer fee / the router under-pulled
+        // (fee-on-transfer / non-standard router) — revert rather than silently
+        // strand vault funds in the adapter (pre-audit review HSA-001/HSA-007).
+        require(IERC20(tokenIn).balanceOf(address(this)) == 0, "HyperSwapRouterAdapter: residual tokenIn");
+
         // Clear any residual allowance (should be 0 after an exact-in swap, but
         // a non-standard router could leave dust approved).
         IERC20(tokenIn).forceApprove(address(router), 0);

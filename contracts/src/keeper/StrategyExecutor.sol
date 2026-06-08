@@ -334,6 +334,10 @@ contract StrategyExecutor is AccessControl {
         onlyRole(KEEPER_ROLE)
         returns (bool)
     {
+        // Defense-in-depth (pre-audit review): reject a zero vault. Not attacker-
+        // reachable (the command must be signed by authorizedSigner), but cheap to
+        // fail fast rather than burn a nonce slot / emit noise on a no-op address.
+        require(vault != address(0), "StrategyExecutor: zero vault");
         if (targetWeightBps > 10000) {
             emit SignalRejected(vault, "weight exceeds 10000");
             revert InvalidWeight(targetWeightBps);

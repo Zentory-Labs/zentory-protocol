@@ -180,4 +180,13 @@ contract ExecuteRebalanceTest is Test {
         vm.expectRevert(StrategyExecutor.InvalidSignature.selector);
         exec2.executeRebalance(address(vault), 6000, 1, expiry, sigForExec);
     }
+
+    function test_zeroVaultReverts() public {
+        // Defense-in-depth guard: a zero vault is rejected before signature/nonce work.
+        uint256 expiry = block.timestamp + 1 hours;
+        bytes memory sig = _sign(address(0), 6000, 1, expiry);
+        vm.prank(keeper);
+        vm.expectRevert(bytes("StrategyExecutor: zero vault"));
+        exec.executeRebalance(address(0), 6000, 1, expiry, sig);
+    }
 }
