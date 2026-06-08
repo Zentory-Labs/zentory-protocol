@@ -11,6 +11,17 @@ import {IVault} from "../vaults/IVault.sol";
 ///         the governor can grant/revoke keeper roles and update risk parameters.
 /// @dev  Signature scheme: keccak256(abi.encode(domain, vault, direction, size, nonce, expiry))
 ///       where domain = block.chainid + address(this).
+///
+///       Spot rebalance scheme (SpotVault v2): keccak256(abi.encode(REBALANCE_TYPEHASH,
+///       vault, targetWeightBps, nonce, expiry)) — same EIP-712 domain. executeRebalance
+///       drives SpotVault.rebalanceTo and requires this contract to hold the vault's
+///       KEEPER_ROLE. This is the on-chain, signed exposure-change path for spot vaults.
+
+/// @notice Minimal interface for SpotVault's keeper-gated rebalance entrypoint.
+interface ISpotRebalancer {
+    function rebalanceTo(uint16 targetWeightBps) external;
+}
+
 contract StrategyExecutor is AccessControl {
 
     // ─── Roles ────────────────────────────────────────────────────────────
@@ -30,6 +41,10 @@ contract StrategyExecutor is AccessControl {
     bytes32 public immutable DOMAIN_SEPARATOR;
     bytes32 public constant SIGNAL_TYPEHASH =
         keccak256("TradeSignal(address vault,uint8 direction,uint256 size,uint64 price,uint256 nonce,uint256 expiry)");
+
+    /// @notice EIP-712 type hash for a SpotVault target-weight rebalance command.
+    bytes32 public constant REBALANCE_TYPEHASH =
+        keccak256("Rebalance(address vault,uint16 targetWeightBps,uint256 nonce,uint256 expiry)");
 
     /// @notice Authorized strategy signer (GP engine / operator signer).
     ///         Initialized to deployer in constructor; governance calls setAuthorizedSigner
@@ -69,6 +84,14 @@ contract StrategyExecutor is AccessControl {
         address indexed keeper
     );
 
+    /// @notice Emitted when a signed SpotVault target-weight rebalance is executed.
+    event RebalanceExecuted(
+        address indexed vault,
+        uint16          targetWeightBps,
+        uint256         nonce,
+        address indexed keeper
+    );
+
     /// @notice Emitted when a signal fails validation.
     event SignalRejected(address indexed vault, string reason);
 
@@ -105,6 +128,7 @@ contract StrategyExecutor is AccessControl {
     error PositionSizeExceedsLimit(uint256 size, uint256 max);
     error LeverageExceedsLimit(uint256 leverageBPS, uint256 maxBPS);
     error ZeroSize();
+    error InvalidWeight(uint16 weight);
     error UnauthorizedKeeper(address account);
 
     // ─── Modifiers ────────────────────────────────────────────────────────
@@ -279,6 +303,63 @@ contract StrategyExecutor is AccessControl {
             keeper:     msg.sender
         });
 
+        return true;
+    }
+
+    // ─── Spot rebalance submission (SpotVault v2) ─────────────────────────
+
+    /// @notice Validate and execute a signed target-weight rebalance on a SpotVault.
+    /// @dev    The signed, on-chain exposure-change path for spot vaults: the GP engine
+    ///         signs (vault, targetWeightBps, nonce, expiry); a keeper (KEEPER_ROLE here)
+    ///         submits it; this contract — holding the vault's KEEPER_ROLE — calls
+    ///         SpotVault.rebalanceTo. Long/flat only: targetWeightBps is 0..10000 (the
+    ///         fraction of NAV held in the underlying), so no leverage check applies.
+    ///         Nonces share the per-vault counter with executeSignal; a given vault is
+    ///         either a perp (executeSignal) or a spot (executeRebalance) vault, so the
+    ///         monotonic nonce blocks cross-action replay.
+    /// @param  vault            Target SpotVault
+    /// @param  targetWeightBps  Desired underlying weight, 0..10000 (0 = flat, 10000 = full long)
+    /// @param  nonce            Unique, strictly-increasing per-vault nonce (replay guard)
+    /// @param  expiry           Unix timestamp after which the command is invalid
+    /// @param  signature        ECDSA signature over the command from the authorized signer
+    function executeRebalance(
+        address vault,
+        uint16  targetWeightBps,
+        uint256 nonce,
+        uint256 expiry,
+        bytes   calldata signature
+    )
+        external
+        whenNotPaused
+        onlyRole(KEEPER_ROLE)
+        returns (bool)
+    {
+        if (targetWeightBps > 10000) {
+            emit SignalRejected(vault, "weight exceeds 10000");
+            revert InvalidWeight(targetWeightBps);
+        }
+        if (block.timestamp > expiry) {
+            emit SignalRejected(vault, "signal expired");
+            revert SignalExpired(expiry, block.timestamp);
+        }
+        if (nonces[vault] >= nonce) {
+            emit SignalRejected(vault, "nonce used");
+            revert NonceAlreadyUsed(vault, nonce);
+        }
+
+        bytes32 structHash = keccak256(
+            abi.encode(REBALANCE_TYPEHASH, vault, targetWeightBps, nonce, expiry)
+        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        _verifySignature(digest, signature);
+
+        // Mark nonce used BEFORE the external call (checks-effects-interactions).
+        nonces[vault] = nonce;
+
+        // Drive the vault. This contract must hold the vault's KEEPER_ROLE.
+        ISpotRebalancer(vault).rebalanceTo(targetWeightBps);
+
+        emit RebalanceExecuted(vault, targetWeightBps, nonce, msg.sender);
         return true;
     }
 
