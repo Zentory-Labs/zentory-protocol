@@ -198,6 +198,9 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
 
     function _swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut) internal {
         if (amountIn == 0) return;
+        // Defense-in-depth (pre-audit review): a rebalance/withdraw before the admin
+        // wired the adapter would otherwise approve+call address(0). Fail clearly.
+        require(address(swapAdapter) != address(0), "SpotVault: adapter unset");
         IERC20(tokenIn).forceApprove(address(swapAdapter), amountIn);
         uint256 out = swapAdapter.swap(tokenIn, tokenOut, amountIn, minOut);
         require(out >= minOut, "slippage");
