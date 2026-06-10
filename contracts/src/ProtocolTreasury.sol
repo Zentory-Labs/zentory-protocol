@@ -2,13 +2,16 @@
 pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title Protocol Treasury
 /// @notice Central wallet that receives all protocol fees (vault fees, sub fees, etc.)
 ///         and routes them: 50% to ZENTBuyback, 50% to operational treasury.
-contract ProtocolTreasury is Ownable(msg.sender) {
+/// @dev    Ownable2Step (2026 re-scan, AC-4/ACC-002): a typo'd transferOwnership can
+///         no longer brick owner-gated recovery — the new owner must acceptOwnership.
+contract ProtocolTreasury is Ownable2Step {
     using SafeERC20 for IERC20;
 
     address public immutable buyback;
@@ -19,7 +22,7 @@ contract ProtocolTreasury is Ownable(msg.sender) {
     event Sweep(address indexed token, uint256 toBuyback, uint256 toOperations);
     event Rescued(address indexed token, address indexed to, uint256 amount);
 
-    constructor(address _buyback, address _operations) {
+    constructor(address _buyback, address _operations) Ownable(msg.sender) {
         require(_buyback != address(0), "ProtocolTreasury: zero buyback");
         require(_operations != address(0), "ProtocolTreasury: zero operations");
         buyback = _buyback;

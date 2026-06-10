@@ -40,6 +40,11 @@ contract DeployMedianOracle is Script {
         int256 maxAns = vm.envOr("ORACLE_MAX_ANSWER", int256(1e15));         // $10,000,000
         uint256 minQuorum = vm.envOr("ORACLE_MIN_QUORUM", uint256(2));
         require(updaters.length >= minQuorum, "updaters < quorum");
+        // 2026 re-scan: on mainnet a 1-2 key quorum makes the median manipulable by
+        // a small compromise; require >= 3 independent updaters for chain 999.
+        if (block.chainid == 999) {
+            require(minQuorum >= 3, "mainnet requires ORACLE_MIN_QUORUM >= 3");
+        }
 
         console2.log("Deployer:    ", deployer);
         console2.log("Decimals:    ", uint256(dec));

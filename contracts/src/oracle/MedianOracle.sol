@@ -84,6 +84,11 @@ contract MedianOracle is AccessControl, AggregatorV3Interface {
 
     function removeUpdater(address u) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(hasRole(UPDATER_ROLE, u), "not updater");
+        // 2026 re-scan fix: removal must never shrink the set below the quorum —
+        // otherwise an admin slip bricks every NAV read (latestRoundData reverts on
+        // insufficient fresh reports). To rotate out a compromised updater at the
+        // boundary, addUpdater the replacement FIRST, then remove.
+        require(updaters.length > minQuorum, "MedianOracle: would break quorum");
         _revokeRole(UPDATER_ROLE, u);
         uint256 n = updaters.length;
         for (uint256 i = 0; i < n; i++) {

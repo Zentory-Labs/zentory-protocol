@@ -4,12 +4,15 @@ pragma solidity ^0.8.28;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /// @title ZENT Buyback & Burn
 /// @notice Accumulates USDC from protocol fees and uses it to buy ZENT from the market,
 ///         then burns the purchased ZENT to 0xdead. Non-discretionary execution model
 ///         (no governance control) to avoid securities classification.
-contract ZENTBuyback is Ownable(msg.sender) {
+/// @dev    Ownable2Step (2026 re-scan, AC-4/ACC-002): two-step handover prevents a
+///         typo'd transferOwnership from orphaning setThreshold/rescueToken.
+contract ZENTBuyback is Ownable2Step {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable zent;   // ZENT token
@@ -23,7 +26,7 @@ contract ZENTBuyback is Ownable(msg.sender) {
 
     error BelowThreshold(uint256 currentBalance);
 
-    constructor(address _zent, address _usdc, uint256 _minThreshold) {
+    constructor(address _zent, address _usdc, uint256 _minThreshold) Ownable(msg.sender) {
         require(_zent != address(0), "ZENTBuyback: zero ZENT address");
         require(_usdc != address(0), "ZENTBuyback: zero USDC address");
 

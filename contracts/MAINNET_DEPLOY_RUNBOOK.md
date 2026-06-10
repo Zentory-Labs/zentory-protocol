@@ -97,3 +97,30 @@ Roles to check per `MigrateToMultisig.s.sol._buildRegistry`: `DEFAULT_ADMIN_ROLE
 - [ ] Production RPC (`RPC_FALLBACK_URLS`) configured (see M6).
 - [ ] All deployer-EOA roles revoked (§4 passes).
 ```
+
+## 6. Spot stack (v1 canonical vault) — added 2026-06 re-scan
+
+```bash
+# g. NAV oracle    (DeployMedianOracle.s.sol — ORACLE_UPDATERS=3+ independent keys;
+#                   script REQUIRES ORACLE_MIN_QUORUM >= 3 on chain 999)
+# h. Spot stack    (DeploySpotStack.s.sol — ROUTER=real HyperSwap V3 SwapRouter,
+#                   FEE_TIER=deepest WBTC/USDC pool, ORACLE=<g>, STRATEGY_EXECUTOR=<live>)
+```
+
+Mandatory after g+h (extends the §4 no-EOA gate to the new surface):
+- [ ] `StrategyExecutor.setAuthorizedSigner(<GP engine signer>)` — until this runs, NO
+      signals/rebalances are accepted (safe default), but it MUST be the engine key,
+      never the deployer.
+- [ ] Per-vault limits SET (skip = unlimited): `setMaxPositionSize`, `setMaxLeverageBPS`
+      for every vault the executor can drive.
+- [ ] MedianOracle: >= 3 independent updaters live and reporting on the keeper cadence;
+      `minQuorum >= 3`; admin transferred to the Safe. (Rotation: addUpdater BEFORE
+      removeUpdater — the contract enforces it.)
+- [ ] Adapter + vault + oracle `DEFAULT_ADMIN_ROLE` → Safe; deployer renounced (§4 check
+      re-run including MedianOracle + HyperSwapRouterAdapter + SpotVault).
+- [ ] Engine env: `EXPECTED_CHAIN_ID=999` set on every writer (oracle_pusher,
+      signal_submitter, executor) — they abort on mismatch.
+- [ ] Key policy applied: `docs/KEY_MANAGEMENT.md` (inventory, rotation, compromise
+      response) — authorizedSigner on KMS/hardware for mainnet.
+- [ ] Seed each SpotVault with a first deposit (inflation-attack invariant) before
+      opening deposits.

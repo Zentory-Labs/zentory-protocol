@@ -105,6 +105,19 @@ contract MedianOracleTest is Test {
         oracle.report(50_000 * 1e8);
     }
 
+    function test_removeUpdaterCannotBreakQuorum() public {
+        // 3 updaters, quorum 2: removing one (→2) is fine; removing another (→1 < quorum)
+        // must revert so an admin slip can't brick every NAV read.
+        oracle.removeUpdater(u3);
+        assertEq(oracle.updaterCount(), 2);
+        vm.expectRevert(bytes("MedianOracle: would break quorum"));
+        oracle.removeUpdater(u2);
+        // Rotation at the boundary: add the replacement first, then remove.
+        oracle.addUpdater(u4);
+        oracle.removeUpdater(u2);
+        assertEq(oracle.updaterCount(), 2);
+    }
+
     function test_removeUpdaterClearsReport() public {
         _report(u1, 50_000 * 1e8);
         _report(u2, 50_000 * 1e8);
