@@ -309,6 +309,46 @@ unaudited; the atomic DEX-router adapter was chosen for v1 and CoreWriter is a v
 The production NAV oracle is `oracle/MedianOracle.sol` (multi-signer median); a
 third-party push feed is an alternative `SpotVault.oracle` can point at.
 
+### 3.6 Full-protocol re-scan (2026-06-10) — web-grounded against the 2026 exploit landscape
+
+A second internal multi-agent re-scan of the ENTIRE system (9 dimensions incl. the new
+spot surface; 155 raw findings; every high/critical 3-vote adversarially verified),
+grounded in a cited 2026 exploit-landscape briefing (key facts the review applied:
+~76% of 2025 losses were key/access-control failures per Immunefi; Volo/Purrlend
+operator-key drains; GiddyVault unsigned-field replay; sDOLA/SingularityFinance 4626
+inflation variants; JELLY oracle manipulation; CoreWriter async/silent-failure traps).
+
+**Dispositions (deduplicated from 49 panel-confirmed entries):**
+- **Fixed in source same day** (PR refs in git): fork-replay-safe `DOMAIN_SEPARATOR()`
+  on StrategyExecutor (recomputed if `block.chainid` changes; ABI-compatible);
+  `MedianOracle.removeUpdater` can no longer shrink the set below `minQuorum`
+  (add-before-remove rotation enforced); `DeployMedianOracle` requires
+  `minQuorum >= 3` on chain 999; `Ownable2Step` on ProtocolTreasury / InsuranceFund /
+  ZENTBuyback (closes the deferred AC-4/ACC-002); engine `EXPECTED_CHAIN_ID` aborts in
+  oracle_pusher + signal_submitter (mirrors keeper F-03).
+- **Operational policy shipped:** `docs/KEY_MANAGEMENT.md` (key inventory, separation,
+  storage, rotation, compromise response) + `MAINNET_DEPLOY_RUNBOOK.md §6` (spot-stack
+  deploy + extended no-EOA gate + per-vault limits + oracle quorum).
+- **Known/tracked, unchanged:** deployer-EOA admin everywhere → M3 Safe migration (the
+  single production gate; script ready, needs signers); workspace on OneDrive →
+  operator action (INFRA-1).
+- **Verified FALSE positives (evidence on file):** "leaked deployer key still present in
+  HANDOFF/TODO/TESTING-PLAN/.claude settings" — grep-verified clean; the flagged hex is
+  a deploy TX HASH and two grep-pattern permission entries. "SpotVault lacks staleness
+  protection" — `_oraclePrice` is fail-closed on staleness/answer/round. "swapAdapter
+  not covered by the Rebalance signature" — the adapter is admin-set vault state, not
+  keeper-supplied calldata (not the GiddyVault hole). "Missing mainnet chain guard on
+  production contracts" — inverted logic (those contracts are the mainnet deployment).
+  `sqrtPriceLimitX96=0` — `minOut` derived from the oracle price ± `maxSlippageBps` is
+  the binding price protection (standard exact-input pattern); noted for the auditor.
+- **Open for the external auditor / Edge decisions:** GOV-001 (66% supermajority
+  override in ZentGovernor — governance design choice); read-only-reentrancy review of
+  NAV views for third-party integrators (no internal exploit found; flagged as a 2026
+  focus area); recorder entries are hash-chained but not signed (tamper-evidence relies
+  on git history; enhancement candidate).
+
+Live suite after fixes: **329 passed / 0 failed / 1 skipped (330)**, engine 47/1.
+
 ---
 
 ## 4. Test coverage

@@ -38,7 +38,26 @@ contract StrategyExecutor is AccessControl {
 
     // ─── Signature domain ─────────────────────────────────────────────────
 
-    bytes32 public immutable DOMAIN_SEPARATOR;
+    // 2026 re-scan fix (fork-replay): the domain separator is cached for the
+    // deployment chain but recomputed if block.chainid ever differs (chain fork
+    // or a forked-network replay), so signatures from one chain can never be
+    // replayed on a fork. Exposed as a view function with the same ABI selector
+    // the old `public immutable` getter had.
+    bytes32 private immutable _CACHED_DOMAIN_SEPARATOR;
+    uint256 private immutable _CACHED_CHAIN_ID;
+
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+        if (block.chainid == _CACHED_CHAIN_ID) return _CACHED_DOMAIN_SEPARATOR;
+        return _buildDomainSeparator(block.chainid);
+    }
+
+    function _buildDomainSeparator(uint256 chainId) private view returns (bytes32) {
+        return keccak256(abi.encode(
+            keccak256("EIP712Domain(uint256 chainId,address executor)"),
+            chainId,
+            address(this)
+        ));
+    }
     bytes32 public constant SIGNAL_TYPEHASH =
         keccak256("TradeSignal(address vault,uint8 direction,uint256 size,uint64 price,uint256 nonce,uint256 expiry)");
 
@@ -146,12 +165,9 @@ contract StrategyExecutor is AccessControl {
 
         hyperCore = HyperCoreAdapter(hyperCore_);
 
-        // Domain separator: prevent cross-chain replay
-        DOMAIN_SEPARATOR = keccak256(abi.encode(
-            keccak256("EIP712Domain(uint256 chainId,address executor)"),
-            block.chainid,
-            address(this)
-        ));
+        // Domain separator: prevent cross-chain replay (cached; rebuilt on fork)
+        _CACHED_CHAIN_ID = block.chainid;
+        _CACHED_DOMAIN_SEPARATOR = _buildDomainSeparator(block.chainid);
 
         // Grant roles:
         // - DEFAULT_ADMIN_ROLE: the deployer (msg.sender in constructor during
@@ -229,7 +245,7 @@ contract StrategyExecutor is AccessControl {
                 expiry
             )
         );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
         _verifySignature(digest, signature);
 
         // ─── Risk checks ────────────────────────────────────────────────
@@ -354,7 +370,7 @@ contract StrategyExecutor is AccessControl {
         bytes32 structHash = keccak256(
             abi.encode(REBALANCE_TYPEHASH, vault, targetWeightBps, nonce, expiry)
         );
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
         _verifySignature(digest, signature);
 
         // Mark nonce used BEFORE the external call (checks-effects-interactions).

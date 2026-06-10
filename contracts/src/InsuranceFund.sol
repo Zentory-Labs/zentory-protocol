@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -19,7 +20,9 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 ///
 ///         Funds arrive by plain ERC20 transfer (no deposit function needed).
 ///         The owner MUST be the Gnosis Safe / Timelock on mainnet, never an EOA.
-contract InsuranceFund is Ownable {
+// Ownable2Step (2026 re-scan, AC-4/ACC-002): governance handover requires the new
+// owner to acceptOwnership, so a mistyped transfer can't orphan the payout authority.
+contract InsuranceFund is Ownable2Step {
     using SafeERC20 for IERC20;
 
     /// @param token  asset paid out

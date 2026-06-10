@@ -181,6 +181,20 @@ contract ExecuteRebalanceTest is Test {
         exec2.executeRebalance(address(vault), 6000, 1, expiry, sigForExec);
     }
 
+    function test_forkReplayRejected() public {
+        // 2026 re-scan fix: a signature minted on the deployment chain must NOT
+        // verify after a chain fork — DOMAIN_SEPARATOR() rebuilds with the live
+        // chainid, so the old-chain digest no longer matches.
+        uint256 expiry = block.timestamp + 1 hours;
+        bytes memory sig = _sign(address(vault), 6000, 1, expiry); // domain @ current chainid
+        bytes32 sepBefore = exec.DOMAIN_SEPARATOR();
+        vm.chainId(block.chainid + 1); // simulate a fork
+        assertTrue(exec.DOMAIN_SEPARATOR() != sepBefore, "separator must rebuild on fork");
+        vm.prank(keeper);
+        vm.expectRevert(StrategyExecutor.InvalidSignature.selector);
+        exec.executeRebalance(address(vault), 6000, 1, expiry, sig);
+    }
+
     function test_zeroVaultReverts() public {
         // Defense-in-depth guard: a zero vault is rejected before signature/nonce work.
         uint256 expiry = block.timestamp + 1 hours;

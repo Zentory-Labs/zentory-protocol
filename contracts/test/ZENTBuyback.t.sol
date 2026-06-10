@@ -28,7 +28,10 @@ contract ZENTBuybackTest is Test {
         zent = new MockERC20("Zentory Token", "ZENT");
         usdc = new MockERC20("USD Coin", "USDC");
         buyback = new ZENTBuyback(address(zent), address(usdc), MIN_THRESHOLD);
+        // Ownable2Step: the new owner must accept the transfer.
         buyback.transferOwnership(owner);
+        vm.prank(owner);
+        buyback.acceptOwnership();
 
         vm.label(address(zent), "ZENT");
         vm.label(address(usdc), "USDC");
