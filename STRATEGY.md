@@ -161,4 +161,4 @@ Active tracks (each owned, each instrumented):
 - Compare us to the cells in [`COMPETITORS.md`](COMPETITORS.md).
 - Watch the testnet at [app.zentorylabs.com](https://app.zentorylabs.com).
 
-If after that you cannot find what is novel, where in the ecosystem we sit, or how we differentiate, please open an issue or email `contact@zentorylabs.io` — that's a documentation bug on our side.
+If after that you cannot find what is novel, where in the ecosystem we sit, or how we differentiate, please open an issue or email `contact@zentorylabs.com` — that's a documentation bug on our side.
