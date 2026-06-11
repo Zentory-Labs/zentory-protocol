@@ -140,7 +140,7 @@ No marginal infrastructure cost. Revenue scales linearly with TVL and subscriber
 
 ## Contact
 
-- **Email:** contact@zentorylabs.io
+- **Email:** contact@zentorylabs.com
 - **Twitter / X:** @zentorylabs
 - **Docs:** [whitepaper.md](./whitepaper.md) · [Ghost Portfolio spec](./docs/superpowers/specs/2026-04-27-hybrid-execution-metrics-design.md) · [regulatory memo](./regulatory-memo.md)
 
