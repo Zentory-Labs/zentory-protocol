@@ -279,7 +279,7 @@ The buyback connects real protocol revenue to a deflationary force on the fixed 
 
 Maintained by ZENTORY Labs. Named contributors, verifiable handles, and contact in [`TEAM.md`](TEAM.md).
 
-For business inquiries: `contact@zentorylabs.com`
+For business inquiries: `info@zentorylabs.com`
 For security: `security@zentorylabs.com`
 For social: [@ZENTORYLabs](https://twitter.com/ZENTORYLabs)
 
@@ -323,7 +323,7 @@ Fully open-sourcing the engine would mean publishing the strategy parameters, ge
 
 We chose BSL 1.1 for the protocol contracts because they will be on the block explorer at mainnet anyway (verified contracts are how DeFi users assess safety — unverified = unsafe). Making them readable 6 months early builds verifiable track record. The BSL prevents a competitor from packaging them into a hosted competing service before September 2030.
 
-For questions about commercial licensing of the protocol contracts, contact: `contact@zentorylabs.com`
+For questions about commercial licensing of the protocol contracts, contact: `info@zentorylabs.com`
 
 ---
 

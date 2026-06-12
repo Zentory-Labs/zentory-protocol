@@ -121,5 +121,5 @@ Unless explicitly noted otherwise, contributions are accepted under the same lic
 
 - **Bugs / features:** GitHub Issues.
 - **Security:** `security@zentorylabs.com`.
-- **Business / partnerships:** `contact@zentorylabs.com`.
+- **Business / partnerships:** `info@zentorylabs.com`.
 - **General community:** [@ZENTORYLabs on X](https://twitter.com/ZENTORYLabs).
