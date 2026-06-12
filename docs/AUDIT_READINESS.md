@@ -362,22 +362,26 @@ Live suite after fixes: **343 passed / 0 failed / 1 skipped (344)**, engine 47/1
 
 ## 4. Test coverage
 
-> **Live run (2026-06-08):** `forge test` against `main` →
-> **327 passed, 0 failed, 1 skipped** (328 total) across 33 suites, ~15s wall.
+> **Live run (2026-06-12):** `forge test` against `main` (`d465482`) →
+> **343 passed, 0 failed, 1 skipped** (344 total) across 34 suites, ~19s wall.
 > An actual run, not a static count. The single skip is an intentional gated test.
-> Re-run before freezing the audit branch and paste the fresh tail.
+> This run includes the #68 capture-scoring formula, the GOV-001 uniform 66%
+> supermajority, and their 14 pinning tests (see `docs/decisions/`).
 
-- **Latest live result:** **327 passed / 0 failed / 1 skipped** (2026-06-08, on `main`).
-- **Static count:** **328 test functions** across 33 test files under `contracts/test/`.
+- **Frozen audit branch:** **`audit/2026-Q3b`** (cut 2026-06-12 from `main` after the
+  decision merges; supersedes `audit/2026-Q3` @ `9dc3ad7`, which predates PRs #40–47).
+  Hand firms this branch — `main` continues to move.
+- **Latest live result:** **343 passed / 0 failed / 1 skipped** (2026-06-12, on `main`).
+- **Static count:** **344 test functions** across 34 test files under `contracts/test/`.
   To reproduce:
   ```bash
   cd contracts
   export PATH="$PATH:$HOME/.foundry/bin"
   forge test 2>&1 | tail -4
   ```
-  Actual tail (2026-06-08, the frozen audit commit):
+  Actual tail (2026-06-12, on `main` at the freeze):
   ```
-  Ran 33 test suites in 20.77s (224.28s CPU time): 327 tests passed, 0 failed, 1 skipped (328 total tests)
+  Ran 34 test suites in 19.21s (113.19s CPU time): 343 tests passed, 0 failed, 1 skipped (344 total tests)
   ```
 
 **Test directories (`contracts/test/`):**
