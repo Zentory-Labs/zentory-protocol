@@ -73,7 +73,7 @@ Once D2 is complete and the new content has been pushed to GitHub + deployed to 
    - GitHub URL.
    - X URL.
    - LinkedIn URL (optional but helps).
-   - Email (`edge@zentorylabs.com`, `shaman@zentorylabs.com`).
+   - Email (`info@zentorylabs.com`, `info@zentorylabs.com`).
 5. **Submit**. Verification typically takes 1–3 business days depending on platform.
 6. **Confirm** the rating platform updates the Founders dimension from 0 to "Verified" or a positive numeric score.
 

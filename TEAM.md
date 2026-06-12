@@ -4,7 +4,7 @@
 
 ZENTORY is built by a small, technically dense team. Each contributor below operates under a stable handle that is verifiable across GitHub, X, and (where applicable) LinkedIn. We list pseudonymous handles because that is how each contributor is identifiable across the work they have shipped — not because the protocol is anonymous in operation. Legal and ops counterparties at ZENTORY Labs are KYC'd and on record with security and audit partners.
 
-For business inquiries: `contact@zentorylabs.com`.
+For business inquiries: `info@zentorylabs.com`.
 For security disclosure: `security@zentorylabs.com` (see [`SECURITY.md`](SECURITY.md)).
 
 ---
@@ -19,7 +19,7 @@ Edge leads algorithm design, strategy research, and execution infrastructure at 
 |---|---|
 | GitHub | [@edgeza](https://github.com/edgeza) |
 | X | TBA — to be linked from [@ZENTORYLabs](https://twitter.com/ZENTORYLabs) once verified |
-| Email | `edge@zentorylabs.com` |
+| Email | `info@zentorylabs.com` |
 | Public profile | [zentorylabs.com/team/edge](https://zentorylabs.com/team/edge) |
 
 ### Shaman — Co-Founder, Head of Operations & Public Relations
@@ -30,7 +30,7 @@ Shaman owns day-to-day operations, partner and community relations, and external
 |---|---|
 | GitHub | TBA — to be linked from this README once active |
 | X | TBA — to be linked from [@ZENTORYLabs](https://twitter.com/ZENTORYLabs) once verified |
-| Email | `shaman@zentorylabs.com` |
+| Email | `info@zentorylabs.com` |
 | Public profile | [zentorylabs.com/team/shaman](https://zentorylabs.com/team/shaman) |
 
 ---
@@ -57,7 +57,7 @@ To verify the team:
 4. **Email:** `*@zentorylabs.com` resolves to the ZENTORY Labs domain, which is the same brand as the marketing site, the dApp ([app.zentorylabs.com](https://app.zentorylabs.com)), and the X handle.
 5. **Investor materials:** [`docs/INVESTOR_ONE_PAGER.md`](docs/INVESTOR_ONE_PAGER.md), [`docs/whitepaper.md`](docs/whitepaper.md), and [`STRATEGY.md`](STRATEGY.md) are signed off by the core team.
 
-If you are evaluating this project and the verification chain above is incomplete on any platform, please email `contact@zentorylabs.com`; that is a docs / settings bug on our side and we will fix it.
+If you are evaluating this project and the verification chain above is incomplete on any platform, please email `info@zentorylabs.com`; that is a docs / settings bug on our side and we will fix it.
 
 ---
 
@@ -70,4 +70,4 @@ Open contractor-style engagements are tracked at [zentorylabs.com](https://zento
 - Quant research contributor (signal author with verifiable track record; ZENT bond required).
 - Frontend engineer (dApp, [`frontend/`](frontend), Next.js 16 + wagmi + viem).
 
-Reach `contact@zentorylabs.com` with a portfolio link and a short note on which of [`STRATEGY.md`](STRATEGY.md) §5 tracks you want to own.
+Reach `info@zentorylabs.com` with a portfolio link and a short note on which of [`STRATEGY.md`](STRATEGY.md) §5 tracks you want to own.

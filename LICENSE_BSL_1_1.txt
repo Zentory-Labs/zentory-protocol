@@ -120,5 +120,5 @@ conflict of law provisions.
 ---
 
 ZENTORY Labs
-contact@zentorylabs.com
+info@zentorylabs.com
 https://github.com/Zentory-Labs/zentory-protocol

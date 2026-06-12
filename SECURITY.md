@@ -159,7 +159,7 @@ The verification master plan (gates G1-G10 with explicit acceptance criteria) is
 |---|---|
 | Security disclosure (preferred) | `security@zentorylabs.com` |
 | Bug bounty intake (post-launch) | [`immunefi.com/project/zentory`](https://immunefi.com/project/zentory) |
-| Business / partnership / legal | `contact@zentorylabs.com` |
+| Business / partnership / legal | `info@zentorylabs.com` |
 | General questions about the protocol | [GitHub Discussions](https://github.com/Zentory-Labs/zentory-protocol/discussions) |
 
 ---
