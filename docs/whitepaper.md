@@ -640,11 +640,19 @@ User funds are held in ERC-4626 vault contracts. The protocol never holds user p
 
 | Parameter / Action | Governance Required |
 |---|---|
-| Epoch duration | Simple majority |
-| Max slash / reward BPS | Simple majority |
-| New vault asset listing | Simple majority |
-| Treasury grant allocation | Simple majority |
+| Epoch duration | 66% supermajority |
+| Max slash / reward BPS | 66% supermajority |
+| New vault asset listing | 66% supermajority |
+| Treasury grant allocation | 66% supermajority |
 | Smart contract upgrades | 66% supermajority |
+
+Every governance action clears the same 66% supermajority of decisive (For +
+Against) votes, enforced in `ZentGovernor._voteSucceeded`. A uniform bar is
+deliberate (decision GOV-001): tiering thresholds by proposal *class* requires
+classifying actions on-chain by target/selector, which batched proposals can
+evade — a single threshold is one auditable invariant with no classification
+to bypass. The protocol is safety-biased by design; if post-TGE parameter
+cadence proves the bar too high, governance itself can vote in a v2 governor.
 
 ### 11.2 Voting Mechanics
 

@@ -94,6 +94,33 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
         return (zentroller.staking().totalVeSupply() * quorumBps) / 10000;
     }
 
+    // ─── Supermajority (GOV-001) ─────────────────────────────────────────
+
+    /// @notice Threshold a proposal's For votes must reach, in basis points of
+    ///         the decisive (For + Against) tally. 6600 = the 66% supermajority
+    ///         the README and whitepaper commit to.
+    uint256 public constant SUPERMAJORITY_BPS = 6600;
+
+    /// @dev GOV-001 (docs/decisions/2026-06-12-gov-001-supermajority.md): the
+    ///      published governance model promises a 66% supermajority, but
+    ///      GovernorCountingSimple's default success rule is a simple majority
+    ///      (For > Against). Every proposal must now clear For >= 66% of
+    ///      (For + Against). Applied uniformly rather than per proposal class:
+    ///      on-chain action classification (by target/selector) is bypassable
+    ///      via batched calls and adds audit surface, while a uniform bar is a
+    ///      single auditable invariant. Abstain counts toward quorum (standard
+    ///      CountingSimple semantics) but not toward the threshold.
+    function _voteSucceeded(uint256 proposalId)
+        internal
+        view
+        override(Governor, GovernorCountingSimple)
+        returns (bool)
+    {
+        (uint256 againstVotes, uint256 forVotes, ) = proposalVotes(proposalId);
+        if (forVotes == 0) return false;
+        return forVotes * 10000 >= (forVotes + againstVotes) * SUPERMAJORITY_BPS;
+    }
+
     // ─── Timing ────────────────────────────────────────────────────────
 
     /// @dev Block-timestamp based clock.

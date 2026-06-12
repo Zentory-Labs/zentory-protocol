@@ -341,13 +341,22 @@ inflation variants; JELLY oracle manipulation; CoreWriter async/silent-failure t
   production contracts" — inverted logic (those contracts are the mainnet deployment).
   `sqrtPriceLimitX96=0` — `minOut` derived from the oracle price ± `maxSlippageBps` is
   the binding price protection (standard exact-input pattern); noted for the auditor.
-- **Open for the external auditor / Edge decisions:** GOV-001 (66% supermajority
-  override in ZentGovernor — governance design choice); read-only-reentrancy review of
+- **DECIDED 2026-06-12 (review during audit):** GOV-001 — uniform 66% supermajority
+  implemented in `ZentGovernor._voteSucceeded` (decision record:
+  `docs/decisions/2026-06-12-gov-001-supermajority.md`; 7 pinning tests). #68 scoring
+  methodology — `EpochScoring._calculateAccuracy` replaced with exposure-weighted
+  directional capture, 5000 = neutral, aligned with the payout curve's documented
+  break-even (decision record: `docs/decisions/2026-06-12-068-scoring-methodology.md`;
+  7 unit tests + updated snapshot-order regression). NOTE: the live testnet
+  EpochScoring (0x659569A6…) predates this formula — accuracy goes live there with the
+  next signal-stack redeploy (RedeploySignalStack.s.sol); mainnet deploys it natively.
+- **Open for the external auditor:** read-only-reentrancy review of
   NAV views for third-party integrators (no internal exploit found; flagged as a 2026
-  focus area); recorder entries are hash-chained but not signed (tamper-evidence relies
-  on git history; enhancement candidate).
+  focus area); recorder entries are hash-chained but not signed (tamper-evidence now
+  ALSO anchored on-chain by the keeper's per-cycle head-hash self-tx, 2026-06-12;
+  signature enhancement still a candidate).
 
-Live suite after fixes: **329 passed / 0 failed / 1 skipped (330)**, engine 47/1.
+Live suite after fixes: **343 passed / 0 failed / 1 skipped (344)**, engine 47/1.
 
 ---
 

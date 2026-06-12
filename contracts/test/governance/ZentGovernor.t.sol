@@ -258,6 +258,95 @@ contract ZentGovernorTest is Test {
         assertEq(address(zentroller.staking()), address(staking));
     }
 
+    // ─── Supermajority (GOV-001) ─────────────────────────────────────────
+    // The published governance model (README, whitepaper §12) commits to a 66%
+    // supermajority; GovernorCountingSimple's default is a simple majority.
+    // These tests pin the _voteSucceeded override: For must reach >= 66% of
+    // (For + Against) or the proposal is Defeated even with a clear majority.
+
+    /// @dev Stake both voters and cast a weighted For/Against split, then warp
+    ///      past the voting period and return the final state. Staking happens
+    ///      immediately before voting with no warp in between so veBalance ==
+    ///      staked amount exactly (no per-second decay rounding) and the
+    ///      For/(For+Against) ratio is exact.
+    function _runWeightedVote(uint256 forAmount, uint256 againstAmount) internal returns (uint8) {
+        uint256 proposalId = governor.propose(_targets, _values, _calldatas, "GOV-001");
+        vm.warp(block.timestamp + 1 days + 1);
+
+        _createStakedPosition(voter1, forAmount, 730 days);
+        _createStakedPosition(voter2, againstAmount, 730 days);
+
+        vm.prank(voter1);
+        governor.castVote(proposalId, 1); // For
+        vm.prank(voter2);
+        governor.castVote(proposalId, 0); // Against
+
+        vm.warp(block.timestamp + 7 days + 1);
+        return uint8(governor.state(proposalId));
+    }
+
+    function test_supermajorityConstantMatchesPublishedDocs() external view {
+        assertEq(governor.SUPERMAJORITY_BPS(), 6600);
+    }
+
+    function test_simpleMajorityIsNoLongerEnough() external {
+        // 60% For / 40% Against passed under GovernorCountingSimple's default —
+        // this is the GOV-001 regression case. Quorum is met (For = 60e18 >
+        // 15% of total veSupply), so the ONLY reason this is Defeated is the
+        // supermajority threshold.
+        assertEq(_runWeightedVote(60 ether, 40 ether), 3, "60% For must be Defeated (3)");
+    }
+
+    function test_sixtyFivePercentForIsDefeated() external {
+        assertEq(_runWeightedVote(65 ether, 35 ether), 3, "65% For must be Defeated (3)");
+    }
+
+    function test_exactSupermajorityBoundarySucceeds() external {
+        // Exactly 66.00% For: 66 * 10000 == 100 * 6600 — at-threshold passes.
+        assertEq(_runWeightedVote(66 ether, 34 ether), 4, "exactly 66% For must Succeed (4)");
+    }
+
+    function test_sixtySevenPercentForSucceeds() external {
+        assertEq(_runWeightedVote(67 ether, 33 ether), 4, "67% For must Succeed (4)");
+    }
+
+    function test_unanimousForSucceeds() external {
+        uint256 proposalId = governor.propose(_targets, _values, _calldatas, "GOV-001 unanimous");
+        vm.warp(block.timestamp + 1 days + 1);
+
+        _createStakedPosition(voter1, 100 ether, 730 days);
+        vm.prank(voter1);
+        governor.castVote(proposalId, 1);
+
+        vm.warp(block.timestamp + 7 days + 1);
+        assertEq(uint8(governor.state(proposalId)), 4, "100% For must Succeed (4)");
+    }
+
+    function test_abstainDoesNotDiluteTheThreshold() external {
+        // 67% of decisive votes For, plus a large Abstain: Abstain counts
+        // toward quorum but must not push the proposal below the threshold.
+        uint256 proposalId = governor.propose(_targets, _values, _calldatas, "GOV-001 abstain");
+        vm.warp(block.timestamp + 1 days + 1);
+
+        // setUp funds proposer/voter1/voter2 only — give the abstainer ZENT.
+        vm.prank(voter1);
+        zent.transfer(outsider, 100 ether);
+
+        _createStakedPosition(voter1, 67 ether, 730 days);
+        _createStakedPosition(voter2, 33 ether, 730 days);
+        _createStakedPosition(outsider, 100 ether, 730 days);
+
+        vm.prank(voter1);
+        governor.castVote(proposalId, 1); // For
+        vm.prank(voter2);
+        governor.castVote(proposalId, 0); // Against
+        vm.prank(outsider);
+        governor.castVote(proposalId, 2); // Abstain
+
+        vm.warp(block.timestamp + 7 days + 1);
+        assertEq(uint8(governor.state(proposalId)), 4, "abstain must not count against the supermajority");
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────
 
     function _createStakedPosition(address user, uint256 amount, uint64 lockDuration) internal {
