@@ -220,7 +220,7 @@ ZENT is a **fixed-supply utility and governance** token. Fixed at **1,000,000,00
 - **Signal-staking collateral.** Quants stake ZENT against each signal they submit; high accuracy mints reputation, low accuracy is slashed up to a per-epoch cap (whitepaper §7.2; see also §6.1 for the full utility table).
 - **Conviction weight.** 1 ZENT staked = 1 conviction point on a signal; conviction routes auto-follow execution.
 - **Access tiers.** Premium vault tiers and signal subscriptions require minimum stake.
-- **Governance.** `veZENT`-style voting (lock 7–730 days) over protocol parameters, new vaults, treasury grants, upgrades (66% supermajority for upgrades).
+- **Governance.** `veZENT`-style voting (lock 7–730 days) over protocol parameters, new vaults, treasury grants, upgrades — every action requires a 66% supermajority of decisive votes (enforced in `ZentGovernor`, decision GOV-001) plus the 48h timelock.
 - **Fee payment.** Subscription tiers can be paid in ZENT (`SubscriptionVault`).
 
 ### What ZENT is **not**

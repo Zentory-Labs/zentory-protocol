@@ -72,9 +72,10 @@ contract EpochScoringSnapshotOrderTest is Test {
 
     function setUp() public {
         vm.warp(1_000_000); // ensure feed updatedAt > 0
-        // Signal predicts +100 bps; we will move the price +100 bps so a correct
-        // ordering yields perfect accuracy (10000).
-        registry = new MockRegistryOneSignal(PROVIDER, int256(100));
+        // Full-conviction long signal (10000); we will move the price +100 bps
+        // so a correct snapshot ordering yields a capture of +100 bps =>
+        // accuracy 6000 under the #68 capture formula (5000 = neutral).
+        registry = new MockRegistryOneSignal(PROVIDER, int256(10000));
         staking = new MockStakingActive();
         // scoringOracle + keeper (EPOCH_SETTLER) = this test contract; DEFAULT_ADMIN
         // is also granted to msg.sender, so we can register the price feed.
@@ -100,21 +101,23 @@ contract EpochScoringSnapshotOrderTest is Test {
 
     function test_scoringObservesPriceMovement_afterSnapshotReorder() external {
         // Epoch 1: price 60000. Snapshots close[1]; movement(1)=0 (no close[0]),
-        // so epoch-1 accuracy is legitimately 0 (no prior baseline).
+        // so epoch-1 accuracy is legitimately neutral (capture of a zero move
+        // is zero -> 5000 under the #68 formula).
         feed.setPrice(60_000e8);
         (uint256 acc1, bool found1) = _settleAndReadAccuracy();
         assertTrue(found1, "epoch 1 should emit SignalScored");
-        assertEq(acc1, 0, "epoch 1 has no prior close -> movement 0 -> accuracy 0");
+        assertEq(acc1, 5000, "epoch 1 has no prior close -> zero movement -> neutral 5000");
 
         // Epoch 2: price +1% to 60600. With the snapshot taken BEFORE scoring,
-        // _getEpochPriceMovement(2) = (60600-60000)*10000/60000 = +100 bps. The
-        // signal predicted +100, so accuracy = 10000 (perfect). Pre-fix the
-        // close[2] read during scoring was 0 -> accuracy 0.
+        // _getEpochPriceMovement(2) = (60600-60000)*10000/60000 = +100 bps. A
+        // full-conviction long captures all +100 bps -> accuracy 6000. Pre-fix
+        // the close[2] read during scoring was 0 -> movement 0 -> a neutral
+        // 5000 for every provider every epoch, which is the regression signal.
         feed.setPrice(60_600e8);
         (uint256 acc2, bool found2) = _settleAndReadAccuracy();
         assertTrue(found2, "epoch 2 should emit SignalScored");
-        assertGt(acc2, 0, "post-fix: scoring must observe the price move (pre-fix this is 0)");
-        assertEq(acc2, 10000, "+100 bps move vs +100 bps signal -> perfect accuracy");
+        assertTrue(acc2 != 5000, "post-fix: scoring must observe the price move (pre-fix this is neutral 5000)");
+        assertEq(acc2, 6000, "+100 bps move at full conviction -> capture 100 bps -> accuracy 6000");
 
         // And the close was actually recorded for epoch 2.
         assertGt(scoring.epochClosePrice(2), 0, "epoch 2 close must be snapshotted");

@@ -514,16 +514,36 @@ contract EpochScoring is AccessControl {
         return 0;
     }
 
-    /// @notice Calculate accuracy score from actual vs. predicted price movement.
-    /// @param actual  The realized price movement (in basis points)
-    /// @param signal  The predicted price movement (in basis points)
-    /// @return accuracy Accuracy score from 0 to 10000 (higher = more accurate)
+    /// @notice Exposure-weighted directional capture, mapped onto the 0..10000
+    ///         accuracy scale with 5000 = neutral.
+    /// @dev Scoring methodology decision #68
+    ///      (docs/decisions/2026-06-12-068-scoring-methodology.md).
+    ///      Providers submit a long-only conviction (0..10000 = target
+    ///      exposure), not a predicted move, so the previous closeness formula
+    ///      |actual - signal| compared incommensurable scales and returned ~0
+    ///      for any realistic epoch move. What a target-weight vault earns
+    ///      from a signal is the move it captures:
+    ///
+    ///          captureBps = conviction × actualMoveBps / 10000
+    ///          accuracy   = 5000 + clamp(captureBps × 10, ±5000)
+    ///
+    ///      so flat (conviction 0) or a zero-move epoch scores exactly 5000 —
+    ///      the payout curve's documented break-even — full conviction on a
+    ///      +100 bps epoch scores 6000, on a −100 bps epoch 4000, and the
+    ///      scale saturates at ±500 bps captured per 4h epoch (a >5% move
+    ///      captured at full conviction is max score either way).
+    /// @param actual  The realized price movement over the epoch (basis points)
+    /// @param signal  The provider's conviction / target exposure (0..10000)
+    /// @return accuracy Accuracy score from 0 to 10000 (5000 = neutral)
     function _calculateAccuracy(int256 actual, int256 signal) internal pure returns (uint256) {
-        if (actual == 0) return 0;
-        int256 diff = actual > signal ? actual - signal : signal - actual;
-        int256 absActual = actual > 0 ? actual : -actual;
-        int256 accuracyRaw = 10000 - ((diff * 10000) / absActual);
-        return accuracyRaw > 0 ? uint256(accuracyRaw) : 0;
+        // Defensive clamp: registry-enforced range is 0..10000, but scoring
+        // must never revert or overflow on out-of-range historical data.
+        if (signal < 0) signal = 0;
+        if (signal > 10000) signal = 10000;
+        int256 scaled = ((signal * actual) / 10000) * 10;
+        if (scaled > 5000) scaled = 5000;
+        if (scaled < -5000) scaled = -5000;
+        return uint256(5000 + scaled);
     }
 
     /// @notice Calculate recency bonus for a provider based on recent signal submission history.
