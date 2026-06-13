@@ -16,6 +16,10 @@ Send order:
 Send 1 + 3 + 5 today if you want the most leverage. The others are
 comparison quotes or fallbacks.
 
+**Audit anchor for all firm conversations:** frozen branch **`audit/2026-Q3b`**
+(cut 2026-06-12) — hand firms the branch, not `main`. Readiness package:
+[docs/AUDIT_READINESS.md](https://github.com/Zentory-Labs/zentory-protocol/blob/audit/2026-Q3b/docs/AUDIT_READINESS.md).
+
 ---
 
 ## 1. Cantina — Smart contract audit
@@ -23,25 +27,36 @@ comparison quotes or fallbacks.
 **Submit at:** https://cantina.xyz/welcome (Get an audit form)
 **Backup email:** support@cantina.xyz
 
-> **Subject:** ZENTORY Protocol audit inquiry — multi-asset quant vaults on HyperEVM (~3.6k LOC)
+> **Subject:** ZENTORY Protocol audit inquiry — non-custodial drawdown-defense vaults on HyperEVM (~3.6k LOC)
 >
 > Hi Cantina team,
 >
-> ZENTORY Labs is a non-custodial Alpha Vault + signal-arena protocol on HyperEVM. We have ~3,586 LOC of Solidity across 26 files deployed to testnet (chain 998) and ready for a formal audit ahead of mainnet launch in Q3–Q4 2026.
+> ZENTORY Labs builds non-custodial ERC-4626 vaults on HyperEVM that hold the
+> underlying asset in uptrends and rotate to cash in downturns (spot only, no
+> leverage), plus an on-chain research/signal layer with slashable ZENT-staked
+> reputation. 29 Solidity contracts (~3.6k LOC) are deployed on testnet
+> (chain 998) and frozen for audit; the external audit is the first of three
+> hard mainnet gates (audit, 3-of-5 multisig migration, 3-month public track
+> record), so your engagement is literally our critical path.
 >
 > **Quick architecture summary:**
-> - ERC-4626 Alpha Vaults: zBTC, zETH, zSOL, zXRP (and zHYPE post-audit)
-> - EIP-712 signed signal registry with slashable ZENT-staked reputation
-> - 4-hour epoch scoring keeper that settles signal accuracy on-chain
-> - StrategyExecutor + HyperCoreAdapter mandate-bounded execution to Hyperliquid
-> - OpenZeppelin Timelock + Governor governance stack
-> - ZENT subscription vault for paid signal feeds
+> - ERC-4626 vaults: zBTC, zETH, zSOL, zXRP + SpotVault (oracle-valued, long/flat via signed `rebalanceTo`)
+> - EIP-712 signed signal registry; 4-hour epoch scoring settles accuracy on-chain
+> - StrategyExecutor: two signed paths (perp TradeSignal + spot target-weight Rebalance), mandate-bounded
+> - MedianOracle (multi-signer median NAV feed) + HyperSwapRouterAdapter (atomic spot venue)
+> - OpenZeppelin Timelock + Governor (uniform 66% supermajority) governance stack
 >
-> **What we have in-repo:**
-> - Public repo: https://github.com/Zentory-Labs/zentory-protocol
-> - Audit brief with scope + threat model + known issues: [docs/SECURITY_AUDIT_BRIEF.md](https://github.com/Zentory-Labs/zentory-protocol/blob/main/docs/SECURITY_AUDIT_BRIEF.md)
-> - Internal Slither + manual pentest reports already committed
-> - 17 Foundry test files (no formal invariant suite yet — open to adding one as part of the engagement)
+> **What we have in-repo (public):**
+> - Frozen audit branch: `audit/2026-Q3b` — https://github.com/Zentory-Labs/zentory-protocol/tree/audit/2026-Q3b
+> - Readiness package (inventory, threat model, prior findings + dispositions): [docs/AUDIT_READINESS.md](https://github.com/Zentory-Labs/zentory-protocol/blob/audit/2026-Q3b/docs/AUDIT_READINESS.md)
+> - Audit brief: [docs/SECURITY_AUDIT_BRIEF.md](https://github.com/Zentory-Labs/zentory-protocol/blob/audit/2026-Q3b/docs/SECURITY_AUDIT_BRIEF.md)
+> - Internal Slither + manual pentest reports committed, all findings triaged with dispositions
+> - **344 Foundry tests across 34 files — including invariant suites (vault + executor), fuzz suites, a cross-language EIP-712 digest-parity test against our Python signer, and an end-to-end signed spot-rebalance integration test.** Live tail: 343 passed / 0 failed / 1 intentional skip.
+> - Design-decision records for the two most recent changes (scoring formula, governance supermajority) in `docs/decisions/`
+>
+> The vault loop already runs autonomously on testnet (keeper-signed 4-hourly
+> rebalances, NAV indexed and published against a hash-chained public ledger) —
+> you'd be auditing a running system, not a paper design.
 >
 > **Budget range:** USD $80–200k for Phase 1+2. Standard 50% engagement / 50% draft delivery split.
 >
@@ -52,12 +67,12 @@ comparison quotes or fallbacks.
 > 2. Indicative team size + 1–2 sample reports for a comparable engagement (DeFi infra, similar LOC)
 > 3. Quote (or quote range) for Phase 1+2 as described
 >
-> Happy to jump on a 30-min walkthrough call once you've had a chance to skim the brief.
+> Happy to jump on a 30-min walkthrough call once you've had a chance to skim the readiness package.
 >
 > Best,
 > Edge
 > Co-founder, ZENTORY Labs
-> edge@zentorylabs.com
+> info@zentorylabs.com
 > Telegram: @ZentoryEdge
 
 ---
@@ -67,17 +82,26 @@ comparison quotes or fallbacks.
 **Submit at:** https://www.trailofbits.com/contact-engagement/
 **Backup email:** contact@trailofbits.com
 
-> **Subject:** Engagement inquiry — ZENTORY Protocol audit, multi-asset DeFi on HyperEVM
+> **Subject:** Engagement inquiry — ZENTORY Protocol audit, non-custodial vaults on HyperEVM
 >
 > Hi Trail of Bits team,
 >
-> Reaching out to scope a smart contract audit for ZENTORY Labs ahead of our HyperEVM mainnet launch in Q3–Q4 2026.
+> Reaching out to scope a smart contract audit for ZENTORY Labs. The external
+> audit is the first of three hard gates before our HyperEVM mainnet launch
+> (audit, multisig migration, 3-month public track record — realistically ~Q1 2027).
 >
-> **Codebase:** ~3,586 LOC of Solidity across 26 files. ERC-4626 vaults, EIP-712 signal registry with on-chain reputation scoring, mandate-bounded StrategyExecutor routing to Hyperliquid, OpenZeppelin governance stack. Public repo: https://github.com/Zentory-Labs/zentory-protocol
+> **Codebase:** 29 Solidity contracts, ~3.6k LOC, frozen for audit on branch
+> `audit/2026-Q3b`. ERC-4626 drawdown-defense vaults (incl. an oracle-valued
+> SpotVault driven by EIP-712-signed target-weight rebalances), a signal
+> registry with on-chain epoch scoring, a multi-signer median NAV oracle, and
+> an OpenZeppelin governance stack with a uniform 66% supermajority.
+> Public repo: https://github.com/Zentory-Labs/zentory-protocol
 >
-> **What's already done:** Internal pentest + Slither (180 findings, 37 high/medium — triaged, high-severity items fixed in Phase 5 redeploy). 17 Foundry test files.
->
-> **Full audit brief:** https://github.com/Zentory-Labs/zentory-protocol/blob/main/docs/SECURITY_AUDIT_BRIEF.md (scope, threat model, known issues all documented).
+> **What's already done:** Internal pentest + Slither (180 findings, triaged with
+> written dispositions; highs fixed and re-verified), two internal audit rounds, a
+> 2026 exploit-landscape re-scan, and **344 Foundry tests (incl. invariant + fuzz
+> suites and a cross-language EIP-712 digest-parity test)** — live tail 343/0/1.
+> Full readiness package: [docs/AUDIT_READINESS.md](https://github.com/Zentory-Labs/zentory-protocol/blob/audit/2026-Q3b/docs/AUDIT_READINESS.md)
 >
 > Budget envelope is open up to ~$300k for the right firm + team — we're sourcing comparison quotes from Cantina and one contest provider as well. ToB's report carries the strongest institutional signal for our target LPs, so we'd weight your proposal accordingly.
 >
@@ -92,7 +116,7 @@ comparison quotes or fallbacks.
 > Best,
 > Edge
 > Co-founder, ZENTORY Labs
-> edge@zentorylabs.com
+> info@zentorylabs.com
 > Telegram: @ZentoryEdge
 
 ---
@@ -106,7 +130,13 @@ comparison quotes or fallbacks.
 >
 > Hi Lex Crypta team,
 >
-> ZENTORY Labs is a non-custodial DeFi protocol on HyperEVM combining ERC-4626 vaults, an EIP-712 signed signal market, and a governance/utility token (ZENT). We're targeting mainnet launch in Q3–Q4 2026 with an external smart contract audit already being scoped.
+> ZENTORY Labs is a non-custodial DeFi protocol on HyperEVM: ERC-4626 vaults
+> running a transparent long/flat spot strategy (hold in uptrends, rotate to
+> cash in downturns), an EIP-712 signed research/signal layer, and a
+> governance/utility token (ZENT). Mainnet is gated on an external smart
+> contract audit (being scoped now), a multisig migration, and a 3-month
+> public track record — realistically ~Q1 2027, so counsel engaged now has
+> comfortable runway.
 >
 > Looking to engage counsel for the pre-launch package:
 >
@@ -114,12 +144,12 @@ comparison quotes or fallbacks.
 > 2. **Entity structure review** — currently planning [BVI / Cayman — please advise] for the operating entity
 > 3. **Founder liability shield review**
 > 4. **Geographic restriction strategy** — what we need to block, how to enforce at the frontend, language for the T&C
-> 5. **T&C, Privacy Policy, risk-disclosure review** — we have templated docs that need a crypto-native pass before they go live for mainnet
+> 5. **T&C, Privacy Policy, risk-disclosure review** — live drafts at zentorylabs.com need a crypto-native pass before mainnet (the current ToS already discloses testnet status, admin powers, and product risks honestly)
 >
 > **About the protocol:**
 > - Public repo: https://github.com/Zentory-Labs/zentory-protocol
 > - Whitepaper: https://www.zentorylabs.com/whitepaper
-> - Testnet dApp: https://app.zentorylabs.com
+> - Testnet dApp: https://app.zentorylabs.com (live public track record + risk docs)
 > - All contracts deployed to HyperEVM testnet (chain 998); mainnet (chain 999) post-audit
 >
 > We're prioritizing speed, cost predictability, and EU/MiCA fluency over US securities depth — which is why we're starting with you over the larger US firms. Budget expectation in the USD $25–50k range for the full package.
@@ -134,7 +164,7 @@ comparison quotes or fallbacks.
 > Best,
 > Edge
 > Co-founder, ZENTORY Labs
-> edge@zentorylabs.com
+> info@zentorylabs.com
 > Telegram: @ZentoryEdge
 
 ---
@@ -149,7 +179,10 @@ comparison quotes or fallbacks.
 >
 > Hi Cooley crypto team,
 >
-> ZENTORY Labs is a non-custodial DeFi protocol on HyperEVM (Hyperliquid's L1 EVM) combining ERC-4626 Alpha Vaults, an EIP-712 signed signal market, and a governance token (ZENT). Q3–Q4 2026 mainnet launch.
+> ZENTORY Labs is a non-custodial DeFi protocol on HyperEVM (Hyperliquid's L1
+> EVM): ERC-4626 drawdown-defense vaults, an EIP-712 signed research/signal
+> layer, and a governance token (ZENT). Mainnet is gated on an external audit,
+> multisig migration, and a 3-month public track record (~Q1 2027).
 >
 > We're scoping US securities counsel for the pre-launch package. Specifically:
 >
@@ -159,7 +192,7 @@ comparison quotes or fallbacks.
 > 4. T&C, Privacy Policy, risk disclosure review
 > 5. Engagement on bug bounty / Immunefi terms
 >
-> Codebase: 26 Solidity contracts, ~3.6k LOC, deployed to HyperEVM testnet. Smart contract audit being scoped in parallel.
+> Codebase: 29 Solidity contracts, ~3.6k LOC, deployed to HyperEVM testnet; frozen audit branch + readiness package public. Smart contract audit being scoped in parallel.
 >
 > **Public docs:**
 > - Repo: https://github.com/Zentory-Labs/zentory-protocol
@@ -176,7 +209,7 @@ comparison quotes or fallbacks.
 > Best,
 > Edge
 > Co-founder, ZENTORY Labs
-> edge@zentorylabs.com
+> info@zentorylabs.com
 > Telegram: @ZentoryEdge
 
 ---
@@ -215,7 +248,7 @@ comparison quotes or fallbacks.
 > Best,
 > Edge
 > Co-founder, ZENTORY Labs
-> edge@zentorylabs.com
+> info@zentorylabs.com
 
 ---
 
@@ -228,4 +261,8 @@ comparison quotes or fallbacks.
 
 ---
 
-*Last updated: 2026-05-26.*
+*Last updated: 2026-06-12 — refreshed to the `audit/2026-Q3b` freeze: 344-test
+suite (was "17 files, no invariant suite" — badly underselling), 29-contract
+inventory incl. the 2026-06 spot surface, honest ~Q1 2027 mainnet gating, the
+drawdown-defense positioning, and `info@zentorylabs.com` (the prior
+`edge@zentorylabs.com` did not exist and would have bounced replies).*
