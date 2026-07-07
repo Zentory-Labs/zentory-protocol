@@ -60,6 +60,16 @@ One `FeeDistributor` instance per vault. Each distributes the 15% performance fe
 | zSOLVault | [`0xc69f8a8014b4d17ee2e7457109ff1db33c0c7d7f`](https://testnet.purrsec.com/address/0xc69f8a8014b4d17ee2e7457109ff1db33c0c7d7f) | [`contracts/src/fees/FeeDistributor.sol`](contracts/src/fees/FeeDistributor.sol) |
 | zXRPVault | [`0xe990bfbc5c1e5779cb54cb95150edbbb2c2800d0`](https://testnet.purrsec.com/address/0xe990bfbc5c1e5779cb54cb95150edbbb2c2800d0) | [`contracts/src/fees/FeeDistributor.sol`](contracts/src/fees/FeeDistributor.sol) |
 
+## Ecosystem Treasury (fee consolidation)
+
+Externally-created **Gnosis Safe** multisig (not a protocol contract) — the canonical wallet all Zentory fees consolidate into. Deployed on **HyperEVM mainnet (chain 999)**, so it is ready to receive mainnet protocol fees at launch (the current testnet fees on chain 998 have no real value).
+
+| Wallet | Address | Network | Config |
+|---|---|---|---|
+| Ecosystem Treasury (Safe) | `0x0BD1EcD88C97572eeE77CbA4fE1008EC17E7e6c3` | HyperEVM mainnet (`999`) | Gnosis Safe · **3-of-3 (interim)** |
+
+⚠️ **Pre-mainnet gates** (before real fees route here — see [`FEE_CONSOLIDATION_PLAN.md`](FEE_CONSOLIDATION_PLAN.md)): (1) change 3-of-3 → 2-of-3; (2) replace the interim hot signers with hardware wallets; (3) multi-chain-deploy the Safe on the bridge-fee source chains (Ethereum / Arbitrum / Base / …); (4) re-point the vault performance-fee recipient and `SubscriptionVault` revenue to this address, and wire each `FeeDistributor`'s treasury leg to it.
+
 ## Governance
 
 | Contract | Address | Source |
