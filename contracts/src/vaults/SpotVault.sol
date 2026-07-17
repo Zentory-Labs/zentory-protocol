@@ -246,6 +246,20 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         swapAdapter = ISpotSwapAdapter(adapter_);
     }
 
+    /// @notice Emitted when the performance-fee recipient is changed. Mirrors
+    ///         BaseVault.FeeRecipientChanged so off-chain monitoring can alert on any
+    ///         fee re-routing uniformly across every vault.
+    event FeeRecipientChanged(address indexed oldRecipient, address indexed newRecipient);
+
+    /// @notice Re-point the performance-fee recipient (e.g. to the ecosystem treasury
+    ///         Safe). Mirrors BaseVault.setFeeRecipient so every vault's fee sink is
+    ///         admin-settable without a redeploy — this was previously constructor-only.
+    function setFeeRecipient(address newRecipient) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newRecipient != address(0), "SpotVault: zero fee recipient");
+        emit FeeRecipientChanged(feeRecipient, newRecipient);
+        feeRecipient = newRecipient;
+    }
+
     function setCircuitBreaker(bool active) external onlyRole(RISK_COUNCIL_ROLE) {
         isCircuitBreakerActive = active;
         emit CircuitBreakerSet(active);

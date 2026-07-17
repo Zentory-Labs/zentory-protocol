@@ -158,4 +158,23 @@ contract SpotVaultTest is Test {
         new SpotVault(address(wbtc), address(usdc), address(oracle), 0,
             "x", "x", 0, 100, 0, address(this), address(this));
     }
+
+    // ─── setFeeRecipient (mainnet fee-consolidation: re-point to the treasury Safe) ──
+    function test_SetFeeRecipient_adminCanRepoint() public {
+        assertEq(vault.feeRecipient(), address(this), "starts at deployer");
+        address treasury = address(0x5AFE);
+        vault.setFeeRecipient(treasury);
+        assertEq(vault.feeRecipient(), treasury, "re-pointed without redeploy");
+    }
+
+    function test_SetFeeRecipient_nonAdminReverts() public {
+        vm.prank(alice);
+        vm.expectRevert(); // AccessControl: alice lacks DEFAULT_ADMIN_ROLE
+        vault.setFeeRecipient(address(0x5AFE));
+    }
+
+    function test_SetFeeRecipient_rejectsZero() public {
+        vm.expectRevert(bytes("SpotVault: zero fee recipient"));
+        vault.setFeeRecipient(address(0));
+    }
 }
