@@ -1,0 +1,28 @@
+name: Railway health
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+# Required secret: RAILWAY_API_TOKEN — create at https://railway.com/account/tokens
+# with read access to project 11ab73e0-e22e-406f-81eb-f410bafed818.
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-health
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Query Railway
+        id: query
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: python scripts/railway_health_check.py

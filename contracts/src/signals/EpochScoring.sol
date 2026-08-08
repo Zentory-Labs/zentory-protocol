@@ -104,6 +104,19 @@ contract EpochScoring is AccessControl {
     /// @notice Pre-cached accuracy values set by ScoringOracle before settleEpoch runs.
     mapping(bytes32 => uint256) public accuracyCache;
 
+    /// @notice True once a signal's accuracy has actually been SET by the scoring
+    ///         oracle. Needed because `accuracyCache` defaults to 0 and 0 is the
+    ///         MAXIMUM-SLASH input — without this flag an unscored signal is
+    ///         indistinguishable from a maximally-wrong one, so a stalled scoring
+    ///         oracle silently burns every provider's stake (audit HIGH).
+    mapping(bytes32 => bool) public accuracyScored;
+
+    /// @notice True once `applyPayout` has settled a signal. `applyPayout` recorded
+    ///         NOTHING before, so it could be re-run on the same signalId without
+    ///         limit — repeatable slashing of a provider's bond, or unbounded repeated
+    ///         rewards (audit CRITICAL-2).
+    mapping(bytes32 => bool) public payoutApplied;
+
     // ─── Roles ─────────────────────────────────────────────
     address public scoringOracle;
 
@@ -127,6 +140,11 @@ contract EpochScoring is AccessControl {
     error BelowMinStake(address provider);
     error UnauthorizedOracle(address caller);
     error ArraysLengthMismatch();
+    /// @dev Signal already settled — payouts are one-shot per signal.
+    error PayoutAlreadyApplied(bytes32 signalId);
+    /// @dev Refuses to settle a signal the scoring oracle never scored (would
+    ///      otherwise be treated as accuracy 0 == maximum slash).
+    error SignalNotScored(bytes32 signalId);
 
     // ─── Constructor ────────────────────────────────────────
     constructor(
@@ -406,6 +424,18 @@ contract EpochScoring is AccessControl {
     /// @param signalId Signal to settle (accuracy must already be cached via setAccuracy)
     /// @return payout The applied payout (negative = slash, positive = reward)
     function applyPayout(bytes32 signalId) external onlyRole(EPOCH_SETTLER) returns (int256 payout) {
+        // One-shot per signal. Without this the same signalId could be settled
+        // repeatedly — draining a provider's bond via repeated slashes, or minting
+        // unbounded rewards (audit CRITICAL-2). Set BEFORE the external staking
+        // calls below so a reentrant re-entry also hits this guard.
+        if (payoutApplied[signalId]) revert PayoutAlreadyApplied(signalId);
+        payoutApplied[signalId] = true;
+
+        // Never settle an unscored signal: accuracyCache defaults to 0, and 0 is the
+        // maximum-slash input, so a stalled scoring oracle would burn every
+        // provider's stake instead of simply doing nothing (audit HIGH).
+        if (!accuracyScored[signalId]) revert SignalNotScored(signalId);
+
         SignalTypes.Signal memory sig = signalRegistry.getSignal(signalId);
         uint256 accuracyBps = accuracyCache[signalId];
 
@@ -465,6 +495,7 @@ contract EpochScoring is AccessControl {
         if (msg.sender != scoringOracle) revert UnauthorizedOracle(msg.sender);
         if (accuracyBps > 10000) revert();
         accuracyCache[signalId] = accuracyBps;
+        accuracyScored[signalId] = true;
         emit AccuracySet(signalId, accuracyBps);
     }
 
@@ -477,6 +508,7 @@ contract EpochScoring is AccessControl {
         for (uint256 i = 0; i < signalIds.length; i++) {
             if (accuraciesBps[i] > 10000) revert();
             accuracyCache[signalIds[i]] = accuraciesBps[i];
+            accuracyScored[signalIds[i]] = true;
             emit AccuracySet(signalIds[i], accuraciesBps[i]);
         }
     }

@@ -61,6 +61,8 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
 
     event Rebalanced(uint16 targetBps, uint256 assetLeg, uint256 cashLeg, uint256 navPerShare);
     event PerformanceFeeAccrued(uint256 fee, uint256 navBefore, uint256 navAfter);
+    event PerformanceFeeClaimed(address indexed recipient, uint256 paid, uint256 stillAccrued);
+    event PerformanceFeeWrittenDown(uint256 amount, uint256 stillAccrued);
     event CircuitBreakerSet(bool active);
 
     error CircuitBreakerActive();
@@ -156,6 +158,35 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         return (totalAssets() * (10 ** decimals())) / supply;
     }
 
+    /// @notice Deposits are refused while the vault is halted or its share price is
+    ///         undefined. Both cases previously let value be stolen:
+    ///
+    ///         1. `totalSupply() > 0 && totalAssets() == 0` — shares exist with
+    ///            nothing backing them, so ERC-4626's
+    ///            `assets.mulDiv(supply + 10**offset, totalAssets + 1)` divides by 1
+    ///            and mints ~`supply * 10**offset` shares for dust. A ~$3 deposit in
+    ///            that state captured >99% of supply and drained the vault as soon as
+    ///            value recovered (audit CRITICAL-1, PoC in
+    ///            docs/security/poc/SpotVaultPinPoc.t.sol). `_decimalsOffset()` only
+    ///            defends the EMPTY vault; here it makes the attack worse.
+    ///         2. Circuit breaker active — it previously gated only `rebalanceTo`, so
+    ///            an admin halting the strategy could not stop money flowing in.
+    ///
+    ///         Returning 0 makes ERC4626.deposit revert with ExceededMaxDeposit.
+    ///         Withdrawals are deliberately NOT gated: users must always be able to exit.
+    function maxDeposit(address) public view override returns (uint256) {
+        if (isCircuitBreakerActive) return 0;
+        if (totalSupply() > 0 && totalAssets() == 0) return 0;
+        return type(uint256).max;
+    }
+
+    /// @inheritdoc ERC4626
+    function maxMint(address) public view override returns (uint256) {
+        if (isCircuitBreakerActive) return 0;
+        if (totalSupply() > 0 && totalAssets() == 0) return 0;
+        return type(uint256).max;
+    }
+
     // ─── Keeper: rebalance to a target exposure ──────────────────────────────
 
     /// @notice Rebalance the vault to hold `targetBps`/10000 of value in the
@@ -232,11 +263,66 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         uint256 alpha = nav - highWaterMark;
         uint256 shareUnit = 10 ** decimals();
         uint256 fee = (alpha * totalSupply() * performanceFee) / (shareUnit * 10000);
+
+        // Never let accrued fees reach gross value. `totalAssets()` is
+        // `gross - performanceFeeAccrued`, so an accrual that swallows gross pins
+        // NAV to zero — which (pre-fix) was the state that opened the share-inflation
+        // drain. Cap the accrual so at least 1 unit of backing always remains for
+        // existing shareholders. Fees the vault genuinely cannot afford are simply
+        // not accrued rather than being taken out of depositor principal.
+        if (fee > 0) {
+            uint256 gross = grossValue();
+            uint256 room = gross > performanceFeeAccrued + 1 ? gross - performanceFeeAccrued - 1 : 0;
+            if (fee > room) fee = room;
+        }
+
         if (fee > 0) {
             performanceFeeAccrued += fee;
             emit PerformanceFeeAccrued(fee, highWaterMark, nav);
         }
         highWaterMark = nav;
+    }
+
+    /// @notice Pay accrued performance fees to `feeRecipient`, in the underlying.
+    /// @dev    Without this, `performanceFeeAccrued` was a ONE-WAY SINK: it only ever
+    ///         grew, the tokens never left, and every accrual pushed `totalAssets()`
+    ///         closer to the zero-pin that enabled audit CRITICAL-1. Paying out
+    ///         reduces gross and accrued by the same amount, so `totalAssets()` — and
+    ///         therefore every depositor's claim — is unchanged.
+    function claimFees()
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+        nonReentrant
+        returns (uint256 paid)
+    {
+        uint256 accrued = performanceFeeAccrued;
+        require(accrued > 0, "SpotVault: nothing accrued");
+        // Pay what the underlying leg can cover; the remainder stays accrued for a
+        // later claim (the keeper can rebalance to raise underlying first).
+        uint256 bal = IERC20(asset()).balanceOf(address(this));
+        paid = accrued <= bal ? accrued : bal;
+        require(paid > 0, "SpotVault: no underlying liquidity");
+        performanceFeeAccrued = accrued - paid;
+        IERC20(asset()).safeTransfer(feeRecipient, paid);
+        emit PerformanceFeeClaimed(feeRecipient, paid, performanceFeeAccrued);
+    }
+
+    /// @notice Forgive part of the accrued performance fee, returning that backing to
+    ///         depositors. Recovery lever for the state where a price move after
+    ///         accrual leaves `performanceFeeAccrued >= grossValue()`: deposits are
+    ///         then blocked (see `maxDeposit`) and existing holders' value is trapped
+    ///         until the price recovers. Writing the fee down un-traps it immediately.
+    /// @dev    Strictly pro-depositor: it can only DECREASE the protocol's fee claim
+    ///         and therefore only INCREASE `totalAssets()`. It moves no tokens and
+    ///         cannot touch depositor principal.
+    function writeDownAccruedFees(uint256 amount)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        uint256 accrued = performanceFeeAccrued;
+        require(amount > 0 && amount <= accrued, "SpotVault: bad write-down");
+        performanceFeeAccrued = accrued - amount;
+        emit PerformanceFeeWrittenDown(amount, performanceFeeAccrued);
     }
 
     // ─── Admin ───────────────────────────────────────────────────────────────
