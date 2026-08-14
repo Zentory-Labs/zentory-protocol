@@ -56,9 +56,78 @@ This doc is the standing policy; the external auditor receives it as prior work.
 - **M3:** deployer EOA still holds `DEFAULT_ADMIN_ROLE` everywhere → Gnosis Safe
   migration (`MigrateToMultisig.s.sol`, needs 5 signers). THE production gate.
 - **INFRA-1:** workspace on OneDrive → move + rotate testnet Alchemy key (operator).
+  See §6 below for the non-OneDrive workflow.
+- **INFRA-2 (2026-08-14, NEW):** the following files containing live credentials
+  sit on the OneDrive-synced workspace and MUST be relocated + the keys rotated
+  BEFORE mainnet:
+  - `zentory-protocol/contracts/.env` — testnet deployer
+    `PRIVATE_KEY=0x924ba663…3bfe8e55` (NOT in git; gitignored). Blast radius: any
+    testnet contract re-deploy until `DEFAULT_ADMIN_ROLE` migrates to the Safe.
+  - `zentory-app/.vercel/.env.production.local` — Vercel project env downloaded
+    via `vercel env pull`, contains `NEXT_PUBLIC_SENTRY_DSN` and live
+    `KEEPER_*` keys (NOT in git; `.vercel/` is gitignored). Blast radius:
+    Sentry source-map upload (auth token present) + Vercel preview deploys.
+  - Both files were confirmed NOT in any commit (`git log --all -p` returns
+    empty); the exposure is sync-only, not history.
 - Historical leaked testnet deployer key (`0xdc42…`): rotated + scrubbed (F-01);
   re-verified clean in the 2026-06 re-scan (docs contain only tx hashes / grep patterns).
 
+## 6. Non-OneDrive workflow (INFRA-1 / INFRA-2)
+
+The workspace currently lives under
+`%USERPROFILE%\OneDrive\Documents\GitHub\ZENTORY LABS\…` and OneDrive syncs any
+file placed in that tree — including `.env` files — to Microsoft's cloud and to
+every other device signed in to the same account. **OneDrive sync is
+incompatible with secret storage.** Apply both of the following:
+
+### 6.1 Keep the code on OneDrive, but move every secret OUT
+1. Pick a non-synced root for secrets. On Windows use
+   `%LOCALAPPDATA%\zentory\` (e.g. `C:\Users\<you>\AppData\Local\zentory\`).
+   This folder is NEVER synced.
+2. Move the live `.env` files there:
+   - `%LOCALAPPDATA%\zentory\zentory-protocol-contracts.env`
+   - `%LOCALAPPDATA%\zentory\zentory-app-vercel.env`
+3. Symlink them back if a tool insists on reading from the repo path:
+   `mklink contracts\.env %LOCALAPPDATA%\zentory\zentory-protocol-contracts.env`
+   (cmd, elevated). Prefer not symlinking — most tools accept an env var that
+   points at the real path.
+4. Add `OneDrive` to the deny list for `.env*` via OneDrive's "Manage Backup
+   Folders" → "Stop backing up" for the workspace, or use
+   `attrib +H contracts\.env` so OneDrive ignores it (hidden files are still
+   synced by default; the cleaner fix is the non-synced root above).
+
+### 6.2 Rotate every key that ever lived on OneDrive
+For each secret that has been in a synced folder, treat it as exposed and
+rotate per §3:
+- Testnet deployer (`PRIVATE_KEY` in `contracts/.env`):
+  1. Generate a fresh key (new ethers wallet or hardware signer).
+  2. Call `StrategyExecutor.setAuthorizedSigner(new)` (admin) and
+     `SpotVault.grantRole(KEEPER_ROLE, new)` then `revokeRole(KEEPER_ROLE, old)`
+     once the new signer is wired in.
+  3. Update `%LOCALAPPDATA%\zentory\zentory-protocol-contracts.env` and every
+     Railway/Vercel env that references it.
+  4. Append the rotation to §Changelog.
+- Vercel `SENTRY_AUTH_TOKEN` / `KEEPER_*`:
+  1. Regenerate at https://sentry.io/settings/auth-tokens/ and revoke the old.
+  2. `vercel env rm SENTRY_AUTH_TOKEN production` then re-add via
+     `vercel env add SENTRY_AUTH_TOKEN production` (Vercel CLI).
+  3. Run `vercel env pull` from a non-OneDrive checkout if you need a local copy.
+
+### 6.3 Pre-commit guard (so we never regress)
+Add a `.git/hooks/pre-commit` hook that refuses to add any `.env*` file. The
+existing `.gitignore` already excludes them, but the hook is a belt-and-braces
+against an IDE auto-stage that bypasses `.gitignore`. Sample:
+```sh
+#!/bin/sh
+git diff --cached --name-only | grep -E '(^|/)(\.env|\.env\.[a-z]+\.local)$' && {
+  echo "Refusing to commit a .env file. Move it to %LOCALAPPDATA%\\zentory\\ first." >&2
+  exit 1
+}
+```
+
 ## Changelog
+- 2026-08-14 (P0-4): documented INFRA-2 exposure (PRIVATE_KEY + Sentry token on
+  OneDrive) and §6 non-OneDrive workflow. Files confirmed NOT in git history.
+  **Operator action pending: rotate keys per §6.2 and move files out of OneDrive.**
 - 2026-06-10: policy created (2026 re-scan); engine chain-guards + MedianOracle
   rotation-order enforcement shipped same day.
