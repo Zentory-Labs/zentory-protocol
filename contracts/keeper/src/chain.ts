@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, defineChain } from 'viem';
+import { createPublicClient, createWalletClient, http, fallback, defineChain } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { config } from './config';
 import { PayoutResult } from './types';
@@ -154,9 +154,21 @@ export const EpochScoringABI = [
 
 // ─── Client Factories ─────────────────────────────────────────────────────────
 
+// Build the viem transport that walks all configured RPC URLs. Primary is tried
+// first; on transport-level failure (502/503/504, network errors, timeouts)
+// viem's fallback transport falls through to the next URL. This is the
+// mechanism by which HYPEREVM_RPC_URL_FALLBACK takes effect on zent-keeper-settle.
+function buildTransport() {
+  const urls = [config.rpcUrl, ...config.rpcFallbackUrls];
+  if (urls.length === 1) {
+    return http(urls[0]);
+  }
+  return fallback(urls.map((u) => http(u)));
+}
+
 export function getPublicClient() {
   return createPublicClient({
-    transport: http(config.rpcUrl),
+    transport: buildTransport(),
     chain: hyperEVMTestnet,
   });
 }
@@ -165,7 +177,7 @@ export function getKeeperWallet() {
   const account = privateKeyToAccount(config.keeperPrivateKey as `0x${string}`);
   return createWalletClient({
     account,
-    transport: http(config.rpcUrl),
+    transport: buildTransport(),
     chain: hyperEVMTestnet,
   });
 }
