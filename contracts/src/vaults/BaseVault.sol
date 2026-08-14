@@ -41,6 +41,13 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     bool public override isCircuitBreakerActive;
     int8 public override currentDirection;
 
+    /// @notice Latest mark price (asset units, in the same decimals as the underlying)
+    ///         reported by the keeper from the off-EVM venue (e.g. Hyperliquid order book).
+    ///         `totalAssets()` values the open position against `currentMarkPrice` so NAV
+    ///         reflects live PnL. Defaults to `currentEntryPrice` so a fresh, never-updated
+    ///         vault reports 0 PnL rather than a fictitious mark.
+    uint256 public currentMarkPrice;
+
     // ─── Events ───────────────────────────────────────────────────────────
 
     /// @notice Emitted when the circuit breaker is automatically triggered by checkCircuitBreaker().
@@ -154,8 +161,64 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     }
 
     /// @inheritdoc IVault
+    /// @dev    NAV = idle balance + signed mark-to-market of the open position
+    ///         − accrued performance fees. The open position is sized in
+    ///         `currentPositionSize` units (same units as the underlying) and is
+    ///         marked against `currentMarkPrice`. `_markToMarket()` may be
+    ///         overridden by subclasses (e.g. SpotVault v2 will keep this hook as
+    ///         a no-op since its legs are already in-vault and self-valued).
+    ///         Without this hook, an off-EVM perp position's PnL is invisible
+    ///         on-chain — the circuit breaker would never see a drawdown until
+    ///         value settled back into the idle balance, and the HWM fee math
+    ///         would understate alpha (or fail to fire at all).
     function totalAssets() public view override(ERC4626, IVault) returns (uint256) {
-        return IERC20(asset()).balanceOf(address(this)) - performanceFeeAccrued;
+        uint256 idle = IERC20(asset()).balanceOf(address(this));
+        int256 mtm = _markToMarket();
+        // NAV is `idle + mtm` (signed add). When MTM is negative we DO want it
+        // to subtract from NAV — that is the whole point of mark-to-market:
+        // the circuit breaker must see the drawdown, not just an idle-balance
+        // change. The result is clamped at zero only if `idle + mtm` would
+        // underflow (i.e. the loss has exceeded the entire idle balance, the
+        // theoretical-maximum-loss case where `size` × (mark-entry)/mark < -idle).
+        // In that pathological case NAV is treated as 0 (effectively insolvent).
+        int256 grossSigned = int256(idle) + mtm;
+        uint256 gross = grossSigned > 0 ? uint256(grossSigned) : 0;
+        return gross > performanceFeeAccrued ? gross - performanceFeeAccrued : 0;
+    }
+
+    /// @notice Signed mark-to-market of the open position in asset units (raw
+    ///         decimals, same as the underlying). Positive when in-the-money,
+    ///         negative when out-of-the-money, zero when flat or no mark set.
+    /// @dev    Formula: `signed_size * (mark - entry) / mark`. `size` and price
+    ///         are stored in different units (asset units vs. a price scale,
+    ///         typically 10^8 USD). Converting USD PnL back to asset units
+    ///         requires dividing by the price — using `mark` (not `entry`)
+    ///         keeps the valuation current. The result is in asset units, so
+    ///         it adds directly to the idle-balance NAV.
+    ///         Subclasses may override; the default is safe to call at any
+    ///         time and degrades gracefully when mark/entry haven't been set.
+    function _markToMarket() internal view virtual returns (int256) {
+        if (currentDirection == int8(0)) return int256(0);
+        if (currentMarkPrice == 0 || currentEntryPrice == 0) return int256(0);
+        if (currentPositionSize == 0) return int256(0);
+        int256 size_ = int256(currentPositionSize);
+        int256 entry = int256(currentEntryPrice);
+        int256 mark = int256(currentMarkPrice);
+        // pnl_asset = size * (mark - entry) / mark, signed by direction.
+        // Multiplication is bounded by size * |mark - entry|; for any sane
+        // position size and price delta this stays well within int256.
+        int256 diff = mark - entry;
+        return (size_ * diff) / mark * int256(currentDirection);
+    }
+
+    /// @notice Keeper pushes the latest off-EVM mark price. `totalAssets()`,
+    ///         `getNavPerShare()`, and `checkCircuitBreaker()` will reflect the
+    ///         updated PnL on the next view call.
+    /// @param  markPrice  Latest mark in the same scale as `entryPrice` (asset
+    ///         units, same decimals as the underlying). Must be > 0.
+    function updateMarkPrice(uint256 markPrice) external onlyRole(KEEPER_ROLE) {
+        require(markPrice > 0, "Invalid mark price");
+        currentMarkPrice = markPrice;
     }
 
     /// @inheritdoc IVault
@@ -247,11 +310,26 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         if (tvl > 0) {
             uint256 maxSize = (tvl * maxPositionSizeBPS) / 10000;
             require(size <= maxSize, "Position size exceeds limit");
+            // Leverage cap: a vault declared `maxLeverage = 3x` (30000 BPS)
+            // must reject any recordTrade whose notional exceeds 3× NAV.
+            // Previously `maxLeverage` was a dead immutable — exposed via the
+            // IVault getter but never read in contract logic. Without this
+            // check a keeper could open a 100x notional trade; the
+            // StrategyExecutor's own `maxLeverageBPS` check does not catch
+            // trades that go through the keeper-direct `recordTrade` path
+            // (the executor's per-vault cap is per-keeper wiring, not a
+            // vault-enforced invariant).
+            uint256 maxNotional = (tvl * maxLeverage) / 10000;
+            require(size <= maxNotional, "Leverage exceeds max");
         }
 
         currentDirection = direction;
         currentPositionSize = size;
         currentEntryPrice = entryPrice;
+        // Mark defaults to entry until the keeper pushes the first off-EVM
+        // mark — keeps the open leg's MTM at 0 instead of pinning to whatever
+        // stale value happened to be left in storage.
+        currentMarkPrice = entryPrice;
 
         tradeHistory.push(
             Trade({direction: direction, size: size, entryPrice: entryPrice, timestamp: block.timestamp, closed: false})
@@ -264,6 +342,7 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         currentDirection = int8(0);
         currentPositionSize = 0;
         currentEntryPrice = 0;
+        currentMarkPrice = 0;
         emit PositionClosed();
     }
 
