@@ -153,7 +153,7 @@ Screenshot both Discord alerts and save to `docs/reports/g9-alert-evidence-2026-
 | Zentroller | `0x24f9401...` |
 | ZentGovernor | `0x21ba1F...` |
 | HyperCoreAdapter | `0xfFc1Da...` |
-| StrategyExecutor | `0x427c941...` |
+| StrategyExecutor | `0xacd862ef...` |
 
 ---
 
