@@ -5,8 +5,17 @@ dotenv.config();
 const keeperPrivateKey = process.env.KEEPER_PRIVATE_KEY!;
 const keeperAccount = privateKeyToAccount(keeperPrivateKey as `0x${string}`);
 
+// Comma-separated list of secondary RPC URLs. Used by viem's `fallback`
+// transport: the public client and the wallet client both try the primary
+// URL first, then walk this list on transport failure. See chain.ts.
+const rpcFallbackUrls: string[] = (process.env.HYPEREVM_RPC_URL_FALLBACK ?? '')
+  .split(',')
+  .map((u) => u.trim())
+  .filter((u) => u.length > 0);
+
 export const config = {
   rpcUrl: process.env.HYPEREVM_RPC_URL!,
+  rpcFallbackUrls,
   keeperPrivateKey,
   keeperAddress: keeperAccount.address,
   chainId: parseInt(process.env.CHAIN_ID || '998'),
