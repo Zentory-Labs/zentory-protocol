@@ -94,7 +94,8 @@ contract SpotVaultCritical1Test is Test {
             address(wbtc), address(usdc), address(oracle), 1 hours,
             "Zentory BTC Spot Vault", "zBTCs",
             0, 100, 2000,                       // 20% perf fee = production default
-            address(this), address(this)
+            address(this), address(this),
+            1 hours                            // emergencyRedeemCooldown (1h)
         );
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));

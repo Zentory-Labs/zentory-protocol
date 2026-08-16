@@ -82,7 +82,8 @@ contract SpotVaultTest is Test {
             0,      // rebalanceThresholdBps (0 = always rebalance, for the test)
             100,    // maxSlippageBps (1%)
             0,      // performanceFee (off for clarity)
-            address(this), address(this)
+            address(this), address(this),
+            1 hours // emergencyRedeemCooldown (matches production default)
         );
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
@@ -156,7 +157,8 @@ contract SpotVaultTest is Test {
     function test_ConstructorRejectsZeroStaleness() public {
         vm.expectRevert(bytes("zero staleness"));
         new SpotVault(address(wbtc), address(usdc), address(oracle), 0,
-            "x", "x", 0, 100, 0, address(this), address(this));
+            "x", "x", 0, 100, 0, address(this), address(this),
+            1 hours);
     }
 
     // ─── setFeeRecipient (mainnet fee-consolidation: re-point to the treasury Safe) ──

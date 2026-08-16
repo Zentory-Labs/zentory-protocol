@@ -40,7 +40,8 @@ contract ShadowStackTest is Test {
             0,      // rebalance threshold bps (always rebalance in test)
             100,    // max slippage bps (1%)
             0,      // perf fee
-            address(this), address(this)
+            address(this), address(this),
+            1 hours // emergencyRedeemCooldown (matches production default)
         );
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
