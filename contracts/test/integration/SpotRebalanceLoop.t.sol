@@ -96,7 +96,8 @@ contract SpotRebalanceLoopTest is Test {
             0,      // rebalanceThresholdBps (always rebalance, for the test)
             100,    // maxSlippageBps (1%)
             0,      // performanceFee off for clarity
-            address(this), address(this)
+            address(this), address(this),
+            1 hours // emergencyRedeemCooldown (1h)
         );
         exec = new StrategyExecutor(makeAddr("hyperCore"), governor);
 

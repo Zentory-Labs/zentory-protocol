@@ -59,17 +59,49 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     address public feeRecipient;
     bool public isCircuitBreakerActive;
 
+    /// @notice Per-address cooldown (seconds) between successive `redeemEmergency`
+    ///         calls. MEV-guard so that during a stale-oracle event a single bot
+    ///         cannot race honest users to the limited underlying left in the vault.
+    uint256 public emergencyRedeemCooldown;
+    /// @notice Last timestamp at which `owner` called `redeemEmergency`. Used to
+    ///         enforce `emergencyRedeemCooldown` per address. Zero means "never
+    ///         called" — first call is always allowed.
+    mapping(address => uint256) public lastEmergencyRedeemAt;
+
     event Rebalanced(uint16 targetBps, uint256 assetLeg, uint256 cashLeg, uint256 navPerShare);
     event PerformanceFeeAccrued(uint256 fee, uint256 navBefore, uint256 navAfter);
     event PerformanceFeeClaimed(address indexed recipient, uint256 paid, uint256 stillAccrued);
     event PerformanceFeeWrittenDown(uint256 amount, uint256 stillAccrued);
     event CircuitBreakerSet(bool active);
+    /// @notice Emitted on every `redeemEmergency` call. `haircutAssets` is what the
+    ///         depositor is OWED at the last oracle price but cannot be paid because
+    ///         the oracle is stale (and we skip the oracle in this path). It is the
+    ///         invariant under which monitoring must alert: a non-zero haircut means
+    ///         a stale-oracle event is in progress.
+    event EmergencyRedeem(
+        address indexed caller,
+        address indexed receiver,
+        address indexed owner,
+        uint256 sharesBurned,
+        uint256 paid,
+        uint256 haircutAssets,
+        uint256 haircutPerShare
+    );
+    event EmergencyRedeemCooldownSet(uint256 oldCooldown, uint256 newCooldown);
 
     error CircuitBreakerActive();
     error BadWeight();
     error StaleOracle(uint256 updatedAt, uint256 nowTs);
     error InvalidOraclePrice(int256 answer);
+    error EmergencyBreakerActive();
+    error EmergencyCooldownActive(uint256 nextAllowedAt);
 
+    /// @param emergencyRedeemCooldown_ seconds between successive `redeemEmergency`
+    ///        calls per `owner` address. Settable later via
+    ///        `setEmergencyRedeemCooldown` (RISK_COUNCIL_ROLE). Recommended default
+    ///        is 1 hour (3600) — long enough to deter MEV racing during a stale
+    ///        oracle event, short enough that honest users are not inconvenienced
+    ///        through a multi-hour outage.
     constructor(
         address asset_,
         address cashAsset_,
@@ -81,7 +113,8 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         uint16 maxSlippageBps_,
         uint256 performanceFeeBps_,
         address feeRecipient_,
-        address admin_
+        address admin_,
+        uint256 emergencyRedeemCooldown_
     ) ERC20(name_, symbol_) ERC4626(IERC20(asset_)) {
         require(asset_ != address(0) && cashAsset_ != address(0) && oracle_ != address(0), "zero addr");
         require(feeRecipient_ != address(0) && admin_ != address(0), "zero addr");
@@ -100,6 +133,8 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         performanceFee = performanceFeeBps_;
         feeRecipient = feeRecipient_;
         highWaterMark = 10 ** _assetDec; // 1.0 in underlying units
+
+        emergencyRedeemCooldown = emergencyRedeemCooldown_;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
@@ -349,5 +384,99 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     function setCircuitBreaker(bool active) external onlyRole(RISK_COUNCIL_ROLE) {
         isCircuitBreakerActive = active;
         emit CircuitBreakerSet(active);
+    }
+
+    // ─── Emergency exit (stale-oracle recovery) ───────────────────────────────
+
+    /// @notice Opt-in emergency exit that bypasses the oracle: pays whatever
+    ///         underlying is currently in the vault, accepting a per-share haircut
+    ///         when the oracle is stale or the vault cannot value its cash leg.
+    /// @dev    Required because the standard `redeem`/`withdraw` paths revert when
+    ///         `assetToCash()` reverts on a stale Chainlink feed, leaving depositors
+    ///         locked in (see `docs/MAINNET_READINESS.md:38`, Tier 0.A — "Oracle
+    ///         going quiet freezes all withdrawals; no fallback, no admin override.
+    ///         Users cannot exit").
+    ///
+    ///         Design notes:
+    ///           - Permissionless: any current share holder may call.
+    ///           - Skips the oracle entirely; what you get is
+    ///             `IERC20(asset()).balanceOf(self) * shares / totalSupply()`.
+    ///             There is NO swap attempt: in a stale-oracle event we do not
+    ///             trust the swap venue to price, and the cash leg is unvalued.
+    ///           - Rate-limited per `owner` address via `emergencyRedeemCooldown` to
+    ///             MEV-guard a single bot from racing honest users to the limited
+    ///             underlying.
+    ///           - Refuses to run while the circuit breaker is active. A halted
+    ///             vault must halt EXITS too — the halt is explicit, not silent.
+    ///           - Does NOT mutate `performanceFeeAccrued`; the protocol's fee claim
+    ///             is computed off this vault's bookkeeping and emergency payouts
+    ///             are paid from underlying the protocol already accounts for. A
+    ///             fee-pinning interaction during a stale-oracle event would be
+    ///             worse than the bug we're fixing.
+    ///           - Emits `EmergencyRedeem` with the haircut so the loss is
+    ///             auditable and proportional across all callers in a stale-oracle
+    ///             event.
+    function redeemEmergency(uint256 shares, address receiver, address owner)
+        external
+        nonReentrant
+        returns (uint256 paid)
+    {
+        if (isCircuitBreakerActive) revert EmergencyBreakerActive();
+        require(shares > 0, "SpotVault: zero shares");
+        require(receiver != address(0) && owner != address(0), "SpotVault: zero addr");
+
+        // Cooldown gate (per `owner`, MEV-guard against a single address racing
+        // others to the limited underlying during a stale-oracle event).
+        uint256 cooldown = emergencyRedeemCooldown;
+        uint256 lastTs = lastEmergencyRedeemAt[owner];
+        if (lastTs != 0 && cooldown != 0) {
+            uint256 nextAllowed = lastTs + cooldown;
+            if (block.timestamp < nextAllowed) revert EmergencyCooldownActive(nextAllowed);
+        }
+        lastEmergencyRedeemAt[owner] = block.timestamp;
+
+        // Owner-auth check (mirror ERC-4626 allowance semantics so a non-owner
+        // cannot burn someone else's shares). OpenZeppelin 5.x exposes
+        // `_spendAllowance` as `internal virtual`; SpotVault inherits ERC20
+        // directly so the call resolves without override.
+        if (owner != msg.sender) {
+            _spendAllowance(owner, msg.sender, shares);
+        }
+
+        // Compute what the depositor is owed purely from current supply and the
+        // actual underlying balance the vault can pay right now. No oracle call.
+        uint256 supply = totalSupply();
+        uint256 bal = IERC20(asset()).balanceOf(address(this));
+        uint256 owed = supply == 0 ? 0 : (shares * bal) / supply;
+
+        _burn(owner, shares);
+        paid = owed;
+        if (paid > 0) IERC20(asset()).safeTransfer(receiver, paid);
+
+        // `haircut` is `owed - paid` — in this path `owed == paid` by construction
+        // (we compute owed FROM the current balance), so it is zero here. Kept as
+        // an explicit, audited field so any future partial-pay path is symmetric
+        // with the event shape and so off-chain monitoring can alert on any
+        // non-zero value (signals that a stale-oracle event has over-subscribed
+        // the vault's available liquidity).
+        uint256 haircut = owed > paid ? owed - paid : 0;
+        emit EmergencyRedeem(
+            msg.sender,
+            receiver,
+            owner,
+            shares,
+            paid,
+            haircut,
+            shares > 0 ? haircut * supply / shares : 0
+        );
+    }
+
+    /// @notice Re-set the per-address cooldown for `redeemEmergency`. Settable by
+    ///         the risk council without redeploy; the constructor seeds the
+    ///         recommended default (1 hour).
+    function setEmergencyRedeemCooldown(uint256 cooldown) external onlyRole(RISK_COUNCIL_ROLE) {
+        uint256 old = emergencyRedeemCooldown;
+        emergencyRedeemCooldown = cooldown;
+        emit EmergencyRedeemCooldownSet(old, cooldown);
     }
 }

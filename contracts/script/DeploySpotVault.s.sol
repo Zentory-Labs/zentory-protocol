@@ -55,6 +55,7 @@ contract DeploySpotVault is Script {
         uint16 threshBps  = uint16(vm.envOr("REBALANCE_THRESHOLD_BPS", uint256(200)));
         uint16 slipBps    = uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(100)));
         uint256 feeBps    = vm.envOr("PERFORMANCE_FEE_BPS", uint256(2000));
+        uint256 emergencyCooldown = vm.envOr("EMERGENCY_REDEEM_COOLDOWN", uint256(3600));
 
         console2.log("Deployer:", deployer);
         console2.log("Keeper:  ", keeper);
@@ -62,13 +63,15 @@ contract DeploySpotVault is Script {
         console2.log("Cash:", cash);
         console2.log("Oracle:", oracle);
         console2.log("SwapAdapter:", adapter);
+        console2.log("EmergencyCooldown (s):", emergencyCooldown);
         console2.log("Chain:", block.chainid);
 
         vm.startBroadcast(deployerKey);
 
         SpotVault vault = new SpotVault(
             underlying, cash, oracle, maxStale,
-            name_, symbol_, threshBps, slipBps, feeBps, feeRecip, deployer
+            name_, symbol_, threshBps, slipBps, feeBps, feeRecip, deployer,
+            emergencyCooldown
         );
         console2.log("SpotVault deployed:", address(vault));
 
