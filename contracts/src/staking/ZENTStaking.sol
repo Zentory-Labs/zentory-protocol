@@ -37,11 +37,16 @@ contract ZENTStaking is AccessControl, IZENTStaking {
     /// @notice Sum of veBalance across all active positions (total voting weight).
     uint256 public totalVeSupply;
 
-    /// @notice Address that receives slashed ZENT. Defaults to the staking
-    ///         contract itself (acts as an internal insurance buffer) if the
-    ///         constructor receives address(0). Governor-adjustable via
-    ///         `setInsuranceFund`. Must NEVER be address(0) post-deploy.
+    /// @notice Destination for slashed ZENT. Defaults to `address(0)` at deploy
+    ///         time — while unset, slashed ZENT is retained inside this contract
+    ///         as an internal insurance buffer (audit-finding 0.C.3). Governance
+    ///         MUST call `setInsuranceFund(insuranceFundAddr)` during mainnet
+    ///         bring-up so slashed ZENT actually flows into `InsuranceFund.sol`.
     address public insuranceFund;
+
+    /// @notice Reverted by `setInsuranceFund(address(0))` — a zero recipient
+    ///         would silently burn slashed ZENT.
+    error ZeroInsuranceFund();
 
     /// @notice Emitted when the insurance fund recipient changes.
     event InsuranceFundUpdated(address indexed previous, address indexed current);
@@ -60,23 +65,25 @@ contract ZENTStaking is AccessControl, IZENTStaking {
 
         zent = IERC20(zent_);
         minStake = minStake_;
-        // Default to this contract as the insurance buffer. Governance MUST
-        // call setInsuranceFund() before mainnet so slashed ZENT flows into
-        // the real insurance contract (audit-finding H-4). Until then,
-        // slashed ZENT accumulates in this contract's own balance — bounded
-        // exposure, no leak back to the slasher.
-        insuranceFund = address(this);
-        emit InsuranceFundUpdated(address(0), address(this));
+        // Default insuranceFund = address(0) means "not yet configured": until
+        // governance calls `setInsuranceFund(<InsuranceFund address>)`, slashed
+        // ZENT accumulates in this contract's own balance as an internal buffer
+        // (audit-finding 0.C.3). The deploy runbook MUST wire the deployed
+        // InsuranceFund address in the same tx batch as ZENTStaking deployment
+        // so slashed ZENT flows to the real insurance fund from block zero.
+        insuranceFund = address(0);
 
         _grantRole(DEFAULT_ADMIN_ROLE, governor_);
         _grantRole(GOVERNOR_ROLE, governor_);
     }
 
     /// @notice Update the insurance fund recipient.
-    /// @dev    Governor-only. Rejects address(0) to prevent slashed ZENT
-    ///         from being burned to the zero address by accident.
-    function setInsuranceFund(address newFund) external onlyRole(GOVERNOR_ROLE) {
-        require(newFund != address(0), "ZENTStaking: zero insurance fund");
+    /// @dev    Admin-only. Rejects `address(0)` so slashed ZENT can never be
+    ///         silently burned to the zero address by an admin mis-entry. The
+    ///         event includes the previous recipient so off-chain monitoring can
+    ///         alert on re-routing (audit VAULT-4-style observability pattern).
+    function setInsuranceFund(address newFund) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newFund == address(0)) revert ZeroInsuranceFund();
         address previous = insuranceFund;
         insuranceFund = newFund;
         emit InsuranceFundUpdated(previous, newFund);
@@ -240,17 +247,20 @@ contract ZENTStaking is AccessControl, IZENTStaking {
         totalVeSupply = totalVeSupply - oldVe + newVe;
 
         emit ProviderSlashed(provider, amount, msg.sender);
-        // H-4 fix: route slashed ZENT to the insurance fund, not the slasher.
-        // Previously sent to msg.sender, which is always the GOVERNOR_ROLE
-        // holder (EpochScoring) — slashed ZENT got stuck in that contract
-        // forever, and the insurance fund never accumulated from slashing.
+        // Route slashed ZENT to the insurance fund if governance has wired one
+        // in (audit-finding 0.C.3 — previously sent to msg.sender, which is the
+        // GOVERNOR_ROLE holder EpochScoring, so slashed ZENT got stuck in that
+        // contract forever and InsuranceFund.sol never accumulated from
+        // slashing). When `insuranceFund` is still address(0) — i.e. governance
+        // hasn't yet configured the recipient — the slashed ZENT simply stays
+        // inside this contract's own balance as a bounded internal buffer
+        // until `setInsuranceFund(...)` is called. No tokens leave this
+        // contract in that case; `totalStaked` already decremented above so the
+        // accounting stays consistent.
         address fund = insuranceFund;
-        if (fund != address(this)) {
+        if (fund != address(0)) {
             zent.safeTransfer(fund, amount);
         }
-        // When fund == address(this), the slashed ZENT just stays in this
-        // contract's balance as an internal buffer until governance points
-        // `insuranceFund` at a real recipient.
     }
 
     /// @inheritdoc IZENTStaking
