@@ -1,0 +1,248 @@
+# Tier 0 Fix Queue — External Audit Hand-Off
+
+> **Status:** 2026-08-20 · **Purpose:** This document is the hand-off package for the external audit firm. Per `MAINNET_READINESS.md`, Tier 0 PRs must not be merged until the external auditor signs off on each fix. This queue maps every remaining Tier 0 item to the code path, the fix shape, the test plan, and the audit gate.
+
+> **Prerequisite:** Read `AUDIT_FINDINGS_2026-08-07.md` at the monorepo workspace root for full context on each finding.
+
+**Execution order:** Highest risk / cheapest to fix first.
+
+---
+
+## Q1 — `totalVeSupply` ratchet decay (`ZENTStaking.sol:159-185`)
+
+**Risk:** CRITICAL. Governance permanently bricks because `totalVeSupply` never decrements while individual `veBalance()` decays to 0. `ZentGovernor.quorum = totalVeSupply * quorumBps / 10000` becomes permanently unreachable. No vote can pass; governance is dead.
+
+**File:** `contracts/src/staking/ZENTStaking.sol`, functions `withdraw()` (line 159) and `_veAt()` (line 185).
+
+**Root cause:** `withdraw()` requires `block.timestamp >= pos.lockEnd`, but `_veAt()` returns 0 once `at >= lockEnd`. So `totalVeSupply -= oldVe` always subtracts zero. The total is incremented at stake time and never decremented. Every individual `veBalance()` decays to 0.
+
+**Founder decision:** Implement **Curve-style checkpointed slope decay** (`_checkpoint` pattern with historical lookup). Decision recorded at `docs/decisions/2026-08-20-gov-002-ve-decay.md`.
+
+**Fix shape (~150–250 LOC):**
+- Add `Checkpoints.History` storage (`_veCheckpoints[address]`) with `_writeCheckpoint/_getCheckpointAtBlock`
+- Rewrite `_veAt()` to read from checkpoint history at the requested timestamp
+- Rewrite `withdraw()` to subtract the user's historical ve at withdraw-time
+- Add `getPriorVeBalance(address, uint256)` public view for governor snapshots (Q7 sub-fix)
+- Update `ZentGovernor._getVotes()` to use the timepoint parameter
+
+**Test plan:**
+- `contracts/test/staking/ZENTStakingVeDecay.t.sol` (NEW)
+- Cases: extendLock preserves totalVeSupply, withdraw decrements totalVeSupply by historical ve, veBalance decays linearly to 0 at lockEnd, getPriorVeBalance returns correct value at past block
+- `contracts/test/invariants/StakingVeSupplyInvariant.t.sol` (NEW): sum(veBalance) == totalVeSupply at every state
+- `contracts/test/governance/ZentGovernorSnapshot.t.sol` (NEW): vote uses snapshot timepoint
+
+**Audit gate:** HIGH — tokenomics decision, affects governance quorum and voting weight semantics.
+
+---
+
+## Q2 — Insurance routing (`ZENTStaking.sol` setter)
+
+**Status:** 🟢 IMPLEMENTED on branch `fix/0-c-3-insurance-routing` (commit `f82b65a`). NOT merged to main (waiting for external audit sign-off per policy).
+
+**Fix:** `setInsuranceFund(address)` requires `DEFAULT_ADMIN_ROLE`, rejects zero address via custom error `ZeroInsuranceFund()`. Constructor defaults `insuranceFund = address(0)`. `slash()` routes to `insuranceFund` if set.
+
+**Test:** `contracts/test/staking/SlashRoutedToInsurance.t.sol` — 4 cases passing.
+
+---
+
+## Q3 — Single hot-key accuracy setter
+
+**Risk:** One EOA can set arbitrary, overwritable, unverified accuracy that drives real payouts. Key compromise rewrites the entire performance record.
+
+**File:** `contracts/src/signals/EpochScoring.sol`, function `setAccuracy()` (line 494).
+
+**Fix shape (~30 LOC):** Replace `require(msg.sender == scoringOracle)` with `onlyRole(SCORING_ORACLE_ROLE)` using OpenZeppelin AccessControl. A Safe multisig can hold the role and rotate EOAs.
+
+**Test plan:** `contracts/test/signals/SetAccuracyRoleGated.t.sol` (NEW). Cases: role-holder succeeds, non-holder reverts with AccessControlUnauthorizedAccount.
+
+**Audit gate:** MEDIUM — multisig dependency.
+
+---
+
+## Q4 — O(n²) settlement DoS (`EpochScoring`)
+
+**Risk:** O(n²) bubble sort + ~10 external calls per signal over an attacker-growable list. Permanent gas DoS of epoch settlement.
+
+**File:** `contracts/src/signals/EpochScoring.sol`, line 616 comment: "Bubble sort by finalScore descending."
+
+**Fix shape (~50–100 LOC):** Replace bubble sort with O(n log n) sort. Batch or bound external calls in `_distributeRewards`.
+
+**Test plan:** `contracts/test/signals/EpochScoringSortDoSFix.t.sol` (NEW). Cases: gas bounded for n=1000 signals, sort result identical to old bubble sort for same inputs.
+
+**Audit gate:** MEDIUM.
+
+---
+
+## Q5 — Silent reward payout failure
+
+**Status:** 🟢 IMPLEMENTED on branch `fix/0-b-3-reward-payout-event` (commit `ab2bb0e`). NOT merged to main.
+
+**Fix:** `EpochScoring._distributeRewards` now emits `RewardPayoutFailed(provider, epochId, amount, reason)` from the try/catch. Persists failed amount in `failedPayouts[epochId][provider]`. Exposes `claimFailedPayouts(epochId, provider)` for post-hoc reconciliation. Adds `fundRewardPool(uint256)` (admin-only, `SafeERC20.transferFrom`).
+
+**Test:** `contracts/test/signals/RewardPayoutFailure.t.sol` — 4 cases passing.
+
+---
+
+## Q6 — `accuracyCache` default-0 ≡ max-slash
+
+**Risk:** An unscored signal is indistinguishable from a maximally-wrong one. A dead scoring oracle silently burns every provider's stake.
+
+**File:** `contracts/src/signals/EpochScoring.sol`, `accuracyCache` mapping and `applyPayout()`.
+
+**Fix shape (~30 LOC):** Add a sentinel value (`type(uint256).max`) for unscored signals. Add `claimExpiredSignal(signalId)` recovery path for signals that never get scored.
+
+**Founder decision:** Tokenomics — how long until an unscored signal can be claimed back. Decision pending.
+
+**Test plan:** `contracts/test/signals/EpochScoringExpiredSignal.t.sol` (NEW).
+
+**Audit gate:** MEDIUM — tokenomics.
+
+---
+
+## Q7 — Governor snapshot manipulation
+
+**Risk:** Governor reads live state instead of the proposal snapshot. Any proposal can be defeated/manipulated after the fact.
+
+**File:** `contracts/src/governance/ZentGovernor.sol`, function `_getVotes()` (line 72). Comment: "Snapshot parameter (timepoint) is ignored — veBalance is time-based, not snapshot-based."
+
+**Fix shape:** Implicitly fixed by Q1 (checkpointed veBalance history). `_getVotes(account, timepoint)` reads from `_veCheckpoints[account]` at the timepoint.
+
+**Test plan:** Same as Q1 governor snapshot test.
+
+**Audit gate:** HIGH — governance semantics.
+
+---
+
+## Q8 — Admin-override emergency exit (`SpotVault`)
+
+**Risk:** Oracle going quiet freezes ALL withdrawals; no fallback, no admin override. Users cannot exit.
+
+**File:** `contracts/src/vaults/SpotVault.sol`, `redeemEmergency()` (line 372).
+
+**Fix shape (~30 LOC):** Add `redeemEmergencyFor(address owner, uint256 shares, address receiver)` admin variant callable by `GUARDIAN_ROLE`. Preserve per-address MEV cooldown.
+
+**Test plan:** `contracts/test/vaults/SpotVaultEmergencyAdmin.t.sol` (NEW). Cases: admin succeeds with cooldown, non-admin reverts, per-address cooldown enforced.
+
+**Audit gate:** HIGH — admin powers.
+
+---
+
+## Q9 — TWAP stale-price check (vault level)
+
+**Risk:** Stale-price window lets a depositor/redeemer extract mispricing from everyone else. Classic oracle-latency arbitrage.
+
+**File:** `contracts/src/vaults/SpotVault.sol` and `contracts/src/vaults/BaseVault.sol`.
+
+**Fix shape (~50 LOC):** Add TWAP / deviation check at the vault level (in addition to `MedianOracle`'s freshness check). Use `ShadowPriceOracle.latestRoundData().updatedAt` as staleness check.
+
+**Test plan:** `contracts/test/vaults/SpotVaultStalePriceGuard.t.sol` (NEW). Cases: deposit reverts on stale price, withdraw reverts on stale price, fresh price succeeds.
+
+**Audit gate:** HIGH — pricing model.
+
+---
+
+## Q10 — Per-depositor HWM equalization
+
+**Risk:** Late depositors are retroactively taxed on gains they never received. No per-share HWM tracking.
+
+**File:** `contracts/src/vaults/BaseVault.sol`, `evaluateFees()` uses single global `highWaterMark`.
+
+**Fix shape (~100–150 LOC):** Add per-depositor HWM mapping. Performance fee only on gains above depositor's individual HWM.
+
+**Test plan:** `contracts/test/vaults/BaseVaultPerDepositorHWM.t.sol` (NEW). Cases: late depositor not retroactively taxed, early depositor taxed above their HWM, both see same alpha at same time.
+
+**Audit gate:** HIGH — fee accounting.
+
+---
+
+## Q11 — z-vault deprecation or live execution
+
+**Risk:** zBTC/zETH/zSOL/zXRP cannot execute the strategy at all — yet charge a 20% performance fee and advertise "3x". Indefensible in diligence and to a regulator.
+
+**Files:** `contracts/src/vaults/zBTCVault.sol`, `zETHVault.sol`, `zSOLVault.sol`, `zXRPVault.sol`. Each is a ~15-24 LOC wrapper around `BaseVault`.
+
+**Founder decision:** PENDING. Options: (a) deprecated — paused, deposits blocked, withdrawals work, OR (b) wired — route through SpotVault v2 executor.
+
+**Decision to be recorded at:** `docs/decisions/`
+
+---
+
+## Q12 — Backtest vs. deployed strategy reconciliation
+
+**Risk:** The investor-facing backtest table describes a different strategy than the deployed one. This finding ends a raise.
+
+**Scope:** Doc-only. Reconcile `data/*-model.json` and `lib/backtest.ts` with `StrategyExecutor.sol` parameters.
+
+**Audit gate:** LOW — investor perception.
+
+---
+
+## Q13 — Fee-split reconciliation (3 sources)
+
+**Risk:** Whitepaper, tokenomics page, and pitch-deck page all contradict the deployed `FeeDistributor`. Whitepaper-vs-code diff is the first thing a technical investor runs.
+
+**Scope:** Doc-only. Canonical is `FeeDistributor.sol`: 50% Buyback / 25% Treasury / 15% Insurance / 10% GP Engine.
+
+**Audit gate:** LOW — diligence.
+
+---
+
+## Q14 — "Recording live — day N" hardcoded date
+
+**Risk:** Day counter never compared to `now`. Site showed "live" through the 30-day data outage.
+
+**Scope:** Doc + dApp UI fix. Already partially addressed by zentory-app PR #276 (staleness gate).
+
+---
+
+## Q15 — Waitlist + subscriber RLS review
+
+**Risk:** Personal-data exposure (GDPR relevance given EU ambitions).
+
+**Scope:** zentory-app Supabase RLS policies on `whitelist` and `subscriptions` tables.
+
+---
+
+## Q16 — Contributor API-key expiry
+
+**Risk:** API keys never expire, self-replicate, validated against a table absent from the schema.
+
+**Scope:** zentory-app Supabase schema. Add `expires_at` column to `api_keys` table.
+
+---
+
+## Q17 — Ledger verifier enforcement
+
+**Risk:** The tamper-evident ledger has no enforced verifier — `verify_ledger()`'s result is discarded.
+
+**Scope:** Engine keeper crons. `ledger_guard.py` ships (zentory-engine PR #17). Single-leader EIP-712 enforcement still in flight.
+
+---
+
+## Summary
+
+| # | Effort | Audit gate | Status |
+|---|---|---|---|
+| Q1 | ~150–250 LOC | HIGH | 🔴 OPEN — founder decision needed (decided: Curve-style) |
+| Q2 | ~20 LOC (DONE) | LOW | 🟢 Branch `fix/0-c-3-insurance-routing` |
+| Q3 | ~30 LOC | MEDIUM | 🔴 OPEN |
+| Q4 | ~50–100 LOC | MEDIUM | 🔴 OPEN |
+| Q5 | ~20 LOC (DONE) | LOW | 🟢 Branch `fix/0-b-3-reward-payout-event` |
+| Q6 | ~30 LOC | MEDIUM | 🔴 OPEN — founder decision pending |
+| Q7 | ~50 LOC (via Q1) | HIGH | 🔴 OPEN — implicit in Q1 fix |
+| Q8 | ~30 LOC | HIGH | 🔴 OPEN |
+| Q9 | ~50 LOC | HIGH | 🔴 OPEN |
+| Q10 | ~100–150 LOC | HIGH | 🔴 OPEN |
+| Q11 | ~30 LOC or TBD | TBD | 🔴 OPEN — founder decision pending |
+| Q12 | doc only | LOW | 🔴 OPEN |
+| Q13 | doc only | LOW | 🔴 OPEN |
+| Q14 | ~20 LOC or doc | LOW | 🟡 Partial |
+| Q15 | ~10 LOC additive | LOW | 🔴 OPEN |
+| Q16 | ~20 LOC | LOW | 🔴 OPEN |
+| Q17 | additive | MEDIUM | 🟡 Partial |
+
+**Estimated engineering effort:** ~6 weeks for contract items (Q1–Q11), ~1 week for doc/marketing items (Q12–Q14). Each item is a separate PR.
+
+---
+
+*Generated 2026-08-20 for the ZENTORY mission M2 audit-ready protocol work.*
