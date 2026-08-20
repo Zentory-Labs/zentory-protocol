@@ -426,17 +426,24 @@ Vault generates $100 in performance fees:
   → $10 → Operations
 ```
 
-### 6.3 Supply Allocation (TBD — pre-mainnet disclosure)
+### 6.3 Supply Allocation
 
-| Category | Allocation | Lock Schedule |
-|---|---|---|
-| Public Sale | TBD | TBD |
-| Team & Advisors | TBD | 4-year vest |
-| Ecosystem / Grants | TBD | TBD |
-| Protocol Reserve | TBD | TBD |
-| Liquidity | TBD | TBD |
+The full bucket list and vesting schedule below is the published intent from `docs/TGE_STRUCTURE.md`. Percentages may shift ±2% based on legal opinion + audit timing, but the structure is the working commitment.
 
-*Specific allocation percentages will be published prior to mainnet launch.*
+| Bucket | % | Tokens | Vesting | Rationale |
+|---|---|---|---|---|
+| Team + founders | **18%** | 180M | 4-yr linear, 1-yr cliff | Standard founder economics. Cliff aligns team commitment with first audited mainnet year. |
+| Treasury | **20%** | 200M | Time-locked, governance-released | Funds protocol development, audits, partnerships, market making. Governance-controlled releases prevent founder discretion. |
+| Quant contributor rewards | **22%** | 220M | Emitted via EpochScoring | Continuously paid to quants based on signal accuracy. This is the protocol's primary alignment mechanism — the bigger the alpha demand, the bigger the contributor base. |
+| LP rewards (vault depositors) | **10%** | 100M | 24-month linear emission | Bootstraps vault TVL. Higher in first 6 months, tapers. |
+| ZENT/USDC liquidity (POL) | **8%** | 80M | Locked 12 months as Protocol-Owned Liquidity | $ZENT side of the seed pool on HyperSwap. Locked = credible price floor signal. |
+| Testnet airdrop | **3%** | 30M | 25% at TGE, 75% linear over 6 months | Reward early dApp users + signal submitters + faucet users. |
+| Strategic round | **10%** | 100M | 18-mo linear, 6-mo cliff | Reserved for the strategic raise. Smaller cliff than team because strategics deliver value earlier. |
+| Public DEX float | **5%** | 50M | Unlocked at TGE | Tradeable supply at launch. Concentrated on HyperSwap pool + a small Uniswap v3 bridged pool. |
+| Bug bounty + insurance | **4%** | 40M | Multi-sig controlled, drawn down on payouts | Funds the Immunefi bounty pool + initial insurance fund seed. |
+| **Total** | **100%** | **1,000M** | | |
+
+The TGE float at T=0 is ~57.5M (~5.75% of supply) — 50M public DEX float + ~7.5M (25%) of the testnet airdrop unlocked. This is deliberately tight; a low float + strong utility demand is the price-discovery posture the protocol wants. See `docs/TGE_STRUCTURE.md` for the full vesting-unlock schedule, buyback cadence, and the "What can governance change?" boundary (the 50/25/15/10 fee split is in the **cannot** column for governance).
 
 ### 6.4 Vault Fee Flow
 
@@ -627,10 +634,12 @@ User funds are held in ERC-4626 vault contracts. The protocol never holds user p
 - `ZENT` token — fixed supply is a core promise
 - `BaseVault` core logic — vault rules must be immutable post-deployment
 
-**Upgradeable (ERC-1967 Proxy):**
-- `EpochScoring` — adjust epoch duration, slash/reward caps
-- `ZENTStaking` — adjust minimum stake
-- `FeeDistributor` — adjust fee allocations
+**Immutable — bytecode deployed at chain 998. Migration path is deploy-new + migrate-state:**
+- `EpochScoring` — epoch duration, slash/reward caps are constants in bytecode; change requires redeploy + state migration (see `contracts/scripts/audit/self_audit_findings.md` I-1).
+- `ZENTStaking` — minimum stake is a constant in bytecode; change requires redeploy + state migration.
+- `FeeDistributor` — the 50/25/15/10 split is hardcoded in `distribute()` (and per `docs/TGE_STRUCTURE.md` is in the "cannot" column for governance); any fee-allocation change requires redeploy + state migration.
+
+> **Note:** None of the protocol primitives are upgradeable. There is no ERC-1967 proxy path. This is a deliberate design choice documented in `contracts/scripts/audit/self_audit_findings.md` I-1. Adjustable parameters (`EPOCH_DURATION`, `MAX_PENALTY_BPS`, `MAX_REWARD_BPS`, `MIN_STAKE`) are flagged as I-2 in the same audit as future-governance candidates; their adjustment path is governance-gated redeploy, not in-place upgrade.
 
 ---
 
