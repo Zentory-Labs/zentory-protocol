@@ -7,6 +7,17 @@
 
 ---
 
+> **CORRECTION (2026-08-20):** The prose in §2.2 / §3 / §5 of this document describes the fee split as
+> **25% GP Engine · 15% Insurance · 10% Treasury · 50% Buyback** (the April 2026 draft). The on-chain
+> canonical split, per `contracts/src/fees/FeeDistributor.sol:12` and the founder decision documented
+> in the source comments at lines 102-108, is **50% Buyback · 25% Protocol Treasury · 15% Insurance
+> · 10% GP Engine** — the GP/Treasury allocations are reversed between the design doc and the
+> deployed code. The Howey analysis (mechanism shape, no-profit-routing-to-holders argument) is
+> unaffected by this fix; only the percentage labels in this document are out of sync. Treat the
+> on-chain contract as the source of truth. A v1.1 of this doc will normalize the prose.
+
+---
+
 ## 1. Executive Summary
 
 ZENT's existing `FeeDistributor.triggerBuyback()` already routes 50% of vault performance fees to a buyback pool, but the mechanism is a placeholder and the overall architecture has a structural Howey test risk: the `FeeDistributor` distributes rewards to stakers in a way that creates profit-sharing with a common enterprise. The March 2026 SEC/CFTC joint interpretation gives us a clear path to fix this: **reframe the buyback as protocol-owned supply management, not profit distribution to holders.**
