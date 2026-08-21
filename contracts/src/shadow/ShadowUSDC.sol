@@ -17,6 +17,12 @@ contract ShadowUSDC is ERC20 {
         // unlimited token inflation if accidentally deployed to production.
         require(block.chainid != 999, "ShadowUSDC: mainnet forbidden");
     }
-    function decimals() public pure override returns (uint8) { return 6; }
-    function mint(address to, uint256 amount) external { _mint(to, amount); }
+
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
 }

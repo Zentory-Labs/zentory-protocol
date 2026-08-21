@@ -218,7 +218,14 @@ contract ZENTStaking is AccessControl, IZENTStaking {
     }
 
     /// @inheritdoc IZENTStaking
-    function getStakeAtEpoch(address provider, uint256 /* epochId */) external view returns (uint256 stakeAmount) {
+    function getStakeAtEpoch(
+        address provider,
+        uint256 /* epochId */
+    )
+        external
+        view
+        returns (uint256 stakeAmount)
+    {
         // Stub: returns current stake for any epoch since ZENTStaking does not store per-epoch history.
         // Production systems should emit StakeUpdated events and maintain epoch-indexed state.
         Position memory pos = _positions[provider];

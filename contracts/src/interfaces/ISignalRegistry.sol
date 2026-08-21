@@ -18,21 +18,19 @@ interface ISignalRegistry {
     /// @param signature  EIP-191 ECDSA signature over the signal hash by provider's wallet
     /// @return signalId  Unique identifier for this signal
     function submitSignal(
-        address            provider,
+        address provider,
         SignalTypes.AssetClass assetClass,
-        bytes32            assetId,
-        int256             direction,
-        uint256            confidence,
-        uint256            expiresAt,
-        bytes calldata     signature
+        bytes32 assetId,
+        int256 direction,
+        uint256 confidence,
+        uint256 expiresAt,
+        bytes calldata signature
     ) external returns (bytes32 signalId);
 
     /// @notice Submit multiple signals in one tx (gas-efficient for providers).
     /// @param batch Array of pre-formed Signal structs; each must pass submitSignal's checks.
     /// @return ids Array of submitted signalIds in the same order as the batch.
-    function submitSignalBatch(SignalTypes.Signal[] calldata batch)
-        external
-        returns (bytes32[] memory ids);
+    function submitSignalBatch(SignalTypes.Signal[] calldata batch) external returns (bytes32[] memory ids);
 
     /// @notice Called by ScoringOracle after epoch settles. Marks signals as resolved.
     /// @param signalIds    Signal IDs to resolve

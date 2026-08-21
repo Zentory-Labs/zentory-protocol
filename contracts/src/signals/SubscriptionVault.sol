@@ -28,19 +28,19 @@ contract SubscriptionVault is ReentrancyGuard {
 
     /// @notice Subscription info attached to each token.
     struct SubscriptionInfo {
-        address  subscriber;
-        uint8    assetClassBitmap; // Bit 0=CRYPTO_SPOT, 1=CRYPTO_PERP, 2=EQUITY, 3=FOREX, 4=COMMODITY
-        uint32   duration;          // Total subscription length in seconds
-        uint32   expiration;       // block.timestamp + duration
-        uint96   pricePaid;        // ZENT amount paid (for proration calculation)
-        uint256  tierId;           // Which tier was purchased
+        address subscriber;
+        uint8 assetClassBitmap; // Bit 0=CRYPTO_SPOT, 1=CRYPTO_PERP, 2=EQUITY, 3=FOREX, 4=COMMODITY
+        uint32 duration; // Total subscription length in seconds
+        uint32 expiration; // block.timestamp + duration
+        uint96 pricePaid; // ZENT amount paid (for proration calculation)
+        uint256 tierId; // Which tier was purchased
     }
 
     // ─── Tier Config ─────────────────────────────────────────
     struct Tier {
-        uint256 monthlyPriceZENT;    // ZENT per 30 days
-        uint8  assetClassBitmap;    // Which asset classes this tier covers
-        uint32 minDuration;         // Minimum subscription in seconds
+        uint256 monthlyPriceZENT; // ZENT per 30 days
+        uint8 assetClassBitmap; // Which asset classes this tier covers
+        uint32 minDuration; // Minimum subscription in seconds
     }
 
     /// @notice Tier definitions keyed by tierId.
@@ -61,17 +61,13 @@ contract SubscriptionVault is ReentrancyGuard {
     mapping(address => uint256) internal _balanceOf;
 
     // ─── Config ──────────────────────────────────────────────
-    IERC20  public zentToken;
+    IERC20 public zentToken;
     address public treasury;
     uint256 public constant MONTH = 30 days;
 
     // ─── Events ─────────────────────────────────────────────
     event Subscribed(
-        address indexed subscriber,
-        uint256 indexed tokenId,
-        uint256 tierId,
-        uint32  duration,
-        uint256 zentPaid
+        address indexed subscriber, uint256 indexed tokenId, uint256 tierId, uint32 duration, uint256 zentPaid
     );
     event RenewalPaid(uint256 indexed tokenId, uint256 zentPaid, uint32 newExpiration);
     event Cancelled(uint256 indexed tokenId, uint256 refundZENT, uint32 refundSeconds);
@@ -91,23 +87,23 @@ contract SubscriptionVault is ReentrancyGuard {
         if (_zentToken == address(0)) revert();
         if (_treasury == address(0)) revert();
         zentToken = IERC20(_zentToken);
-        treasury  = _treasury;
+        treasury = _treasury;
 
         // Default tier definitions
         tiers[0] = Tier({
             monthlyPriceZENT: 100e18,
-            assetClassBitmap: 0x01,  // CRYPTO_SPOT only
-            minDuration:       uint32(MONTH)
+            assetClassBitmap: 0x01, // CRYPTO_SPOT only
+            minDuration: uint32(MONTH)
         });
         tiers[1] = Tier({
             monthlyPriceZENT: 500e18,
-            assetClassBitmap: 0x03,  // CRYPTO_SPOT + CRYPTO_PERP
-            minDuration:       uint32(MONTH)
+            assetClassBitmap: 0x03, // CRYPTO_SPOT + CRYPTO_PERP
+            minDuration: uint32(MONTH)
         });
         tiers[2] = Tier({
             monthlyPriceZENT: 2000e18,
-            assetClassBitmap: 0x1F,  // All asset classes
-            minDuration:       uint32(MONTH)
+            assetClassBitmap: 0x1F, // All asset classes
+            minDuration: uint32(MONTH)
         });
     }
 
@@ -116,29 +112,26 @@ contract SubscriptionVault is ReentrancyGuard {
     /// @param tierId  0=BASIC, 1=PRO, 2=ELITE
     /// @param months  Number of monthly periods (1–12 recommended, no hard cap)
     /// @return tokenId The minted ERC-721 token ID representing this subscription
-    function subscribe(uint256 tierId, uint32 months)
-        external
-        nonReentrant
-        returns (uint256 tokenId)
-    {
+    function subscribe(uint256 tierId, uint32 months) external nonReentrant returns (uint256 tokenId) {
         Tier storage tier = tiers[tierId];
         if (tier.monthlyPriceZENT == 0) revert TierNotFound(tierId);
 
         uint256 totalCost = tier.monthlyPriceZENT * months;
-        if (zentToken.balanceOf(msg.sender) < totalCost)
+        if (zentToken.balanceOf(msg.sender) < totalCost) {
             revert InsufficientZENT(totalCost, zentToken.balanceOf(msg.sender));
+        }
 
         tokenId = nextTokenId++;
         uint32 duration = uint32(MONTH) * months;
         uint32 expiration = uint32(block.timestamp) + duration;
 
         subscriptionInfo[tokenId] = SubscriptionInfo({
-            subscriber:       msg.sender,
+            subscriber: msg.sender,
             assetClassBitmap: tier.assetClassBitmap,
-            duration:         duration,
-            expiration:       expiration,
-            pricePaid:        uint96(totalCost),
-            tierId:           tierId
+            duration: duration,
+            expiration: expiration,
+            pricePaid: uint96(totalCost),
+            tierId: tierId
         });
 
         // CEI: update state before external call
@@ -161,11 +154,7 @@ contract SubscriptionVault is ReentrancyGuard {
     /// @param tokenId Subscription NFT to renew
     /// @param months  Additional monthly periods
     /// @return newExpiration Updated expiration timestamp
-    function renewSubscription(uint256 tokenId, uint32 months)
-        external
-        nonReentrant
-        returns (uint32 newExpiration)
-    {
+    function renewSubscription(uint256 tokenId, uint32 months) external nonReentrant returns (uint32 newExpiration) {
         SubscriptionInfo storage sub = subscriptionInfo[tokenId];
         if (sub.subscriber != msg.sender) revert NotOwnerOfToken(tokenId);
         if (sub.expiration == 0) revert SubscriptionExpired(tokenId);
@@ -180,12 +169,10 @@ contract SubscriptionVault is ReentrancyGuard {
         uint256 cost = tier.monthlyPriceZENT * months;
 
         // Extend from current expiry (or now if already expired) for continuity
-        uint32 baseExpiry = sub.expiration < uint32(block.timestamp)
-            ? uint32(block.timestamp)
-            : sub.expiration;
+        uint32 baseExpiry = sub.expiration < uint32(block.timestamp) ? uint32(block.timestamp) : sub.expiration;
         newExpiration = baseExpiry + uint32(MONTH) * months;
         sub.expiration = newExpiration;
-        sub.duration  += uint32(MONTH) * months;
+        sub.duration += uint32(MONTH) * months;
 
         // CEI: update cache before external call
         if (newExpiration > latestExpiration[msg.sender]) {
@@ -202,11 +189,7 @@ contract SubscriptionVault is ReentrancyGuard {
     /// @param tokenId Subscription NFT to cancel
     /// @return refundZENT ZENT refunded to subscriber
     /// @dev Refund = (remaining seconds / total seconds) × pricePaid
-    function cancelSubscription(uint256 tokenId)
-        external
-        nonReentrant
-        returns (uint256 refundZENT)
-    {
+    function cancelSubscription(uint256 tokenId) external nonReentrant returns (uint256 refundZENT) {
         SubscriptionInfo storage sub = subscriptionInfo[tokenId];
         if (sub.subscriber != msg.sender) revert NotOwnerOfToken(tokenId);
 
@@ -246,9 +229,7 @@ contract SubscriptionVault is ReentrancyGuard {
     ///
     /// @dev This is the canonical gate used by SignalRegistry and other contracts:
     ///      require(subscriptionVault.hasAccess(msg.sender, assetClass), "Not subscribed");
-    function hasAccess(address subscriber, uint8 assetClass)
-        external view returns (bool hasAccess_)
-    {
+    function hasAccess(address subscriber, uint8 assetClass) external view returns (bool hasAccess_) {
         // Bound assetClass to the valid AssetClass enum range (0–4) (audit
         // SIGNAL-005); out-of-range values would wrap in the uint8 bitmap cast
         // and silently mis-evaluate access.
@@ -271,9 +252,7 @@ contract SubscriptionVault is ReentrancyGuard {
     }
 
     /// @notice Get all active subscription token IDs for a wallet.
-    function getActiveSubscriptions(address subscriber)
-        external view returns (uint256[] memory tokenIds)
-    {
+    function getActiveSubscriptions(address subscriber) external view returns (uint256[] memory tokenIds) {
         uint256[] storage all = subscriberTokens[subscriber];
         uint256 count = 0;
         for (uint256 i = 0; i < all.length; i++) {
@@ -290,9 +269,17 @@ contract SubscriptionVault is ReentrancyGuard {
     }
 
     // ─── ERC-721 Stub ───────────────────────────────────────
-    function name() external pure returns (string memory) { return name_; }
-    function symbol() external pure returns (string memory) { return symbol_; }
-    function tokenURI(uint256) external pure returns (string memory) { return ""; }
+    function name() external pure returns (string memory) {
+        return name_;
+    }
+
+    function symbol() external pure returns (string memory) {
+        return symbol_;
+    }
+
+    function tokenURI(uint256) external pure returns (string memory) {
+        return "";
+    }
 
     /// @notice Returns the owner of tokenId.
     function ownerOf(uint256 tokenId) external view returns (address) {
@@ -315,27 +302,64 @@ contract SubscriptionVault is ReentrancyGuard {
     ///         block transfers entirely — subscriptions are scoped to the
     ///         purchasing wallet per the published spec. To change ownership,
     ///         cancel and re-subscribe from the new wallet.
-    function transferFrom(address /*from*/, address /*to*/, uint256 /*tokenId*/) external pure {
+    function transferFrom(
+        address,
+        /*from*/
+        address,
+        /*to*/
+        uint256 /*tokenId*/
+    )
+        external
+        pure
+    {
         revert("SubscriptionVault: non-transferable");
     }
 
     /// @notice Subscriptions are non-transferable; approvals have no effect.
-    function approve(address /*to*/, uint256 /*tokenId*/) external pure {
+    function approve(
+        address,
+        /*to*/
+        uint256 /*tokenId*/
+    )
+        external
+        pure
+    {
         revert("SubscriptionVault: non-transferable");
     }
 
     /// @notice Subscriptions are non-transferable; approvals have no effect.
-    function setApprovalForAll(address /*operator*/, bool /*approved*/) external pure {
+    function setApprovalForAll(
+        address,
+        /*operator*/
+        bool /*approved*/
+    )
+        external
+        pure
+    {
         revert("SubscriptionVault: non-transferable");
     }
 
     /// @notice ERC-721 conformance stub — subscriptions are non-transferable.
-    function getApproved(uint256 /*tokenId*/) external pure returns (address) {
+    function getApproved(
+        uint256 /*tokenId*/
+    )
+        external
+        pure
+        returns (address)
+    {
         return address(0);
     }
 
     /// @notice ERC-721 conformance stub — subscriptions are non-transferable.
-    function isApprovedForAll(address /*owner*/, address /*operator*/) external pure returns (bool) {
+    function isApprovedForAll(
+        address,
+        /*owner*/
+        address /*operator*/
+    )
+        external
+        pure
+        returns (bool)
+    {
         return false;
     }
 

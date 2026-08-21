@@ -41,21 +41,21 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
     bytes32 public constant RISK_COUNCIL_ROLE = keccak256("RISK_COUNCIL_ROLE");
 
-    IERC20 public immutable cashAsset;              // e.g. USDC
-    AggregatorV3Interface public immutable oracle;  // underlying/USD
-    uint256 public immutable maxOracleStaleness;    // seconds; reverts if feed older
+    IERC20 public immutable cashAsset; // e.g. USDC
+    AggregatorV3Interface public immutable oracle; // underlying/USD
+    uint256 public immutable maxOracleStaleness; // seconds; reverts if feed older
     ISpotSwapAdapter public swapAdapter;
 
     uint8 internal immutable _assetDec;
     uint8 internal immutable _cashDec;
     uint8 internal immutable _priceDec;
 
-    uint16 public targetWeightBps;              // 0..10000 (last commanded exposure)
+    uint16 public targetWeightBps; // 0..10000 (last commanded exposure)
     uint16 public immutable rebalanceThresholdBps; // dust deadband
     uint16 public immutable maxSlippageBps;
-    uint256 public immutable performanceFee;    // bps of alpha above HWM
+    uint256 public immutable performanceFee; // bps of alpha above HWM
     uint256 public highWaterMark;
-    uint256 public performanceFeeAccrued;       // in underlying units
+    uint256 public performanceFeeAccrued; // in underlying units
     address public feeRecipient;
     bool public isCircuitBreakerActive;
 
@@ -152,8 +152,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     ///         on a bad price — the conservative choice. Operational outages are
     ///         handled by the circuit breaker, not by trusting a dead feed.
     function _oraclePrice() internal view returns (uint256) {
-        (uint80 roundId, int256 answer, , uint256 updatedAt, uint80 answeredInRound) =
-            oracle.latestRoundData();
+        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = oracle.latestRoundData();
         if (answer <= 0) revert InvalidOraclePrice(answer);
         if (answeredInRound < roundId) revert StaleOracle(updatedAt, block.timestamp);
         if (updatedAt == 0 || block.timestamp - updatedAt > maxOracleStaleness) {
@@ -164,7 +163,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
 
     /// @notice Value `cashAmt` (raw cash units) in underlying units.
     function cashToAsset(uint256 cashAmt) public view returns (uint256) {
-        if (cashAmt == 0) return 0;   // fully-long vault needs no oracle
+        if (cashAmt == 0) return 0; // fully-long vault needs no oracle
         uint256 p = _oraclePrice();
         return (cashAmt * (10 ** _assetDec) * (10 ** _priceDec)) / ((10 ** _cashDec) * p);
     }
@@ -231,7 +230,10 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         if (targetBps > 10000) revert BadWeight();
 
         uint256 tvl = grossValue();
-        if (tvl == 0) { targetWeightBps = targetBps; return; }
+        if (tvl == 0) {
+            targetWeightBps = targetBps;
+            return;
+        }
 
         uint256 desiredAsset = (tvl * targetBps) / 10000;
         uint256 curAsset = IERC20(asset()).balanceOf(address(this));
@@ -258,8 +260,9 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         }
 
         targetWeightBps = targetBps;
-        emit Rebalanced(targetBps, IERC20(asset()).balanceOf(address(this)),
-                        cashAsset.balanceOf(address(this)), getNavPerShare());
+        emit Rebalanced(
+            targetBps, IERC20(asset()).balanceOf(address(this)), cashAsset.balanceOf(address(this)), getNavPerShare()
+        );
     }
 
     function _swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut) internal {
@@ -324,12 +327,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     ///         closer to the zero-pin that enabled audit CRITICAL-1. Paying out
     ///         reduces gross and accrued by the same amount, so `totalAssets()` — and
     ///         therefore every depositor's claim — is unchanged.
-    function claimFees()
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        nonReentrant
-        returns (uint256 paid)
-    {
+    function claimFees() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant returns (uint256 paid) {
         uint256 accrued = performanceFeeAccrued;
         require(accrued > 0, "SpotVault: nothing accrued");
         // Pay what the underlying leg can cover; the remainder stays accrued for a
@@ -350,10 +348,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     /// @dev    Strictly pro-depositor: it can only DECREASE the protocol's fee claim
     ///         and therefore only INCREASE `totalAssets()`. It moves no tokens and
     ///         cannot touch depositor principal.
-    function writeDownAccruedFees(uint256 amount)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function writeDownAccruedFees(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 accrued = performanceFeeAccrued;
         require(amount > 0 && amount <= accrued, "SpotVault: bad write-down");
         performanceFeeAccrued = accrued - amount;
@@ -461,13 +456,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         // the vault's available liquidity).
         uint256 haircut = owed > paid ? owed - paid : 0;
         emit EmergencyRedeem(
-            msg.sender,
-            receiver,
-            owner,
-            shares,
-            paid,
-            haircut,
-            shares > 0 ? haircut * supply / shares : 0
+            msg.sender, receiver, owner, shares, paid, haircut, shares > 0 ? haircut * supply / shares : 0
         );
     }
 

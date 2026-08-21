@@ -30,26 +30,26 @@ contract ShadowSpotAdapter is AccessControl, ISpotSwapAdapter {
     IERC20 public immutable asset;
     IERC20 public immutable cash;
     AggregatorV3Interface public immutable oracle;
-    uint16 public immutable simulatedSlippageBps;   // shaves the fill (set 0 for ideal)
+    uint16 public immutable simulatedSlippageBps; // shaves the fill (set 0 for ideal)
     uint8 internal immutable _assetDec;
     uint8 internal immutable _cashDec;
     uint8 internal immutable _priceDec;
 
-    event Swapped(address indexed caller, address tokenIn, address tokenOut,
-                  uint256 amountIn, uint256 amountOut, int256 oraclePrice);
+    event Swapped(
+        address indexed caller,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOut,
+        int256 oraclePrice
+    );
 
     error UnsupportedPair(address tokenIn, address tokenOut);
     error InsufficientReserves(address token, uint256 needed, uint256 have);
     error SlippageExceeded(uint256 amountOut, uint256 minOut);
     error BadOraclePrice(int256 answer);
 
-    constructor(
-        address asset_,
-        address cash_,
-        address oracle_,
-        uint16 simulatedSlippageBps_,
-        address admin
-    ) {
+    constructor(address asset_, address cash_, address oracle_, uint16 simulatedSlippageBps_, address admin) {
         require(asset_ != address(0) && cash_ != address(0) && oracle_ != address(0), "zero addr");
         require(admin != address(0), "zero admin");
         require(simulatedSlippageBps_ <= 10000, "bad bps");
@@ -69,11 +69,13 @@ contract ShadowSpotAdapter is AccessControl, ISpotSwapAdapter {
         onlyRole(VAULT_ROLE)
         returns (uint256 amountOut)
     {
-        if (!(tokenIn == address(asset) && tokenOut == address(cash))
-            && !(tokenIn == address(cash) && tokenOut == address(asset))) {
+        if (
+            !(tokenIn == address(asset) && tokenOut == address(cash))
+                && !(tokenIn == address(cash) && tokenOut == address(asset))
+        ) {
             revert UnsupportedPair(tokenIn, tokenOut);
         }
-        (, int256 ans, , , ) = oracle.latestRoundData();
+        (, int256 ans,,,) = oracle.latestRoundData();
         if (ans <= 0) revert BadOraclePrice(ans);
         uint256 p = uint256(ans);
 

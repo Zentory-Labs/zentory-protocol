@@ -44,10 +44,7 @@ contract InsuranceFund is Ownable2Step {
     /// @notice Governance pays reserves out to cover a protocol shortfall, or to
     ///         recover tokens misrouted to this contract. Owner-only; the `reason`
     ///         is emitted for an on-chain audit trail.
-    function payout(address token, address to, uint256 amount, string calldata reason)
-        external
-        onlyOwner
-    {
+    function payout(address token, address to, uint256 amount, string calldata reason) external onlyOwner {
         require(to != address(0), "InsuranceFund: zero recipient");
         require(amount > 0, "InsuranceFund: zero amount");
         IERC20(token).safeTransfer(to, amount);

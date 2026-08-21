@@ -42,10 +42,14 @@ contract ShadowPriceOracle is AccessControl, AggregatorV3Interface {
         _grantRole(UPDATER_ROLE, admin);
     }
 
-    function decimals() external view override returns (uint8) { return _decimals; }
+    function decimals() external view override returns (uint8) {
+        return _decimals;
+    }
 
     function latestRoundData()
-        external view override
+        external
+        view
+        override
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         return (_round, _answer, _updatedAt, _updatedAt, _round);
@@ -57,7 +61,9 @@ contract ShadowPriceOracle is AccessControl, AggregatorV3Interface {
         require(newPrice > 0, "bad price");
         _answer = newPrice;
         _updatedAt = block.timestamp;
-        unchecked { _round++; }
+        unchecked {
+            _round++;
+        }
         emit PriceUpdated(newPrice, _updatedAt, _round);
     }
 }
