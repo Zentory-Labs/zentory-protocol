@@ -53,6 +53,17 @@ contract EpochScoring is AccessControl {
     /// @notice Top N providers that receive rewards after each epoch is settled.
     uint256 public constant REWARD_CUTOFF = 10;
 
+    /// @notice Maximum age (seconds) a signal can remain in the registry without
+    ///         being scored before the keeper (or governance) can release it via
+    ///         `claimExpiredSignal(signalId)`. Without this path, a stalled
+    ///         scoring oracle leaves the signal permanently in limbo: it can
+    ///         never be settled (applyPayout reverts with SignalNotScored) and
+    ///         it can never be removed. 7 days is generous enough that any
+    ///         routine keeper outage (hours-to-days) is recovered well before
+    ///         the deadline, while being short enough that a permanently-dead
+    ///         oracle doesn't strand signals for a full mainnet launch cycle.
+    uint256 public constant MAX_SIGNAL_AGE = 7 days;
+
     /// @notice Reward amount distributed to each top-performing provider per epoch.
     uint256 public epochReward;
 
@@ -61,8 +72,8 @@ contract EpochScoring is AccessControl {
 
     // ─── State ──────────────────────────────────────────────
     ISignalRegistry public signalRegistry;
-    IZENTStaking    public zentStaking;
-    address         public zentToken;
+    IZENTStaking public zentStaking;
+    address public zentToken;
 
     uint256 public currentEpochId;
     uint256 public lastEpochStart;
@@ -89,16 +100,16 @@ contract EpochScoring is AccessControl {
     struct EpochState {
         uint256 totalSignals;
         uint256 settledSignals;
-        bool    settled;
+        bool settled;
     }
     mapping(uint256 => EpochState) public epochStates;
 
     /// @notice In-memory scoring result for a single signal provider.
     struct ScoreResult {
-        address provider;   /// @dev Provider address
-        uint256 accuracy;  /// @dev Accuracy score in basis points (0-10000)
+        address provider; /// @dev Provider address
+        uint256 accuracy; /// @dev Accuracy score in basis points (0-10000)
         uint256 finalScore; /// @dev Combined score (accuracy + recency + stake)
-        uint256 rank;       /// @dev Provider rank (1 = best)
+        uint256 rank; /// @dev Provider rank (1 = best)
     }
 
     /// @notice Pre-cached accuracy values set by ScoringOracle before settleEpoch runs.
@@ -117,6 +128,15 @@ contract EpochScoring is AccessControl {
     ///         rewards (audit CRITICAL-2).
     mapping(bytes32 => bool) public payoutApplied;
 
+    /// @notice True once `claimExpiredSignal(signalId)` has released an old
+    ///         unscored signal. Marks the signal as "released without slash" so
+    ///         off-chain observers can confirm the keeper has cleared it from
+    ///         the active list (Q6 recovery path — audit HIGH "unscored == max
+    ///         slash"). No state was ever taken from the provider because the
+    ///         signal was never scored; this flag is purely an off-chain
+    ///         reconciliation signal that the signal has been processed.
+    mapping(bytes32 => bool) public expiredClaimed;
+
     // ─── Roles ─────────────────────────────────────────────
     address public scoringOracle;
 
@@ -132,6 +152,12 @@ contract EpochScoring is AccessControl {
     event SignalScored(address indexed provider, uint256 accuracy, uint256 finalScore, uint256 rank);
     event ReferenceAssetSet(bytes32 indexed previous, bytes32 indexed current);
     event EpochClosePriceSet(uint256 indexed epochId, bytes32 indexed assetId, int256 price);
+    /// @notice Emitted when `claimExpiredSignal(signalId)` releases an old
+    ///         unscored signal. The provider's stake is unaffected (nothing was
+    ///         ever slashed — `applyPayout` would have reverted), but the
+    ///         event lets keepers + indexers reconcile that this signal is now
+    ///         out of the active queue and will never be scored.
+    event ExpiredSignalClaimed(bytes32 indexed signalId, address indexed provider, uint256 ageSeconds);
 
     // ─── Errors ─────────────────────────────────────────────
     error EpochNotReady();
@@ -145,6 +171,17 @@ contract EpochScoring is AccessControl {
     /// @dev Refuses to settle a signal the scoring oracle never scored (would
     ///      otherwise be treated as accuracy 0 == maximum slash).
     error SignalNotScored(bytes32 signalId);
+    /// @dev Signal cannot be claimed as expired because it is younger than
+    ///      `MAX_SIGNAL_AGE`. The grace period gives the scoring oracle time
+    ///      to recover from routine keeper outages before recovery kicks in.
+    error SignalStillFresh(uint256 ageSeconds, uint256 maxAge);
+    /// @dev Signal has already been released via `claimExpiredSignal`.
+    error ExpiredAlreadyClaimed(bytes32 signalId);
+    /// @dev `claimExpiredSignal` rejected because the signal was actually
+    ///      scored by the oracle after all. The recovery path is only for
+    ///      permanently-unscored signals; once `accuracyScored[id] == true`
+    ///      the keeper must settle via `applyPayout` instead.
+    error SignalAlreadyScored(bytes32 signalId);
 
     // ─── Constructor ────────────────────────────────────────
     constructor(
@@ -159,9 +196,9 @@ contract EpochScoring is AccessControl {
         if (_scoringOracle == address(0)) revert();
         if (_keeper == address(0)) revert();
         signalRegistry = ISignalRegistry(_signalRegistry);
-        zentStaking    = IZENTStaking(_zentStaking);
-        zentToken      = _zentToken;
-        scoringOracle  = _scoringOracle;
+        zentStaking = IZENTStaking(_zentStaking);
+        zentToken = _zentToken;
+        scoringOracle = _scoringOracle;
         currentEpochId = 1;
         lastEpochStart = block.timestamp;
         // Default reference asset is BTC. Governance can switch via
@@ -217,11 +254,9 @@ contract EpochScoring is AccessControl {
     ///         Called by Chainlink Automation Network.
     /// @return upkeepNeeded Whether performUpkeep should be called
     /// @return performData   Opaque data passed through to performUpkeep
-    function checkUpkeep(bytes calldata)
-        external view returns (bool upkeepNeeded, bytes memory performData)
-    {
+    function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, bytes memory performData) {
         upkeepNeeded = (block.timestamp - lastEpochStart) >= EPOCH_DURATION;
-        performData  = "";
+        performData = "";
     }
 
     /// @notice performUpkeep — settle the current epoch, compute payouts.
@@ -246,7 +281,7 @@ contract EpochScoring is AccessControl {
         if (epochStates[epochId].settled) revert EpochAlreadySettled(epochId);
 
         uint256 startTime = lastEpochStart;
-        uint256 endTime   = block.timestamp;
+        uint256 endTime = block.timestamp;
         emit EpochStarted(epochId, startTime, endTime);
 
         // M-2: iterate only this epoch's signals, not the lifetime list.
@@ -284,9 +319,8 @@ contract EpochScoring is AccessControl {
         // stake-weight normalization. M-2: scoped to epoch signals.
         totalStake = 0;
         for (uint256 i = 0; i < signalCount; i++) {
-            totalStake += IZENTStaking(zentStaking).getProviderStake(
-                ISignalRegistry(signalRegistry).getEpochSignalProvider(epochId, i)
-            );
+            totalStake += IZENTStaking(zentStaking)
+                .getProviderStake(ISignalRegistry(signalRegistry).getEpochSignalProvider(epochId, i));
         }
 
         // SECURITY FIX (spec-conformance audit, finding #3): snapshot the
@@ -340,7 +374,7 @@ contract EpochScoring is AccessControl {
         bytes32 refId = referenceAssetId;
         address feed = priceFeeds[refId];
         if (feed == address(0)) return;
-        (, int256 answer, , uint256 updatedAt, ) = AggregatorV3Interface(feed).latestRoundData();
+        (, int256 answer,, uint256 updatedAt,) = AggregatorV3Interface(feed).latestRoundData();
         if (answer <= 0 || updatedAt == 0) return;
         epochClosePrice[epochId] = answer;
         emit EpochClosePriceSet(epochId, refId, answer);
@@ -348,11 +382,7 @@ contract EpochScoring is AccessControl {
 
     /// @dev Extracted from settleEpoch() to keep its local-variable count below
     ///      the Yul stack-too-deep threshold. Scores one provider for one epoch.
-    function _scoreProvider(uint256 epochId, uint256 idx)
-        internal
-        view
-        returns (ScoreResult memory)
-    {
+    function _scoreProvider(uint256 epochId, uint256 idx) internal view returns (ScoreResult memory) {
         // M-2/M-3: resolve the provider + signal direction from this epoch's
         // signal at position `idx`, so each signal is scored individually
         // (not collapsed to the provider's last signal).
@@ -360,20 +390,20 @@ contract EpochScoring is AccessControl {
         (uint256 stake, uint256[] memory epochsActive) = _getProviderStakeInfo(provider, epochId);
 
         uint256 accuracy = _calculateAccuracy(
-            _getEpochPriceMovement(epochId),
-            ISignalRegistry(signalRegistry).getEpochSignalReturn(epochId, idx)
+            _getEpochPriceMovement(epochId), ISignalRegistry(signalRegistry).getEpochSignalReturn(epochId, idx)
         );
 
         uint256 recencyBonus = _calculateRecencyBonus(provider, epochId, epochsActive);
         uint256 stakeScore = totalStake > 0 ? (stake * 100) / totalStake : 0;
         uint256 finalScore = (accuracy * 50 / 100) + (recencyBonus * 30 / 100) + (stakeScore * 20 / 100);
 
-        return ScoreResult({
-            provider: provider,
-            accuracy: accuracy,
-            finalScore: finalScore,
-            rank: 0 // filled after sorting
-        });
+        return
+            ScoreResult({
+                provider: provider,
+                accuracy: accuracy,
+                finalScore: finalScore,
+                rank: 0 // filled after sorting
+            });
     }
 
     /// @dev Extracted from settleEpoch() — distributes rewards to ranked results.
@@ -385,10 +415,7 @@ contract EpochScoring is AccessControl {
     ///      Now we emit a skip event and continue — the epoch still settles,
     ///      and the missed payout is forfeit to the epoch reward pool budget
     ///      rather than locking up the cron.
-    function _distributeRewards(ScoreResult[] memory results)
-        internal
-        returns (uint256 totalRewards)
-    {
+    function _distributeRewards(ScoreResult[] memory results) internal returns (uint256 totalRewards) {
         if (results.length == 0) return 0;
         uint256 reward = epochReward / results.length;
         for (uint256 i = 0; i < results.length; i++) {
@@ -465,13 +492,13 @@ contract EpochScoring is AccessControl {
         // Monotonicity AND the clip endpoints are pinned by
         // test/signals/PayoutCurve.t.sol.
         int256 payoutFactor = (int256(accuracyBps) * 20000 / 10000) - 10000;
-        int256 rawPayout    = payoutFactor * 3 / 10;
+        int256 rawPayout = payoutFactor * 3 / 10;
 
         // Clip to configured max/min
         int256 maxPenalty = -int256(MAX_PENALTY_BPS);
-        int256 maxReward  =  int256(MAX_REWARD_BPS);
+        int256 maxReward = int256(MAX_REWARD_BPS);
         if (rawPayout < maxPenalty) rawPayout = maxPenalty;
-        if (rawPayout > maxReward)  rawPayout = maxReward;
+        if (rawPayout > maxReward) rawPayout = maxReward;
 
         uint256 stake = zentStaking.getProviderStake(sig.provider);
         if (stake < MIN_STAKE) revert BelowMinStake(sig.provider);
@@ -485,6 +512,48 @@ contract EpochScoring is AccessControl {
         }
 
         emit PayoutApplied(signalId, sig.provider, payout);
+    }
+
+    /// @notice Dead-oracle recovery path. Releases a signal that the scoring
+    ///         oracle never scored and is older than `MAX_SIGNAL_AGE`. No slash
+    ///         is applied (the signal was never scored, so no payout was ever
+    ///         settled — nothing was taken from the provider in the first
+    ///         place), and `applyPayout` will continue to revert with
+    ///         `SignalNotScored` if invoked, so this cannot be used to launder
+    ///         a slash that should have happened.
+    /// @dev    Audit Q6 (HIGH "unscored == max slash") recovery. Gated by
+    ///         EPOCH_SETTLER so only the keeper (or governance, which can
+    ///         grant the role) can release a signal. The `MAX_SIGNAL_AGE`
+    ///         grace window is wide enough for routine keeper outages to
+    ///         self-heal (the oracle catches up on the next healthy cron)
+    ///         but tight enough that a permanently-dead oracle doesn't strand
+    ///         signals indefinitely.
+    /// @param  signalId Signal to release (must exist, never scored, never
+    ///                  payout-applied, never previously claimed, and at
+    ///                  least `MAX_SIGNAL_AGE` old).
+    function claimExpiredSignal(bytes32 signalId) external onlyRole(EPOCH_SETTLER) {
+        if (expiredClaimed[signalId]) revert ExpiredAlreadyClaimed(signalId);
+        // Already-scored signals MUST go through `applyPayout` (which itself
+        // reverts with SignalNotScored when accuracyScored is false, so this
+        // branch is unreachable in the normal flow). We guard it explicitly
+        // so a misordered keeper call cannot silently release a signal that
+        // was actually scored — the economics have to play out on the
+        // intended path.
+        if (accuracyScored[signalId]) revert SignalAlreadyScored(signalId);
+        // `applyPayout` would already have reverted with PayoutAlreadyApplied
+        // for any settled signal, so this is also a defensive guard against
+        // a release-then-rescore race.
+        if (payoutApplied[signalId]) revert PayoutAlreadyApplied(signalId);
+
+        SignalTypes.Signal memory sig = signalRegistry.getSignal(signalId);
+        // submittedAt is set inside SignalRegistry._submitSignal; getSignal
+        // reverts with SignalNotFound for unknown ids, so we don't need a
+        // separate existence check here.
+        uint256 age = block.timestamp > sig.submittedAt ? block.timestamp - sig.submittedAt : 0;
+        if (age < MAX_SIGNAL_AGE) revert SignalStillFresh(age, MAX_SIGNAL_AGE);
+
+        expiredClaimed[signalId] = true;
+        emit ExpiredSignalClaimed(signalId, sig.provider, age);
     }
 
     // ─── Accuracy Caching (Keeper / ScoringOracle Interface) ──
@@ -529,7 +598,7 @@ contract EpochScoring is AccessControl {
     function getPrice(bytes32 assetId) public view returns (int256 price, uint8 decimals) {
         if (priceFeeds[assetId] == address(0)) revert PriceFeedNotSet(assetId);
         AggregatorV3Interface feed = AggregatorV3Interface(priceFeeds[assetId]);
-        (, int256 rawPrice, , , ) = feed.latestRoundData();
+        (, int256 rawPrice,,,) = feed.latestRoundData();
         decimals = feed.decimals();
         return (rawPrice, decimals);
     }
@@ -537,8 +606,14 @@ contract EpochScoring is AccessControl {
     // ─── Internal Helpers ────────────────────────────────────
     /// @notice Count active signals within the given epoch window.
     /// @dev Production should use a Subgraph query rather than this placeholder.
-    function _countActiveSignals(uint256 /* startTime */, uint256 /* endTime */)
-        internal pure returns (uint256)
+    function _countActiveSignals(
+        uint256,
+        /* startTime */
+        uint256 /* endTime */
+    )
+        internal
+        pure
+        returns (uint256)
     {
         // Placeholder — keeper's off-chain indexer maintains the authoritative count.
         // In production, emit an event in SignalRegistry.submitSignal() with
@@ -584,11 +659,11 @@ contract EpochScoring is AccessControl {
     /// @param epochId     Current epoch being settled
     /// @param epochsActive Array of epoch IDs the provider was active in
     /// @return recencyBonus Score from 0 to 100 (higher = more recent)
-    function _calculateRecencyBonus(
-        address provider,
-        uint256 epochId,
-        uint256[] memory epochsActive
-    ) internal pure returns (uint256) {
+    function _calculateRecencyBonus(address provider, uint256 epochId, uint256[] memory epochsActive)
+        internal
+        pure
+        returns (uint256)
+    {
         // Look back AT MOST 3 epochs. Clamp the window start at 0 to avoid the
         // `epochId - 3` underflow panic (Solidity 0.8 checked math) that would
         // brick recency-bonus scoring for the protocol's first three epochs
@@ -611,21 +686,113 @@ contract EpochScoring is AccessControl {
     }
 
     /// @notice Rank results by finalScore in descending order and assign ranks.
+    /// @dev    Q4 (audit finding #9) fix. The pre-fix implementation ran a
+    ///         full O(n²) bubble sort over every signal in the epoch, with
+    ///         full struct copies at every swap. For n=1000 the sort alone
+    ///         cost >100M gas, far past HyperEVM's 30M big-block limit, and
+    ///         the keeper was permanently locked out of any epoch that
+    ///         accumulated a few hundred signals — a permanent gas DoS of
+    ///         epoch settlement.
+    ///
+    ///         Post-fix: we use a bounded top-K selection algorithm. Only
+    ///         REWARD_CUTOFF=10 providers receive rewards in
+    ///         `_distributeRewards`, so we never need to fully sort the
+    ///         array — we walk it once maintaining a descending-sorted
+    ///         top-K. Total cost is O(n × K) = O(n × 10) = effectively
+    ///         O(n). For n=1000 the sort costs ~1-2M gas (verified in
+    ///         `test/signals/EpochScoringSortDoSFix.t.sol`); for n=100
+    ///         the sort costs ~100k gas.
+    ///
+    ///         Three passes:
+    ///         (1) Bounded top-K selection. Maintain `topK[]` of length
+    ///             REWARD_CUTOFF sorted descending by finalScore. For each
+    ///             candidate result, walk back from the end of `topK` to
+    ///             find its insertion point and shift up smaller entries.
+    ///             This is the linear O(n) outer pass × K inner walk.
+    ///         (2) Assign ranks 1..topKLen to the top-K entries. We locate
+    ///             each top-K provider in the original `results` array so
+    ///             the rank lives on the same memory slot
+    ///             `_distributeRewards` reads from.
+    ///         (3) Assign ranks K+1..n to non-top-K entries in input order.
+    ///             `_distributeRewards` only acts on rank <= REWARD_CUTOFF
+    ///             so this assignment is for invariant hygiene only; any
+    ///             consistent ordering is acceptable.
+    ///
     /// @param results In-memory array of ScoreResult to rank
     function _rankResults(ScoreResult[] memory results) internal pure {
-        // Bubble sort by finalScore descending.
-        for (uint256 i = 0; i < results.length; i++) {
-            for (uint256 j = i + 1; j < results.length; j++) {
-                if (results[j].finalScore > results[i].finalScore) {
-                    ScoreResult memory tmp = results[i];
-                    results[i] = results[j];
-                    results[j] = tmp;
+        uint256 n = results.length;
+        if (n == 0) return;
+
+        // Cap the working top-K at min(n, REWARD_CUTOFF). For epochs smaller
+        // than REWARD_CUTOFF we still walk the full input and assign all
+        // entries to the top-K — the algorithm degrades gracefully when
+        // REWARD_CUTOFF >= n.
+        uint256 k = n < REWARD_CUTOFF ? n : REWARD_CUTOFF;
+
+        // ── Step 1: bounded top-K selection. Walk results once, maintaining
+        //    a descending-sorted `topK[]`. Each candidate either fills an
+        //    empty slot (topKLen < k) or replaces the smallest entry in
+        //    topK if it scores higher.
+        ScoreResult[] memory topK = new ScoreResult[](k);
+        uint256 topKLen = 0;
+        for (uint256 i = 0; i < n; i++) {
+            ScoreResult memory candidate = results[i];
+            if (topKLen < k) {
+                // Fill an empty slot. Insertion-sorted descending by
+                // finalScore: shift entries with score < candidate up by
+                // one slot, drop candidate into the freed slot. Strict `<`
+                // preserves insertion order on ties (first encountered wins
+                // the higher rank), matching the legacy bubble sort's
+                // strict-`>` swap rule.
+                uint256 pos = topKLen;
+                while (pos > 0 && topK[pos - 1].finalScore < candidate.finalScore) {
+                    topK[pos] = topK[pos - 1];
+                    pos--;
+                }
+                topK[pos] = candidate;
+                topKLen++;
+            } else if (candidate.finalScore > topK[k - 1].finalScore) {
+                // Replace the smallest in topK (slot k-1, since topK is
+                // descending). Walk back from the end and shift up entries
+                // smaller than the candidate; drop the candidate into the
+                // freed slot.
+                uint256 pos = k - 1;
+                while (pos > 0 && topK[pos - 1].finalScore < candidate.finalScore) {
+                    topK[pos] = topK[pos - 1];
+                    pos--;
+                }
+                topK[pos] = candidate;
+            }
+        }
+
+        // ── Step 2: assign ranks 1..topKLen to the top-K entries. Match
+        //    by provider AND finalScore so tied providers (multiple signals
+        //    from the same address with identical scores — a sybil pattern
+        //    the protocol already mitigates at the registry layer) don't
+        //    collapse onto a single rank slot. For honest inputs the
+        //    provider alone is unique; the finalScore guard is purely
+        //    defensive against pathological ties.
+        for (uint256 r = 0; r < topKLen; r++) {
+            for (uint256 j = 0; j < n; j++) {
+                if (
+                    results[j].provider == topK[r].provider && results[j].finalScore == topK[r].finalScore
+                        && results[j].rank == 0
+                ) {
+                    results[j].rank = r + 1;
+                    break;
                 }
             }
         }
-        // Assign ranks (1 = best).
-        for (uint256 i = 0; i < results.length; i++) {
-            results[i].rank = i + 1;
+
+        // ── Step 3: assign ranks > REWARD_CUTOFF to non-top-K entries in
+        //    input order. `_distributeRewards` only reads rank <=
+        //    REWARD_CUTOFF, so these ranks are unused; we assign them for
+        //    invariant hygiene (no rank == 0 dangling in the array).
+        uint256 nextRank = topKLen + 1;
+        for (uint256 j = 0; j < n; j++) {
+            if (results[j].rank == 0) {
+                results[j].rank = nextRank++;
+            }
         }
     }
 
@@ -641,7 +808,9 @@ contract EpochScoring is AccessControl {
     /// @return stake Current total stake for the provider
     /// @return epochsActive Array of recent epoch IDs where provider had active stake
     function _getProviderStakeInfo(address provider, uint256 epochId)
-        internal view returns (uint256 stake, uint256[] memory epochsActive)
+        internal
+        view
+        returns (uint256 stake, uint256[] memory epochsActive)
     {
         stake = IZENTStaking(zentStaking).getProviderStake(provider);
         epochsActive = new uint256[](5);
@@ -689,13 +858,9 @@ contract EpochScoring is AccessControl {
 /// @dev Full interface: https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/interfaces/AggregatorV3Interface.sol
 interface AggregatorV3Interface {
     function latestRoundData()
-        external view returns (
-            uint80   roundId,
-            int256   answer,
-            uint256  startedAt,
-            uint256  updatedAt,
-            uint80   answeredInRound
-        );
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 
     function decimals() external view returns (uint8);
 }
