@@ -31,12 +31,12 @@ import {BaseVault} from "../../src/vaults/BaseVault.sol";
 
 contract BaseVaultNavAndLeverageTest is Test {
     ERC20Mock public asset;
-    BaseVault public vault;            // standard 3x / 100% BPS
-    BaseVault public halfLeverVault;    // 0.5x leverage, 100% BPS (binding leverage)
+    BaseVault public vault; // standard 3x / 100% BPS
+    BaseVault public halfLeverVault; // 0.5x leverage, 100% BPS (binding leverage)
 
-    address public admin   = address(this);
-    address public keeper  = makeAddr("keeper");
-    address public alice   = makeAddr("alice");
+    address public admin = address(this);
+    address public keeper = makeAddr("keeper");
+    address public alice = makeAddr("alice");
     address constant FEE_RECIPIENT = address(0xFEE);
 
     uint256 constant ASSET_UNIT = 10 ** 18;
@@ -52,9 +52,9 @@ contract BaseVaultNavAndLeverageTest is Test {
             "zBTC",
             30000, // 3x leverage
             10000, // 100% of TVL
-            2000,  // 20% drawdown breaker
-            500,   // 5% rebalance threshold
-            2000,  // 20% perf fee
+            2000, // 20% drawdown breaker
+            500, // 5% rebalance threshold
+            2000, // 20% perf fee
             FEE_RECIPIENT,
             admin
         );
@@ -69,7 +69,7 @@ contract BaseVaultNavAndLeverageTest is Test {
             address(asset),
             "zHalf",
             "zH",
-            5000,  // 0.5x leverage (binding)
+            5000, // 0.5x leverage (binding)
             10000, // 100% BPS (loose)
             2000,
             500,
@@ -167,7 +167,7 @@ contract BaseVaultNavAndLeverageTest is Test {
 
         // Build NAV up so we can fall from a high HWM.
         _transferToVault(vault, 50 * ASSET_UNIT); // idle 150
-        vault.evaluateFees();                     // HWM lifts to 1.5 × asset unit
+        vault.evaluateFees(); // HWM lifts to 1.5 × asset unit
 
         vm.prank(keeper);
         vault.recordTrade(int8(1), 30 * ASSET_UNIT, 50_000 * 1e8);
@@ -175,26 +175,28 @@ contract BaseVaultNavAndLeverageTest is Test {
 
         vm.prank(keeper);
         vault.updateMarkPrice(75_000 * 1e8);
-        vault.evaluateFees();                     // HWM lifts again to peak NAV
+        vault.evaluateFees(); // HWM lifts again to peak NAV
 
         uint256 hwmPeak = vault.highWaterMark();
         assertGt(hwmPeak, ASSET_UNIT, "HWM must rise to peak NAV");
 
         // Crash the mark. Position is 30 WBTC long; idle stays 200.
-        // Peak MTM ≈ 30 * (75k − 50k)/75k = 10 WBTC → peak NAV ≈ 210.
-        // Mark → 30k: MTM = 30 * (30k − 75k)/30k = −45 WBTC.
-        // NAV = 200 − 45 = 155. Drawdown from 210 = ~26%, well over 20%.
+        // Peak MTM ~ 30 * (75k - 50k)/75k = 10 WBTC -> peak NAV ~ 210.
+        // Mark -> 20k: MTM = 30 * (20k - 50k)/20k = -45 WBTC.
+        // Total assets drop to ~155 (or to totalAssets - MTM with no fee
+        // deduction post-Tier-0 Q10 fee-share dilution), well over a 20%
+        // drawdown from peak NAV. We use 20k (rather than 30k as the
+        // original) so the drawdown is unambiguously above the 20%
+        // breaker threshold under both the pre-fix (asset-deduction) and
+        // post-fix (share-dilution) accounting.
         vm.prank(keeper);
-        vault.updateMarkPrice(30_000 * 1e8);
+        vault.updateMarkPrice(20_000 * 1e8);
 
         assertFalse(vault.isCircuitBreakerActive(), "breaker starts inactive");
 
         vault.checkCircuitBreaker();
 
-        assertTrue(
-            vault.isCircuitBreakerActive(),
-            "circuit breaker MUST auto-trigger on MTM-driven drawdown (Claim 1)"
-        );
+        assertTrue(vault.isCircuitBreakerActive(), "circuit breaker MUST auto-trigger on MTM-driven drawdown (Claim 1)");
     }
 
     /// @notice While mark == entry, MTM is 0 and NAV = idle. The first mark
