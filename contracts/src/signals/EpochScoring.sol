@@ -27,6 +27,13 @@ import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
 contract EpochScoring is AccessControl {
     // ─── Roles ─────────────────────────────────────────────
     bytes32 public constant EPOCH_SETTLER = keccak256("EPOCH_SETTLER");
+    /// @notice AccessControl role for the address permitted to write accuracy
+    ///         values via `setAccuracy` / `setAccuracyBatch`. Replaces the
+    ///         pre-fix plain `msg.sender == scoringOracle` equality check
+    ///         (audit Q3, finding #13) so the role can be held by a Safe
+    ///         multisig or threshold signer set and rotated by the admin
+    ///         role without redeploying EpochScoring. See `setScoringOracle`.
+    bytes32 public constant SCORING_ORACLE_ROLE = keccak256("SCORING_ORACLE_ROLE");
 
     // ─── Config ──────────────────────────────────────────────
     /// @notice 1.7% max slash per epoch (Numerai's −0.017)
@@ -61,8 +68,8 @@ contract EpochScoring is AccessControl {
 
     // ─── State ──────────────────────────────────────────────
     ISignalRegistry public signalRegistry;
-    IZENTStaking    public zentStaking;
-    address         public zentToken;
+    IZENTStaking public zentStaking;
+    address public zentToken;
 
     uint256 public currentEpochId;
     uint256 public lastEpochStart;
@@ -89,16 +96,16 @@ contract EpochScoring is AccessControl {
     struct EpochState {
         uint256 totalSignals;
         uint256 settledSignals;
-        bool    settled;
+        bool settled;
     }
     mapping(uint256 => EpochState) public epochStates;
 
     /// @notice In-memory scoring result for a single signal provider.
     struct ScoreResult {
-        address provider;   /// @dev Provider address
-        uint256 accuracy;  /// @dev Accuracy score in basis points (0-10000)
+        address provider; /// @dev Provider address
+        uint256 accuracy; /// @dev Accuracy score in basis points (0-10000)
         uint256 finalScore; /// @dev Combined score (accuracy + recency + stake)
-        uint256 rank;       /// @dev Provider rank (1 = best)
+        uint256 rank; /// @dev Provider rank (1 = best)
     }
 
     /// @notice Pre-cached accuracy values set by ScoringOracle before settleEpoch runs.
@@ -138,7 +145,6 @@ contract EpochScoring is AccessControl {
     error EpochAlreadySettled(uint256 epochId);
     error PriceFeedNotSet(bytes32 assetId);
     error BelowMinStake(address provider);
-    error UnauthorizedOracle(address caller);
     error ArraysLengthMismatch();
     /// @dev Signal already settled — payouts are one-shot per signal.
     error PayoutAlreadyApplied(bytes32 signalId);
@@ -159,9 +165,9 @@ contract EpochScoring is AccessControl {
         if (_scoringOracle == address(0)) revert();
         if (_keeper == address(0)) revert();
         signalRegistry = ISignalRegistry(_signalRegistry);
-        zentStaking    = IZENTStaking(_zentStaking);
-        zentToken      = _zentToken;
-        scoringOracle  = _scoringOracle;
+        zentStaking = IZENTStaking(_zentStaking);
+        zentToken = _zentToken;
+        scoringOracle = _scoringOracle;
         currentEpochId = 1;
         lastEpochStart = block.timestamp;
         // Default reference asset is BTC. Governance can switch via
@@ -171,6 +177,11 @@ contract EpochScoring is AccessControl {
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(EPOCH_SETTLER, _keeper);
+        // Audit Q3 fix: the scoring oracle is gated by an AccessControl role
+        // (not a plain `msg.sender ==` equality check), so a Safe multisig
+        // can hold the role and EOAs can be rotated via `setScoringOracle`
+        // without redeploying the contract.
+        _grantRole(SCORING_ORACLE_ROLE, _scoringOracle);
     }
 
     /// @notice Update the reference asset used for epoch-level price-movement
@@ -199,10 +210,18 @@ contract EpochScoring is AccessControl {
     }
 
     /// @notice Update the scoring oracle address (governance-controlled).
+    ///         Audit Q3 fix: the rotation now grants `SCORING_ORACLE_ROLE`
+    ///         to the new address and revokes it from the old, keeping the
+    ///         AccessControl membership in lockstep with the legacy
+    ///         `scoringOracle` storage variable. A Safe multisig or
+    ///         threshold signer set can hold the role and rotate EOAs by
+    ///         calling this function.
     function setScoringOracle(address newOracle) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newOracle == address(0)) revert();
         address old = scoringOracle;
         scoringOracle = newOracle;
+        if (old != address(0)) _revokeRole(SCORING_ORACLE_ROLE, old);
+        _grantRole(SCORING_ORACLE_ROLE, newOracle);
         emit ScoringOracleUpdated(old, newOracle);
     }
 
@@ -217,11 +236,9 @@ contract EpochScoring is AccessControl {
     ///         Called by Chainlink Automation Network.
     /// @return upkeepNeeded Whether performUpkeep should be called
     /// @return performData   Opaque data passed through to performUpkeep
-    function checkUpkeep(bytes calldata)
-        external view returns (bool upkeepNeeded, bytes memory performData)
-    {
+    function checkUpkeep(bytes calldata) external view returns (bool upkeepNeeded, bytes memory performData) {
         upkeepNeeded = (block.timestamp - lastEpochStart) >= EPOCH_DURATION;
-        performData  = "";
+        performData = "";
     }
 
     /// @notice performUpkeep — settle the current epoch, compute payouts.
@@ -246,7 +263,7 @@ contract EpochScoring is AccessControl {
         if (epochStates[epochId].settled) revert EpochAlreadySettled(epochId);
 
         uint256 startTime = lastEpochStart;
-        uint256 endTime   = block.timestamp;
+        uint256 endTime = block.timestamp;
         emit EpochStarted(epochId, startTime, endTime);
 
         // M-2: iterate only this epoch's signals, not the lifetime list.
@@ -284,9 +301,8 @@ contract EpochScoring is AccessControl {
         // stake-weight normalization. M-2: scoped to epoch signals.
         totalStake = 0;
         for (uint256 i = 0; i < signalCount; i++) {
-            totalStake += IZENTStaking(zentStaking).getProviderStake(
-                ISignalRegistry(signalRegistry).getEpochSignalProvider(epochId, i)
-            );
+            totalStake += IZENTStaking(zentStaking)
+                .getProviderStake(ISignalRegistry(signalRegistry).getEpochSignalProvider(epochId, i));
         }
 
         // SECURITY FIX (spec-conformance audit, finding #3): snapshot the
@@ -340,7 +356,7 @@ contract EpochScoring is AccessControl {
         bytes32 refId = referenceAssetId;
         address feed = priceFeeds[refId];
         if (feed == address(0)) return;
-        (, int256 answer, , uint256 updatedAt, ) = AggregatorV3Interface(feed).latestRoundData();
+        (, int256 answer,, uint256 updatedAt,) = AggregatorV3Interface(feed).latestRoundData();
         if (answer <= 0 || updatedAt == 0) return;
         epochClosePrice[epochId] = answer;
         emit EpochClosePriceSet(epochId, refId, answer);
@@ -348,11 +364,7 @@ contract EpochScoring is AccessControl {
 
     /// @dev Extracted from settleEpoch() to keep its local-variable count below
     ///      the Yul stack-too-deep threshold. Scores one provider for one epoch.
-    function _scoreProvider(uint256 epochId, uint256 idx)
-        internal
-        view
-        returns (ScoreResult memory)
-    {
+    function _scoreProvider(uint256 epochId, uint256 idx) internal view returns (ScoreResult memory) {
         // M-2/M-3: resolve the provider + signal direction from this epoch's
         // signal at position `idx`, so each signal is scored individually
         // (not collapsed to the provider's last signal).
@@ -360,20 +372,20 @@ contract EpochScoring is AccessControl {
         (uint256 stake, uint256[] memory epochsActive) = _getProviderStakeInfo(provider, epochId);
 
         uint256 accuracy = _calculateAccuracy(
-            _getEpochPriceMovement(epochId),
-            ISignalRegistry(signalRegistry).getEpochSignalReturn(epochId, idx)
+            _getEpochPriceMovement(epochId), ISignalRegistry(signalRegistry).getEpochSignalReturn(epochId, idx)
         );
 
         uint256 recencyBonus = _calculateRecencyBonus(provider, epochId, epochsActive);
         uint256 stakeScore = totalStake > 0 ? (stake * 100) / totalStake : 0;
         uint256 finalScore = (accuracy * 50 / 100) + (recencyBonus * 30 / 100) + (stakeScore * 20 / 100);
 
-        return ScoreResult({
-            provider: provider,
-            accuracy: accuracy,
-            finalScore: finalScore,
-            rank: 0 // filled after sorting
-        });
+        return
+            ScoreResult({
+                provider: provider,
+                accuracy: accuracy,
+                finalScore: finalScore,
+                rank: 0 // filled after sorting
+            });
     }
 
     /// @dev Extracted from settleEpoch() — distributes rewards to ranked results.
@@ -385,10 +397,7 @@ contract EpochScoring is AccessControl {
     ///      Now we emit a skip event and continue — the epoch still settles,
     ///      and the missed payout is forfeit to the epoch reward pool budget
     ///      rather than locking up the cron.
-    function _distributeRewards(ScoreResult[] memory results)
-        internal
-        returns (uint256 totalRewards)
-    {
+    function _distributeRewards(ScoreResult[] memory results) internal returns (uint256 totalRewards) {
         if (results.length == 0) return 0;
         uint256 reward = epochReward / results.length;
         for (uint256 i = 0; i < results.length; i++) {
@@ -465,13 +474,13 @@ contract EpochScoring is AccessControl {
         // Monotonicity AND the clip endpoints are pinned by
         // test/signals/PayoutCurve.t.sol.
         int256 payoutFactor = (int256(accuracyBps) * 20000 / 10000) - 10000;
-        int256 rawPayout    = payoutFactor * 3 / 10;
+        int256 rawPayout = payoutFactor * 3 / 10;
 
         // Clip to configured max/min
         int256 maxPenalty = -int256(MAX_PENALTY_BPS);
-        int256 maxReward  =  int256(MAX_REWARD_BPS);
+        int256 maxReward = int256(MAX_REWARD_BPS);
         if (rawPayout < maxPenalty) rawPayout = maxPenalty;
-        if (rawPayout > maxReward)  rawPayout = maxReward;
+        if (rawPayout > maxReward) rawPayout = maxReward;
 
         uint256 stake = zentStaking.getProviderStake(sig.provider);
         if (stake < MIN_STAKE) revert BelowMinStake(sig.provider);
@@ -491,8 +500,13 @@ contract EpochScoring is AccessControl {
     /// @notice Set accuracy for a signal (called by ScoringOracle / keeper bot).
     /// @param signalId    Signal to score
     /// @param accuracyBps Accuracy in basis points (0–10000)
-    function setAccuracy(bytes32 signalId, uint256 accuracyBps) external {
-        if (msg.sender != scoringOracle) revert UnauthorizedOracle(msg.sender);
+    /// @dev Audit Q3 fix: gated by the SCORING_ORACLE_ROLE AccessControl
+    ///      role (set in the constructor on `_scoringOracle` and rotated via
+    ///      `setScoringOracle`). Holding the role via a Safe multisig makes
+    ///      the accuracy setter key-resilient without redeploying the
+    ///      contract. A non-role caller reverts with the standard OZ
+    ///      `AccessControlUnauthorizedAccount(account, role)` error.
+    function setAccuracy(bytes32 signalId, uint256 accuracyBps) external onlyRole(SCORING_ORACLE_ROLE) {
         if (accuracyBps > 10000) revert();
         accuracyCache[signalId] = accuracyBps;
         accuracyScored[signalId] = true;
@@ -502,8 +516,11 @@ contract EpochScoring is AccessControl {
     /// @notice Batch set accuracy (called by ScoringOracle / keeper bot).
     /// @param signalIds    Array of signal IDs to score
     /// @param accuraciesBps Respective accuracy values in basis points
-    function setAccuracyBatch(bytes32[] calldata signalIds, uint256[] calldata accuraciesBps) external {
-        if (msg.sender != scoringOracle) revert UnauthorizedOracle(msg.sender);
+    /// @dev Same role gate as `setAccuracy` (audit Q3 fix).
+    function setAccuracyBatch(bytes32[] calldata signalIds, uint256[] calldata accuraciesBps)
+        external
+        onlyRole(SCORING_ORACLE_ROLE)
+    {
         if (signalIds.length != accuraciesBps.length) revert ArraysLengthMismatch();
         for (uint256 i = 0; i < signalIds.length; i++) {
             if (accuraciesBps[i] > 10000) revert();
@@ -529,7 +546,7 @@ contract EpochScoring is AccessControl {
     function getPrice(bytes32 assetId) public view returns (int256 price, uint8 decimals) {
         if (priceFeeds[assetId] == address(0)) revert PriceFeedNotSet(assetId);
         AggregatorV3Interface feed = AggregatorV3Interface(priceFeeds[assetId]);
-        (, int256 rawPrice, , , ) = feed.latestRoundData();
+        (, int256 rawPrice,,,) = feed.latestRoundData();
         decimals = feed.decimals();
         return (rawPrice, decimals);
     }
@@ -537,8 +554,14 @@ contract EpochScoring is AccessControl {
     // ─── Internal Helpers ────────────────────────────────────
     /// @notice Count active signals within the given epoch window.
     /// @dev Production should use a Subgraph query rather than this placeholder.
-    function _countActiveSignals(uint256 /* startTime */, uint256 /* endTime */)
-        internal pure returns (uint256)
+    function _countActiveSignals(
+        uint256,
+        /* startTime */
+        uint256 /* endTime */
+    )
+        internal
+        pure
+        returns (uint256)
     {
         // Placeholder — keeper's off-chain indexer maintains the authoritative count.
         // In production, emit an event in SignalRegistry.submitSignal() with
@@ -584,11 +607,11 @@ contract EpochScoring is AccessControl {
     /// @param epochId     Current epoch being settled
     /// @param epochsActive Array of epoch IDs the provider was active in
     /// @return recencyBonus Score from 0 to 100 (higher = more recent)
-    function _calculateRecencyBonus(
-        address provider,
-        uint256 epochId,
-        uint256[] memory epochsActive
-    ) internal pure returns (uint256) {
+    function _calculateRecencyBonus(address provider, uint256 epochId, uint256[] memory epochsActive)
+        internal
+        pure
+        returns (uint256)
+    {
         // Look back AT MOST 3 epochs. Clamp the window start at 0 to avoid the
         // `epochId - 3` underflow panic (Solidity 0.8 checked math) that would
         // brick recency-bonus scoring for the protocol's first three epochs
@@ -641,7 +664,9 @@ contract EpochScoring is AccessControl {
     /// @return stake Current total stake for the provider
     /// @return epochsActive Array of recent epoch IDs where provider had active stake
     function _getProviderStakeInfo(address provider, uint256 epochId)
-        internal view returns (uint256 stake, uint256[] memory epochsActive)
+        internal
+        view
+        returns (uint256 stake, uint256[] memory epochsActive)
     {
         stake = IZENTStaking(zentStaking).getProviderStake(provider);
         epochsActive = new uint256[](5);
@@ -689,13 +714,9 @@ contract EpochScoring is AccessControl {
 /// @dev Full interface: https://github.com/smartcontractkit/chainlink/blob/develop/contracts/src/interfaces/AggregatorV3Interface.sol
 interface AggregatorV3Interface {
     function latestRoundData()
-        external view returns (
-            uint80   roundId,
-            int256   answer,
-            uint256  startedAt,
-            uint256  updatedAt,
-            uint80   answeredInRound
-        );
+        external
+        view
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 
     function decimals() external view returns (uint8);
 }
