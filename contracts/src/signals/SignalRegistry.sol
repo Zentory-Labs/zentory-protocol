@@ -23,10 +23,9 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     // ─── EIP-712 Domain ─────────────────────────────────────
     string public constant VERSION = "1.0";
 
-    bytes32 public constant SIGNAL_TYPEHASH =
-        keccak256(
-            "Signal(address provider,uint8 assetClass,bytes32 assetId,int256 direction,uint256 confidence,uint256 nonce,uint256 expiresAt)"
-        );
+    bytes32 public constant SIGNAL_TYPEHASH = keccak256(
+        "Signal(address provider,uint8 assetClass,bytes32 assetId,int256 direction,uint256 confidence,uint256 nonce,uint256 expiresAt)"
+    );
 
     // ─── State ──────────────────────────────────────────────
     /// @notice Signal records keyed by unique signal ID.
@@ -124,13 +123,13 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     ///         submitSignal (after modifier checks) and submitSignalBatch (bypasses
     ///         the onlyValidSignal modifier to avoid double-checks on re-entrant calls).
     function _submitSignal(
-        address                   provider,
-        SignalTypes.AssetClass    assetClass,
-        bytes32                   assetId,
-        int256                    direction,
-        uint256                   confidence,
-        uint256                   expiresAt,
-        bytes calldata            signature
+        address provider,
+        SignalTypes.AssetClass assetClass,
+        bytes32 assetId,
+        int256 direction,
+        uint256 confidence,
+        uint256 expiresAt,
+        bytes calldata signature
     ) internal returns (bytes32 signalId) {
         uint256 nonce = providerNonce[provider];
         signalId = _computeSignalId(provider, assetClass, assetId, direction, confidence, nonce, block.timestamp);
@@ -138,16 +137,16 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
         if (signalExists[signalId]) revert SignalAlreadyExists(signalId);
 
         signals[signalId] = SignalTypes.Signal({
-            signalId:    signalId,
-            provider:    provider,
+            signalId: signalId,
+            provider: provider,
             assetClass: assetClass,
-            assetId:    assetId,
-            direction:  direction,
+            assetId: assetId,
+            direction: direction,
             confidence: confidence,
             submittedAt: block.timestamp,
-            expiresAt:  expiresAt,
-            signature:  signature,
-            status:     SignalTypes.SignalStatus.Active
+            expiresAt: expiresAt,
+            signature: signature,
+            status: SignalTypes.SignalStatus.Active
         });
         signalExists[signalId] = true;
         providerNonce[provider] = nonce + 1;
@@ -166,9 +165,7 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
         // only this epoch's signals and scores each one individually.
         epochSignalIds[epochId].push(signalId);
 
-        emit SignalTypes.SignalSubmitted(
-            signalId, provider, assetClass, assetId, direction, confidence, expiresAt
-        );
+        emit SignalTypes.SignalSubmitted(signalId, provider, assetClass, assetId, direction, confidence, expiresAt);
     }
 
     /// @notice Submit a signal. Signature must be fresh (nonce matches providerNonce).
@@ -180,17 +177,14 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     /// @param expiresAt     Unix timestamp — signal not scored after this
     /// @param signature     EIP-191 ECDSA signature over the signal hash by provider's wallet
     function submitSignal(
-        address                   provider,
-        SignalTypes.AssetClass    assetClass,
-        bytes32                   assetId,
-        int256                    direction,
-        uint256                   confidence,
-        uint256                   expiresAt,
-        bytes calldata            signature
-    )
-        external
-        returns (bytes32 signalId)
-    {
+        address provider,
+        SignalTypes.AssetClass assetClass,
+        bytes32 assetId,
+        int256 direction,
+        uint256 confidence,
+        uint256 expiresAt,
+        bytes calldata signature
+    ) external returns (bytes32 signalId) {
         if (confidence == 0) revert ZeroConfidence();
         // Finding #17: enforce the documented bounds before the value is signed
         // into the digest and stored.
@@ -205,16 +199,7 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
         // mempool front-runner cannot steal the nonce slot and cause revert.
         bytes32 digest = _hashTypedDataV4(
             keccak256(
-                abi.encode(
-                    SIGNAL_TYPEHASH,
-                    provider,
-                    assetClass,
-                    assetId,
-                    direction,
-                    confidence,
-                    nonce,
-                    expiresAt
-                )
+                abi.encode(SIGNAL_TYPEHASH, provider, assetClass, assetId, direction, confidence, nonce, expiresAt)
             )
         );
         address recovered = digest.recover(signature);
@@ -226,10 +211,7 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     // ─── Batch Submit ────────────────────────────────────────
     /// @notice Submit multiple signals in one tx (gas-efficient for providers).
     /// @param batch Array of pre-formed Signal structs; each must pass submitSignal's checks.
-    function submitSignalBatch(SignalTypes.Signal[] calldata batch)
-        external
-        returns (bytes32[] memory ids)
-    {
+    function submitSignalBatch(SignalTypes.Signal[] calldata batch) external returns (bytes32[] memory ids) {
         if (batch.length > MAX_BATCH_SIZE) revert BatchSizeExceeded(batch.length, MAX_BATCH_SIZE);
 
         ids = new bytes32[](batch.length);
@@ -241,7 +223,9 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
             if (s.confidence > 10000) revert ConfidenceTooHigh(s.confidence);
             if (s.direction < -10000 || s.direction > 10000) revert InvalidDirection(s.direction);
             if (block.timestamp > s.expiresAt) revert SignatureExpired(s.expiresAt, block.timestamp);
-            if (s.expiresAt > block.timestamp + MAX_EXPIRY) revert ExpiryTooFar(s.expiresAt, block.timestamp + MAX_EXPIRY);
+            if (s.expiresAt > block.timestamp + MAX_EXPIRY) {
+                revert ExpiryTooFar(s.expiresAt, block.timestamp + MAX_EXPIRY);
+            }
 
             // Front-running protection: pre-check nonce BEFORE verifying signature.
             // Without this, an attacker monitoring the mempool could see a signed signal
@@ -265,15 +249,8 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
             address recovered = digest.recover(s.signature);
             if (recovered != s.provider) revert InvalidSignature(recovered, s.provider);
 
-            ids[i] = _submitSignal(
-                s.provider,
-                s.assetClass,
-                s.assetId,
-                s.direction,
-                s.confidence,
-                s.expiresAt,
-                s.signature
-            );
+            ids[i] =
+                _submitSignal(s.provider, s.assetClass, s.assetId, s.direction, s.confidence, s.expiresAt, s.signature);
         }
     }
 
@@ -281,10 +258,10 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     /// @notice Called by ScoringOracle after epoch settles. Marks signals as resolved.
     /// @param signalIds     Signal IDs to resolve
     /// @param accuraciesBps Accuracy in basis points (10000 = perfect score)
-    function resolveSignals(
-        bytes32[] calldata signalIds,
-        uint256[] calldata accuraciesBps
-    ) external onlyRole(SCORING_ORACLE) {
+    function resolveSignals(bytes32[] calldata signalIds, uint256[] calldata accuraciesBps)
+        external
+        onlyRole(SCORING_ORACLE)
+    {
         if (signalIds.length != accuraciesBps.length) revert ArraysLengthMismatch();
 
         for (uint256 i = 0; i < signalIds.length; i++) {
@@ -302,9 +279,7 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
 
     // ─── Views ───────────────────────────────────────────────
     /// @inheritdoc ISignalRegistry
-    function getSignal(bytes32 signalId)
-        external view returns (SignalTypes.Signal memory)
-    {
+    function getSignal(bytes32 signalId) external view returns (SignalTypes.Signal memory) {
         if (!signalExists[signalId]) revert SignalNotFound(signalId);
         return signals[signalId];
     }
@@ -384,24 +359,20 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     /// @param  to       Ending index (inclusive)
     /// @return ids      Signal IDs in the given range
     /// @return statuses Respective signal statuses
-    function getProviderSignals(
-        address provider,
-        uint256 from,
-        uint256 to
-    )
-        external view returns (bytes32[] memory ids, SignalTypes.SignalStatus[] memory statuses)
+    function getProviderSignals(address provider, uint256 from, uint256 to)
+        external
+        view
+        returns (bytes32[] memory ids, SignalTypes.SignalStatus[] memory statuses)
     {
-        uint256 len = from <= to && from < providerSignalIds[provider].length
-            ? to - from + 1
-            : 0;
+        uint256 len = from <= to && from < providerSignalIds[provider].length ? to - from + 1 : 0;
 
-        ids     = new bytes32[](len);
+        ids = new bytes32[](len);
         statuses = new SignalTypes.SignalStatus[](len);
 
         uint256 idx = 0;
         for (uint256 i = from; i <= to && i < providerSignalIds[provider].length; i++) {
             bytes32 id = providerSignalIds[provider][i];
-            ids[idx]     = id;
+            ids[idx] = id;
             statuses[idx] = signals[id].status;
             idx++;
         }
@@ -410,17 +381,15 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     // ─── Internal ───────────────────────────────────────────
     /// @notice Compute the canonical signal ID for a submitted signal.
     function _computeSignalId(
-        address                   provider,
-        SignalTypes.AssetClass    assetClass,
-        bytes32                   assetId,
-        int256                    direction,
-        uint256                   confidence,
-        uint256                   nonce,
-        uint256                   timestamp
+        address provider,
+        SignalTypes.AssetClass assetClass,
+        bytes32 assetId,
+        int256 direction,
+        uint256 confidence,
+        uint256 nonce,
+        uint256 timestamp
     ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encode(provider, assetClass, assetId, direction, confidence, nonce, timestamp)
-        );
+        return keccak256(abi.encode(provider, assetClass, assetId, direction, confidence, nonce, timestamp));
     }
 
     /// @inheritdoc EIP712

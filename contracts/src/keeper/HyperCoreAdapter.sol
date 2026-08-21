@@ -10,7 +10,6 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 /// @dev    Actions are delayed by ~few seconds — not atomic with EVM execution.
 ///         Asset indices are chain-specific constants configured at deployment.
 contract HyperCoreAdapter is AccessControl {
-
     bytes32 public constant GOVERNOR_ROLE = keccak256("GOVERNOR_ROLE");
 
     /// @notice Authorized to submit orders to HyperCore on the protocol's
@@ -46,9 +45,9 @@ contract HyperCoreAdapter is AccessControl {
 
     /// @notice Asset configuration for a single supported asset.
     struct AssetConfig {
-        uint32 assetIndex;   // HyperCore asset index (e.g. 0 for BTC)
-        uint8  szDecimals;   // decimals for size (10^szDecimals = human unit)
-        bool   supported;
+        uint32 assetIndex; // HyperCore asset index (e.g. 0 for BTC)
+        uint8 szDecimals; // decimals for size (10^szDecimals = human unit)
+        bool supported;
     }
 
     /// @notice Maps a local asset key (e.g. 0=BTC, 1=ETH) to HyperCore config.
@@ -56,13 +55,13 @@ contract HyperCoreAdapter is AccessControl {
 
     /// @notice Emitted when an order is submitted to CoreWriter for HyperCore execution.
     event OrderSubmitted(
-        uint8   indexed localAsset,
-        uint32  indexed hyperCoreAsset,
-        bool    isBuy,
-        uint64  limitPx,
-        uint64  sz,
-        bool    reduceOnly,
-        uint8   tif,
+        uint8 indexed localAsset,
+        uint32 indexed hyperCoreAsset,
+        bool isBuy,
+        uint64 limitPx,
+        uint64 sz,
+        bool reduceOnly,
+        uint8 tif,
         uint128 cloid
     );
 
@@ -92,11 +91,7 @@ contract HyperCoreAdapter is AccessControl {
     /// @param  szDecimals_   Size decimals (sz = human * 10^szDecimals_)
     function setAssetConfig(uint8 localAsset, uint32 assetIndex, uint8 szDecimals_) external onlyRole(GOVERNOR_ROLE) {
         require(localAsset <= 3, "HyperCoreAdapter: invalid local asset");
-        assetConfigs[localAsset] = AssetConfig({
-            assetIndex: assetIndex,
-            szDecimals: szDecimals_,
-            supported: true
-        });
+        assetConfigs[localAsset] = AssetConfig({assetIndex: assetIndex, szDecimals: szDecimals_, supported: true});
     }
 
     /// @notice Encode and send a limit order to HyperCore via CoreWriter.
@@ -109,12 +104,12 @@ contract HyperCoreAdapter is AccessControl {
     /// @param  cloid        Client order ID (0 = no cloid)
     /// @return cloid_       The cloid assigned or passed in
     function sendLimitOrder(
-        uint8  localAsset,
-        bool   isBuy,
+        uint8 localAsset,
+        bool isBuy,
         uint64 limitPxHuman,
         uint64 szHuman,
-        bool   reduceOnly,
-        uint8  tif,
+        bool reduceOnly,
+        uint8 tif,
         uint128 cloid
     )
         external
@@ -136,33 +131,27 @@ contract HyperCoreAdapter is AccessControl {
         cloid_ = cloid;
 
         // Build encoded action for CoreWriter
-        bytes memory data = _encodeLimitOrderAction(
-            cfg.assetIndex,
-            isBuy,
-            limitPx,
-            sz,
-            reduceOnly,
-            tif,
-            cloid_
-        );
+        bytes memory data = _encodeLimitOrderAction(cfg.assetIndex, isBuy, limitPx, sz, reduceOnly, tif, cloid_);
 
         // slither-disable-next-line low-level-calling
         bool success;
         /// @dev Inline assembly needed because via-IR miscompiles the high-level call with
         ///      CORE_WRITER constant. The address 0x3333...3333 is the HyperCore CoreWriter precompile.
-        assembly { success := call(gas(), 0x3333333333333333333333333333333333333333, 0, add(data, 32), mload(data), 0, 0) }
+        assembly {
+            success := call(gas(), 0x3333333333333333333333333333333333333333, 0, add(data, 32), mload(data), 0, 0)
+        }
         // CoreWriter actions are fire-and-forget; HyperCore executes in next block.
         // We emit the event for off-chain indexing.
 
         emit OrderSubmitted({
-            localAsset:     localAsset,
+            localAsset: localAsset,
             hyperCoreAsset: cfg.assetIndex,
-            isBuy:          isBuy,
-            limitPx:        limitPx,
-            sz:             sz,
-            reduceOnly:     reduceOnly,
-            tif:            tif,
-            cloid:          cloid_
+            isBuy: isBuy,
+            limitPx: limitPx,
+            sz: sz,
+            reduceOnly: reduceOnly,
+            tif: tif,
+            cloid: cloid_
         });
     }
 
@@ -171,18 +160,14 @@ contract HyperCoreAdapter is AccessControl {
     ///              [sz(8)][reduceOnly(1)][tif(1)][cloid(16)]
     ///         Total: 41 bytes
     function _encodeLimitOrderAction(
-        uint32  assetIndex,
-        bool    isBuy,
-        uint64  limitPx,
-        uint64  sz,
-        bool    reduceOnly,
-        uint8   tif,
+        uint32 assetIndex,
+        bool isBuy,
+        uint64 limitPx,
+        uint64 sz,
+        bool reduceOnly,
+        uint8 tif,
         uint128 cloid
-    )
-        internal
-        pure
-        returns (bytes memory data)
-    {
+    ) internal pure returns (bytes memory data) {
         data = new bytes(41);
 
         // Byte 0: encoding version
@@ -215,21 +200,21 @@ contract HyperCoreAdapter is AccessControl {
     // ─── Byte encoding helpers ─────────────────────────────────────────────
 
     function uint32ToBytes(uint32 value, bytes memory buffer, uint256 offset) internal pure {
-        buffer[offset]      = bytes1(uint8(value));
-        buffer[offset + 1]  = bytes1(uint8(value >> 8));
-        buffer[offset + 2]  = bytes1(uint8(value >> 16));
-        buffer[offset + 3]  = bytes1(uint8(value >> 24));
+        buffer[offset] = bytes1(uint8(value));
+        buffer[offset + 1] = bytes1(uint8(value >> 8));
+        buffer[offset + 2] = bytes1(uint8(value >> 16));
+        buffer[offset + 3] = bytes1(uint8(value >> 24));
     }
 
     function uint64ToBytes(uint64 value, bytes memory buffer, uint256 offset) internal pure {
-        buffer[offset]      = bytes1(uint8(value));
-        buffer[offset + 1]  = bytes1(uint8(value >> 8));
-        buffer[offset + 2]  = bytes1(uint8(value >> 16));
-        buffer[offset + 3]  = bytes1(uint8(value >> 24));
-        buffer[offset + 4]  = bytes1(uint8(value >> 32));
-        buffer[offset + 5]  = bytes1(uint8(value >> 40));
-        buffer[offset + 6]  = bytes1(uint8(value >> 48));
-        buffer[offset + 7]  = bytes1(uint8(value >> 56));
+        buffer[offset] = bytes1(uint8(value));
+        buffer[offset + 1] = bytes1(uint8(value >> 8));
+        buffer[offset + 2] = bytes1(uint8(value >> 16));
+        buffer[offset + 3] = bytes1(uint8(value >> 24));
+        buffer[offset + 4] = bytes1(uint8(value >> 32));
+        buffer[offset + 5] = bytes1(uint8(value >> 40));
+        buffer[offset + 6] = bytes1(uint8(value >> 48));
+        buffer[offset + 7] = bytes1(uint8(value >> 56));
     }
 
     function uint128ToBytes(uint128 value, bytes memory buffer, uint256 offset) internal pure {

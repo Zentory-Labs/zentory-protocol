@@ -65,12 +65,7 @@ contract MerkleDistributor is AccessControl {
     ///                       Recommended: 90 days post-deploy.
     /// @param admin_         Holder of DEFAULT_ADMIN_ROLE + SWEEPER_ROLE.
     ///                       MUST be a multisig, not an EOA.
-    constructor(
-        IERC20 token_,
-        bytes32 merkleRoot_,
-        uint256 claimDeadline_,
-        address admin_
-    ) {
+    constructor(IERC20 token_, bytes32 merkleRoot_, uint256 claimDeadline_, address admin_) {
         if (address(token_) == address(0) || merkleRoot_ == bytes32(0)) revert InvalidConfig();
         if (claimDeadline_ <= block.timestamp) revert InvalidConfig();
         if (admin_ == address(0)) revert InvalidConfig();
@@ -97,12 +92,7 @@ contract MerkleDistributor is AccessControl {
     /// @notice Claim `amount` of ZENT for `account`. Anyone can submit on
     ///         behalf of the recipient (the proof is the gate, not msg.sender).
     /// @dev    Reverts if already claimed, proof invalid, or window closed.
-    function claim(
-        uint256 index,
-        address account,
-        uint256 amount,
-        bytes32[] calldata merkleProof
-    ) external {
+    function claim(uint256 index, address account, uint256 amount, bytes32[] calldata merkleProof) external {
         if (block.timestamp > claimDeadline) revert ClaimWindowClosed();
         if (isClaimed(index)) revert AlreadyClaimed(index);
 

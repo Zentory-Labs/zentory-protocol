@@ -15,8 +15,8 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 contract ZENTBuyback is Ownable2Step {
     using SafeERC20 for IERC20;
 
-    IERC20 public immutable zent;   // ZENT token
-    IERC20 public immutable usdc;   // fee payment token (USDC or USDC-like)
+    IERC20 public immutable zent; // ZENT token
+    IERC20 public immutable usdc; // fee payment token (USDC or USDC-like)
 
     uint256 public minBuybackThreshold; // minimum USDC balance to trigger buyback
     address public constant deadAddress = 0x000000000000000000000000000000000000dEaD;

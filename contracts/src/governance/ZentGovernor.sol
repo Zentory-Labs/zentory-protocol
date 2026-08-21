@@ -17,7 +17,6 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 /// @dev    Does NOT inherit GovernorVotes — voting weight comes from ZENTStaking.veBalance,
 ///         not from ZENT ERC20Votes checkpoints.
 contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockControl {
-
     /// @notice ZENT token address (used for quorum totalSupply reference).
     address public immutable zentToken;
 
@@ -47,10 +46,7 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
         uint256 votingPeriod__,
         uint256 proposalThreshold_,
         uint256 quorumBps_
-    )
-        Governor("ZentGovernor")
-        GovernorTimelockControl(TimelockController(payable(timelock_)))
-    {
+    ) Governor("ZentGovernor") GovernorTimelockControl(TimelockController(payable(timelock_))) {
         require(zentToken_ != address(0), "ZentGovernor: zero zent");
         require(staking_ != address(0), "ZentGovernor: zero staking");
         require(timelock_ != address(0), "ZentGovernor: zero timelock");
@@ -69,12 +65,7 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
 
     /// @dev Voting weight is veBalance from ZENTStaking, not ZENT ERC20Votes.
     ///     Snapshot parameter (timepoint) is ignored — veBalance is time-based, not snapshot-based.
-    function _getVotes(address account, uint256, bytes memory)
-        internal
-        view
-        override(Governor)
-        returns (uint256)
-    {
+    function _getVotes(address account, uint256, bytes memory) internal view override(Governor) returns (uint256) {
         return IZENTStaking(address(zentroller.staking())).veBalance(account);
     }
 
@@ -116,7 +107,7 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
         override(Governor, GovernorCountingSimple)
         returns (bool)
     {
-        (uint256 againstVotes, uint256 forVotes, ) = proposalVotes(proposalId);
+        (uint256 againstVotes, uint256 forVotes,) = proposalVotes(proposalId);
         if (forVotes == 0) return false;
         return forVotes * 10000 >= (forVotes + againstVotes) * SUPERMAJORITY_BPS;
     }
@@ -145,12 +136,7 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
 
     // ─── Timelock integration ────────────────────────────────────────────
 
-    function state(uint256 proposalId)
-        public
-        view
-        override(Governor, GovernorTimelockControl)
-        returns (ProposalState)
-    {
+    function state(uint256 proposalId) public view override(Governor, GovernorTimelockControl) returns (ProposalState) {
         return super.state(proposalId);
     }
 
@@ -169,11 +155,7 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    )
-        internal
-        override(Governor, GovernorTimelockControl)
-        returns (uint48)
-    {
+    ) internal override(Governor, GovernorTimelockControl) returns (uint48) {
         return super._queueOperations(proposalId, targets, values, calldatas, descriptionHash);
     }
 
@@ -183,10 +165,7 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    )
-        internal
-        override(Governor, GovernorTimelockControl)
-    {
+    ) internal override(Governor, GovernorTimelockControl) {
         super._executeOperations(proposalId, targets, values, calldatas, descriptionHash);
     }
 
@@ -195,29 +174,15 @@ contract ZentGovernor is Governor, GovernorCountingSimple, GovernorTimelockContr
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    )
-        internal
-        override(Governor, GovernorTimelockControl)
-        returns (uint256)
-    {
+    ) internal override(Governor, GovernorTimelockControl) returns (uint256) {
         return super._cancel(targets, values, calldatas, descriptionHash);
     }
 
-    function _executor()
-        internal
-        view
-        override(Governor, GovernorTimelockControl)
-        returns (address)
-    {
+    function _executor() internal view override(Governor, GovernorTimelockControl) returns (address) {
         return super._executor();
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        override(Governor)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override(Governor) returns (bool) {
         return Governor.supportsInterface(interfaceId);
     }
 }

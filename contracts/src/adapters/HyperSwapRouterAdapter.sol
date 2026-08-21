@@ -13,7 +13,7 @@ interface ISwapRouterV3 {
     struct ExactInputSingleParams {
         address tokenIn;
         address tokenOut;
-        uint24  fee;
+        uint24 fee;
         address recipient;
         uint256 deadline;
         uint256 amountIn;
@@ -21,10 +21,7 @@ interface ISwapRouterV3 {
         uint160 sqrtPriceLimitX96;
     }
 
-    function exactInputSingle(ExactInputSingleParams calldata params)
-        external
-        payable
-        returns (uint256 amountOut);
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
 }
 
 /// @title HyperSwapRouterAdapter
@@ -51,35 +48,22 @@ contract HyperSwapRouterAdapter is AccessControl, ISpotSwapAdapter {
     bytes32 public constant VAULT_ROLE = keccak256("VAULT_ROLE");
 
     ISwapRouterV3 public immutable router;
-    address public immutable asset;   // the vault underlying (e.g. WBTC)
-    address public immutable cash;     // the vault cash leg (e.g. USDC)
-    uint24  public immutable feeTier;  // pool fee, e.g. 500 = 0.05%, 3000 = 0.30%
+    address public immutable asset; // the vault underlying (e.g. WBTC)
+    address public immutable cash; // the vault cash leg (e.g. USDC)
+    uint24 public immutable feeTier; // pool fee, e.g. 500 = 0.05%, 3000 = 0.30%
 
     /// @notice Seconds added to block.timestamp for the swap deadline. Admin-tunable.
     uint256 public swapDeadlineWindow = 300; // 5 minutes
 
-    event Swapped(
-        address indexed caller,
-        address tokenIn,
-        address tokenOut,
-        uint256 amountIn,
-        uint256 amountOut
-    );
+    event Swapped(address indexed caller, address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOut);
     event DeadlineWindowSet(uint256 window);
 
     error UnsupportedPair(address tokenIn, address tokenOut);
     error SlippageExceeded(uint256 amountOut, uint256 minOut);
 
-    constructor(
-        address router_,
-        address asset_,
-        address cash_,
-        uint24  feeTier_,
-        address admin_
-    ) {
+    constructor(address router_, address asset_, address cash_, uint24 feeTier_, address admin_) {
         require(
-            router_ != address(0) && asset_ != address(0) && cash_ != address(0) && admin_ != address(0),
-            "zero addr"
+            router_ != address(0) && asset_ != address(0) && cash_ != address(0) && admin_ != address(0), "zero addr"
         );
         require(asset_ != cash_, "asset == cash");
         router = ISwapRouterV3(router_);
@@ -95,9 +79,7 @@ contract HyperSwapRouterAdapter is AccessControl, ISpotSwapAdapter {
         onlyRole(VAULT_ROLE)
         returns (uint256 amountOut)
     {
-        if (
-            !((tokenIn == asset && tokenOut == cash) || (tokenIn == cash && tokenOut == asset))
-        ) {
+        if (!((tokenIn == asset && tokenOut == cash) || (tokenIn == cash && tokenOut == asset))) {
             revert UnsupportedPair(tokenIn, tokenOut);
         }
 
@@ -109,13 +91,13 @@ contract HyperSwapRouterAdapter is AccessControl, ISpotSwapAdapter {
         // amountOutMinimum (reverts the whole tx on shortfall) — atomic by construction.
         amountOut = router.exactInputSingle(
             ISwapRouterV3.ExactInputSingleParams({
-                tokenIn:           tokenIn,
-                tokenOut:          tokenOut,
-                fee:               feeTier,
-                recipient:         msg.sender,
-                deadline:          block.timestamp + swapDeadlineWindow,
-                amountIn:          amountIn,
-                amountOutMinimum:  minOut,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                fee: feeTier,
+                recipient: msg.sender,
+                deadline: block.timestamp + swapDeadlineWindow,
+                amountIn: amountIn,
+                amountOutMinimum: minOut,
                 sqrtPriceLimitX96: 0
             })
         );

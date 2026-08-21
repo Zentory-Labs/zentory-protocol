@@ -10,7 +10,10 @@ import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
 contract Zentroller {
     IZENTStaking public immutable staking;
 
-    constructor(address staking_, address /* guardian */) {
+    constructor(
+        address staking_,
+        address /* guardian */
+    ) {
         require(staking_ != address(0), "Zentroller: zero staking");
         staking = IZENTStaking(staking_);
     }

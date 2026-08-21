@@ -31,11 +31,14 @@ contract MedianOracle is AccessControl, AggregatorV3Interface {
 
     uint8 private immutable _decimals;
     uint256 public immutable maxStaleness; // seconds a report stays "fresh"
-    int256 public immutable minAnswer;     // sane lower bound (e.g. $100 at 8dec)
-    int256 public immutable maxAnswer;     // sane upper bound
-    uint256 public immutable minQuorum;    // min fresh reports for a valid price
+    int256 public immutable minAnswer; // sane lower bound (e.g. $100 at 8dec)
+    int256 public immutable maxAnswer; // sane upper bound
+    uint256 public immutable minQuorum; // min fresh reports for a valid price
 
-    struct Report { int256 price; uint64 timestamp; }
+    struct Report {
+        int256 price;
+        uint64 timestamp;
+    }
     mapping(address => Report) public reports;
     address[] public updaters; // the signer set (iterated for the median)
     uint80 private _round;
@@ -68,9 +71,13 @@ contract MedianOracle is AccessControl, AggregatorV3Interface {
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 
-    function decimals() external view override returns (uint8) { return _decimals; }
+    function decimals() external view override returns (uint8) {
+        return _decimals;
+    }
 
-    function updaterCount() external view returns (uint256) { return updaters.length; }
+    function updaterCount() external view returns (uint256) {
+        return updaters.length;
+    }
 
     // ─── Admin: manage the updater set ────────────────────────────────────
 
@@ -109,7 +116,9 @@ contract MedianOracle is AccessControl, AggregatorV3Interface {
     function report(int256 price) external onlyRole(UPDATER_ROLE) {
         if (price < minAnswer || price > maxAnswer) revert OutOfBounds(price);
         reports[msg.sender] = Report(price, uint64(block.timestamp));
-        unchecked { _round++; }
+        unchecked {
+            _round++;
+        }
         emit Reported(msg.sender, price, block.timestamp, _round);
     }
 

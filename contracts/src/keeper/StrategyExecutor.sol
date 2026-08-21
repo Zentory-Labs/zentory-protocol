@@ -23,10 +23,9 @@ interface ISpotRebalancer {
 }
 
 contract StrategyExecutor is AccessControl {
-
     // ─── Roles ────────────────────────────────────────────────────────────
 
-    bytes32 public constant KEEPER_ROLE  = keccak256("KEEPER_ROLE");
+    bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE"); // emergency pause
     /// @notice Can adjust risk parameters (setMaxLeverageBPS, setMaxPositionSize).
     ///         Distinct from DEFAULT_ADMIN_ROLE which controls who can grant/revoke roles.
@@ -52,11 +51,8 @@ contract StrategyExecutor is AccessControl {
     }
 
     function _buildDomainSeparator(uint256 chainId) private view returns (bytes32) {
-        return keccak256(abi.encode(
-            keccak256("EIP712Domain(uint256 chainId,address executor)"),
-            chainId,
-            address(this)
-        ));
+        return
+            keccak256(abi.encode(keccak256("EIP712Domain(uint256 chainId,address executor)"), chainId, address(this)));
     }
     bytes32 public constant SIGNAL_TYPEHASH =
         keccak256("TradeSignal(address vault,uint8 direction,uint256 size,uint64 price,uint256 nonce,uint256 expiry)");
@@ -96,20 +92,15 @@ contract StrategyExecutor is AccessControl {
     /// @notice Emitted when a trade is successfully validated and submitted.
     event TradeSignalExecuted(
         address indexed vault,
-        uint8  indexed direction,  // 1=long, 0=short, 2=close
-        uint256        size,
-        uint256        price,
-        uint256        nonce,
+        uint8 indexed direction, // 1=long, 0=short, 2=close
+        uint256 size,
+        uint256 price,
+        uint256 nonce,
         address indexed keeper
     );
 
     /// @notice Emitted when a signed SpotVault target-weight rebalance is executed.
-    event RebalanceExecuted(
-        address indexed vault,
-        uint16          targetWeightBps,
-        uint256         nonce,
-        address indexed keeper
-    );
+    event RebalanceExecuted(address indexed vault, uint16 targetWeightBps, uint256 nonce, address indexed keeper);
 
     /// @notice Emitted when a signal fails validation.
     event SignalRejected(address indexed vault, string reason);
@@ -131,11 +122,7 @@ contract StrategyExecutor is AccessControl {
 
     /// @notice Emitted when a keeper manually records a trade on a vault (bypassing signal/signature).
     event ManualTradeRecorded(
-        address indexed vault,
-        bool    indexed isBuy,
-        uint64           size,
-        uint64           price,
-        address indexed keeper
+        address indexed vault, bool indexed isBuy, uint64 size, uint64 price, address indexed keeper
     );
 
     // ─── Errors ───────────────────────────────────────────────────────────
@@ -209,18 +196,13 @@ contract StrategyExecutor is AccessControl {
     /// @param  signature  ECDSA signature over the signal from the GP engine
     function executeSignal(
         address vault,
-        uint8   direction,  // 1=long, 0=short, 2=close
+        uint8 direction, // 1=long, 0=short, 2=close
         uint256 size,
-        uint64  price,
+        uint64 price,
         uint256 nonce,
         uint256 expiry,
-        bytes   calldata signature
-    )
-        external
-        whenNotPaused
-        onlyRole(KEEPER_ROLE)
-        returns (bool)
-    {
+        bytes calldata signature
+    ) external whenNotPaused onlyRole(KEEPER_ROLE) returns (bool) {
         if (size == 0) {
             emit SignalRejected(vault, "zero size");
             revert ZeroSize();
@@ -234,17 +216,7 @@ contract StrategyExecutor is AccessControl {
             revert NonceAlreadyUsed(vault, nonce);
         }
 
-        bytes32 structHash = keccak256(
-            abi.encode(
-                SIGNAL_TYPEHASH,
-                vault,
-                direction,
-                size,
-                price,
-                nonce,
-                expiry
-            )
-        );
+        bytes32 structHash = keccak256(abi.encode(SIGNAL_TYPEHASH, vault, direction, size, price, nonce, expiry));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
         _verifySignature(digest, signature);
 
@@ -303,7 +275,7 @@ contract StrategyExecutor is AccessControl {
             uint64(price),
             uint64(size),
             reduceOnly,
-            2,   // TIF_GTC
+            2, // TIF_GTC
             uint128(nonce)
         );
 
@@ -311,12 +283,7 @@ contract StrategyExecutor is AccessControl {
         nonces[vault] = nonce;
 
         emit TradeSignalExecuted({
-            vault:      vault,
-            direction:  direction,
-            size:       size,
-            price:      price,
-            nonce:      nonce,
-            keeper:     msg.sender
+            vault: vault, direction: direction, size: size, price: price, nonce: nonce, keeper: msg.sender
         });
 
         return true;
@@ -340,16 +307,11 @@ contract StrategyExecutor is AccessControl {
     /// @param  signature        ECDSA signature over the command from the authorized signer
     function executeRebalance(
         address vault,
-        uint16  targetWeightBps,
+        uint16 targetWeightBps,
         uint256 nonce,
         uint256 expiry,
-        bytes   calldata signature
-    )
-        external
-        whenNotPaused
-        onlyRole(KEEPER_ROLE)
-        returns (bool)
-    {
+        bytes calldata signature
+    ) external whenNotPaused onlyRole(KEEPER_ROLE) returns (bool) {
         // Defense-in-depth (pre-audit review): reject a zero vault. Not attacker-
         // reachable (the command must be signed by authorizedSigner), but cheap to
         // fail fast rather than burn a nonce slot / emit noise on a no-op address.
@@ -367,9 +329,7 @@ contract StrategyExecutor is AccessControl {
             revert NonceAlreadyUsed(vault, nonce);
         }
 
-        bytes32 structHash = keccak256(
-            abi.encode(REBALANCE_TYPEHASH, vault, targetWeightBps, nonce, expiry)
-        );
+        bytes32 structHash = keccak256(abi.encode(REBALANCE_TYPEHASH, vault, targetWeightBps, nonce, expiry));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
         _verifySignature(digest, signature);
 
@@ -394,12 +354,10 @@ contract StrategyExecutor is AccessControl {
     /// @param  isBuy        true = long/buy, false = short/sell
     /// @param  sizeHuman    Order size in asset units (e.g. 100000 = 0.001 BTC with 8-decimal asset)
     /// @param  priceHuman   Entry price in dollars (e.g. 65000000000 = $65,000 in 10^8)
-    function recordTradeManual(
-        address vault,
-        bool     isBuy,
-        uint64   sizeHuman,
-        uint64   priceHuman
-    ) external onlyRole(KEEPER_ROLE) {
+    function recordTradeManual(address vault, bool isBuy, uint64 sizeHuman, uint64 priceHuman)
+        external
+        onlyRole(KEEPER_ROLE)
+    {
         int8 direction = isBuy ? int8(1) : int8(-1);
 
         // priceHuman is in 10^8 format ($65,000 → 6_500_000_000); store as-is
@@ -410,13 +368,7 @@ contract StrategyExecutor is AccessControl {
         // slither-disable-next-line calls-loop
         IVault(vault).recordTrade(direction, size_, price_);
 
-        emit ManualTradeRecorded({
-            vault:  vault,
-            isBuy:  isBuy,
-            size:   sizeHuman,
-            price:  priceHuman,
-            keeper: msg.sender
-        });
+        emit ManualTradeRecorded({vault: vault, isBuy: isBuy, size: sizeHuman, price: priceHuman, keeper: msg.sender});
     }
 
     // ─── Admin functions ─────────────────────────────────────────────────
@@ -451,10 +403,10 @@ contract StrategyExecutor is AccessControl {
     }
 
     /// @notice Batch-update leverage limits for multiple vaults.
-    function batchSetMaxLeverageBPS(
-        address[] calldata vaults,
-        uint256[] calldata maxBPS
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function batchSetMaxLeverageBPS(address[] calldata vaults, uint256[] calldata maxBPS)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         require(vaults.length == maxBPS.length, "mismatch length");
         for (uint256 i = 0; i < vaults.length; i++) {
             maxLeverageBPS[vaults[i]] = maxBPS[i];
@@ -477,7 +429,7 @@ contract StrategyExecutor is AccessControl {
 
         bytes32 r;
         bytes32 s;
-        uint8   v;
+        uint8 v;
 
         assembly {
             r := calldataload(signature.offset)
@@ -504,5 +456,4 @@ contract StrategyExecutor is AccessControl {
         if (signer == address(0)) revert InvalidSignature();
         if (signer != authorizedSigner) revert InvalidSignature();
     }
-
 }
