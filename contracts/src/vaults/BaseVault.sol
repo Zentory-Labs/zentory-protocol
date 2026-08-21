@@ -37,6 +37,14 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     /// @inheritdoc IVault
     address public override feeRecipient;
     IZENTStaking public staking;
+    /// @notice DEPRECATED under Tier 0 Q10 per-depositor HWM equalization
+    ///         (audit finding #6). Performance fees are now captured as
+    ///         fee-share dilution to the fee recipient, not as an idle-
+    ///         balance deduction. The storage slot is retained so existing
+    ///         off-chain indexers and explorers continue to compile / query
+    ///         the field, but it is always zero in normal operation. New
+    ///         code MUST NOT depend on it; use `feeRecipient`'s share balance
+    ///         via `balanceOf(feeRecipient)` instead.
     uint256 public performanceFeeAccrued;
     bool public override isCircuitBreakerActive;
     int8 public override currentDirection;
@@ -121,6 +129,21 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         return 6;
     }
 
+    /// @notice ERC4626 internal withdraw hook override (Tier 0 Q10).
+    ///         Captures any accrued perf fee BEFORE the burn so the outgoing
+    ///         share owner is not included in any subsequent fee calculation
+    ///         that targets the just-burned supply.
+    /// @dev    `withdraw()` and `redeem()` both reach this hook via the OZ
+    ///         routing (`withdraw -> _withdraw`, `redeem -> _withdraw`), so a
+    ///         single override gates the fee capture on both surfaces.
+    function _withdraw(address caller, address receiver, address owner, uint256 assets, uint256 shares)
+        internal
+        override
+    {
+        _captureFee();
+        super._withdraw(caller, receiver, owner, assets, shares);
+    }
+
     // ─── ERC4626 Overrides ─────────────────────────────────────────────────
 
     function deposit(uint256 assets, address receiver)
@@ -129,6 +152,10 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         onlyWhenCircuitBreakerInactive
         returns (uint256)
     {
+        // Tier 0 Q10: capture any accrued perf fee BEFORE computing shares
+        // so the incoming depositor is not included in the fee calculation.
+        _captureFee();
+
         IZENTStaking staking_ = staking;
         if (address(staking_) != address(0)) {
             require(staking_.hasAccess(receiver), "BaseVault: stake required");
@@ -142,6 +169,10 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     }
 
     function mint(uint256 shares, address receiver) public override onlyWhenCircuitBreakerInactive returns (uint256) {
+        // Tier 0 Q10: capture any accrued perf fee BEFORE computing shares
+        // so the incoming minter is not included in the fee calculation.
+        _captureFee();
+
         IZENTStaking staking_ = staking;
         if (address(staking_) != address(0)) {
             require(staking_.hasAccess(receiver), "BaseVault: stake required");
@@ -161,29 +192,34 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     }
 
     /// @inheritdoc IVault
-    /// @dev    NAV = idle balance + signed mark-to-market of the open position
-    ///         − accrued performance fees. The open position is sized in
-    ///         `currentPositionSize` units (same units as the underlying) and is
-    ///         marked against `currentMarkPrice`. `_markToMarket()` may be
-    ///         overridden by subclasses (e.g. SpotVault v2 will keep this hook as
-    ///         a no-op since its legs are already in-vault and self-valued).
-    ///         Without this hook, an off-EVM perp position's PnL is invisible
-    ///         on-chain — the circuit breaker would never see a drawdown until
-    ///         value settled back into the idle balance, and the HWM fee math
-    ///         would understate alpha (or fail to fire at all).
+    /// @dev    NAV = idle balance + signed mark-to-market of the open position.
+    ///         The open position is sized in `currentPositionSize` units (same
+    ///         units as the underlying) and is marked against `currentMarkPrice`.
+    ///         `_markToMarket()` may be overridden by subclasses (e.g. SpotVault
+    ///         v2 will keep this hook as a no-op since its legs are already
+    ///         in-vault and self-valued). Without this hook, an off-EVM perp
+    ///         position's PnL is invisible on-chain - the circuit breaker would
+    ///         never see a drawdown until value settled back into the idle
+    ///         balance, and the HWM fee math would understate alpha (or fail to
+    ///         fire at all).
+    /// @dev    Tier 0 Q10 (audit finding #6): the performance fee is captured
+    ///         as a SHARE DILUTION to the fee recipient (see `_captureFee()`),
+    ///         not as an idle-balance deduction. `performanceFeeAccrued` is
+    ///         retained as storage for off-chain monitoring compatibility but
+    ///         is always zero in normal operation; it MUST NOT be subtracted
+    ///         here (that would double-charge the dilution path).
     function totalAssets() public view override(ERC4626, IVault) returns (uint256) {
         uint256 idle = IERC20(asset()).balanceOf(address(this));
         int256 mtm = _markToMarket();
         // NAV is `idle + mtm` (signed add). When MTM is negative we DO want it
-        // to subtract from NAV — that is the whole point of mark-to-market:
+        // to subtract from NAV - that is the whole point of mark-to-market:
         // the circuit breaker must see the drawdown, not just an idle-balance
         // change. The result is clamped at zero only if `idle + mtm` would
         // underflow (i.e. the loss has exceeded the entire idle balance, the
-        // theoretical-maximum-loss case where `size` × (mark-entry)/mark < -idle).
+        // theoretical-maximum-loss case where `size` * (mark-entry)/mark < -idle).
         // In that pathological case NAV is treated as 0 (effectively insolvent).
         int256 grossSigned = int256(idle) + mtm;
-        uint256 gross = grossSigned > 0 ? uint256(grossSigned) : 0;
-        return gross > performanceFeeAccrued ? gross - performanceFeeAccrued : 0;
+        return grossSigned > 0 ? uint256(grossSigned) : 0;
     }
 
     /// @notice Signed mark-to-market of the open position in asset units (raw
@@ -236,46 +272,123 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         return (totalAssets() * shareUnit) / supply;
     }
 
-    // ─── Performance Fee ───────────────────────────────────────────────────
+    // ─── Performance Fee (Tier 0 Q10: per-depositor HWM equalization) ────
 
-    function evaluateFees() external onlyRole(KEEPER_ROLE) {
+    /// @notice Emitted on every fee-share mint. `feeShares` is the number of
+    ///         new shares minted to `feeRecipient`; `feeAssetEquivalent` is
+    ///         what those shares are worth at `navPerShare` in underlying
+    ///         units. Lets off-chain monitoring compute the per-call fee
+    ///         without re-running the formula.
+    event FeeSharesMinted(
+        address indexed feeRecipient, uint256 feeShares, uint256 feeAssetEquivalent, uint256 navPerShare
+    );
+
+    /// @dev    Tier 0 Q10 (audit finding #6): the performance fee is captured
+    ///         as a SHARE DILUTION rather than as an idle-balance deduction.
+    ///         Late depositors used to be charged retroactively on gains
+    ///         earned before they joined, because the fee was computed
+    ///         against the full post-deposit supply and subtracted from the
+    ///         vault's balance: anyone depositing between two `evaluateFees()`
+    ///         calls would see their share value drop on the next call.
+    ///
+    ///         With share dilution:
+    ///         - The fee mints new shares to the fee recipient worth exactly
+    ///           `performanceFee% × alpha × supplyOutstanding` in underlying.
+    ///         - The dilution only affects supply that was outstanding when
+    ///           the alpha was earned (we capture the fee atomically at the
+    ///           start of every deposit/withdraw, so the depositing user is
+    ///           never included in the fee calc).
+    ///         - `totalAssets()` returns the gross balance with no fee
+    ///           subtraction (the fee lives in shares, not in the balance).
+    ///         - `evaluateFees()` is `public` instead of `onlyRole(KEEPER_ROLE)`
+    ///           so a stale-keeper scenario cannot leave HWM stale. The
+    ///           auto-trigger on every deposit/withdraw makes the HWM
+    ///           never-stale even without a live keeper.
+    function evaluateFees() public {
+        _captureFee();
+    }
+
+    /// @notice Internal helper: capture any accrued performance fee as share
+    ///         dilution. Called from `deposit()` / `mint()` / `_withdraw()` /
+    ///         `evaluateFees()`. MUST be called BEFORE any new share mint so
+    ///         the new depositor is not included in the supply the fee is
+    ///         captured against.
+    function _captureFee() internal {
         uint256 nav = getNavPerShare();
         uint256 hwm = highWaterMark;
 
         if (nav <= hwm) {
+            // No alpha to charge. Update lastNavPerShare for invariant tests
+            // and monitoring; do NOT touch HWM (HWM is monotonic up).
             lastNavPerShare = nav;
             return;
         }
 
         uint256 alpha = nav - hwm;
-        // Fee is computed in asset units: alpha (asset units per share) × supply
-        // (shares) / shareUnit (raw units per share) × performanceFee / 10000.
-        // shareUnit replaces the previous assetUnit denominator to stay
-        // consistent with the share-decimals offset (audit H-1).
-        uint256 shareUnit = 10 ** decimals();
-        uint256 fee = (alpha * totalSupply() * performanceFee) / (shareUnit * 10000);
+        // Compute the number of fee SHARES (not asset units) to mint such that
+        // (feeShares / (totalSupply + feeShares)) * nav = 20% of alpha.
+        //
+        //   feeAsset       = alpha * totalSupply() * performanceFee / (shareUnit * 10000)
+        //   feeShares      = feeAsset * shareUnit / nav
+        //                  = alpha * totalSupply() * performanceFee / (nav * 10000)
+        //
+        // shareUnit cancels because feeAsset scales with totalSupply()/shareUnit
+        // and feeShares scales back with shareUnit/nav.
+        //
+        // Equivalently: `feeShares / (totalSupply + feeShares) = perfFee%`
+        // at the new NAV. This is the standard OpenZeppelin "fee share"
+        // pattern (https://docs.openzeppelin.com/contracts/5.x/erc4626#fees).
+        uint256 feeShares = (alpha * totalSupply() * performanceFee) / (nav * 10000);
 
-        if (fee > 0) {
-            performanceFeeAccrued += fee;
-            emit PerformanceFeeAccrued(fee, lastNavPerShare, nav);
+        if (feeShares > 0) {
+            address recipient = feeRecipient;
+            // Fee recipient shares are excluded from `supply` for the
+            // purpose of the next fee calculation because the next call is
+            // gated through deposit/withdraw: the depositor mints at the
+            // post-fee NAV, so the new fee captures only against the
+            // pre-deposit supply. Including fee-shares in the denominator is
+            // mathematically fine; the design is that the fee is bounded
+            // to the supply-outstanding at the time of the alpha being earned.
+            _mint(recipient, feeShares);
+
+            // For off-chain monitoring / dApp trust panel render: emit the
+            // asset-equivalent fee and the post-fee NAV. `feeAsset` is what
+            // the shares are worth at `nav` (matching the legacy field that
+            // `performanceFeeAccrued` used to track).
+            uint256 shareUnit = 10 ** decimals();
+            uint256 feeAsset = (feeShares * nav) / shareUnit;
+            emit FeeSharesMinted(recipient, feeShares, feeAsset, nav);
         }
 
         highWaterMark = nav;
         lastNavPerShare = nav;
     }
 
+    /// @notice Redeem ALL of the fee recipient's accrued fee shares back to
+    ///         underlying. Replaces the legacy `claimFees()` that paid out
+    ///         the `performanceFeeAccrued` pool; under the new design, the
+    ///         fee is in shares, so the natural way to "take the fee as cash"
+    ///         is to redeem those shares.
+    ///
+    ///         `feeRecipient` may also choose to NOT call this function and
+    ///         instead keep the shares as a passive claim against vault
+    ///         underlying (their share value tracks the vault going forward).
     function claimFees() external nonReentrant returns (uint256 claimed) {
-        claimed = performanceFeeAccrued;
-        require(claimed > 0, "No fees to claim");
-        performanceFeeAccrued = 0;
+        uint256 feeShares = balanceOf(feeRecipient);
+        require(feeShares > 0, "No fees to claim");
 
-        address recipient = feeRecipient;
-        if (recipient.code.length > 0) {
-            IERC20(asset()).forceApprove(recipient, claimed);
-            IFeeDistributor(recipient).accumulate(address(this), claimed);
-        } else {
-            IERC20(asset()).safeTransfer(recipient, claimed);
+        // Compute the redemption value out-of-band so we can both burn the
+        // shares AND pay the underlying. Burn first to keep totalSupply in
+        // sync, then pro-rate the underlying by the post-burn denominator.
+        uint256 supply = totalSupply();
+        uint256 balance = IERC20(asset()).balanceOf(address(this));
+        claimed = (feeShares * balance) / supply;
+
+        _burn(feeRecipient, feeShares);
+        if (claimed > 0) {
+            IERC20(asset()).safeTransfer(feeRecipient, claimed);
         }
+        emit PerformanceFeeAccrued(claimed, lastNavPerShare, getNavPerShare());
     }
 
     /// @notice Emitted when the performance-fee recipient is changed. Lets
