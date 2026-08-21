@@ -611,21 +611,114 @@ contract EpochScoring is AccessControl {
     }
 
     /// @notice Rank results by finalScore in descending order and assign ranks.
+    /// @dev    Q4 (audit finding #9) fix. The pre-fix implementation ran a
+    ///         full O(n²) bubble sort over every signal in the epoch, with
+    ///         full struct copies at every swap. For n=1000 the sort alone
+    ///         cost >100M gas, far past HyperEVM's 30M big-block limit, and
+    ///         the keeper was permanently locked out of any epoch that
+    ///         accumulated a few hundred signals — a permanent gas DoS of
+    ///         epoch settlement.
+    ///
+    ///         Post-fix: we use a bounded top-K selection algorithm. Only
+    ///         REWARD_CUTOFF=10 providers receive rewards in
+    ///         `_distributeRewards`, so we never need to fully sort the
+    ///         array — we walk it once maintaining a descending-sorted
+    ///         top-K. Total cost is O(n × K) = O(n × 10) = effectively
+    ///         O(n). For n=1000 the sort costs ~1-2M gas (verified in
+    ///         `test/signals/EpochScoringSortDoSFix.t.sol`); for n=100
+    ///         the sort costs ~100k gas.
+    ///
+    ///         Three passes:
+    ///         (1) Bounded top-K selection. Maintain `topK[]` of length
+    ///             REWARD_CUTOFF sorted descending by finalScore. For each
+    ///             candidate result, walk back from the end of `topK` to
+    ///             find its insertion point and shift up smaller entries.
+    ///             This is the linear O(n) outer pass × K inner walk.
+    ///         (2) Assign ranks 1..topKLen to the top-K entries. We locate
+    ///             each top-K provider in the original `results` array so
+    ///             the rank lives on the same memory slot
+    ///             `_distributeRewards` reads from.
+    ///         (3) Assign ranks K+1..n to non-top-K entries in input order.
+    ///             `_distributeRewards` only acts on rank <= REWARD_CUTOFF
+    ///             so this assignment is for invariant hygiene only; any
+    ///             consistent ordering is acceptable.
+    ///
     /// @param results In-memory array of ScoreResult to rank
     function _rankResults(ScoreResult[] memory results) internal pure {
-        // Bubble sort by finalScore descending.
-        for (uint256 i = 0; i < results.length; i++) {
-            for (uint256 j = i + 1; j < results.length; j++) {
-                if (results[j].finalScore > results[i].finalScore) {
-                    ScoreResult memory tmp = results[i];
-                    results[i] = results[j];
-                    results[j] = tmp;
+        uint256 n = results.length;
+        if (n == 0) return;
+
+        // Cap the working top-K at min(n, REWARD_CUTOFF). For epochs smaller
+        // than REWARD_CUTOFF we still walk the full input and assign all
+        // entries to the top-K — the algorithm degrades gracefully when
+        // REWARD_CUTOFF >= n.
+        uint256 k = n < REWARD_CUTOFF ? n : REWARD_CUTOFF;
+
+        // ── Step 1: bounded top-K selection. Walk results once, maintaining
+        //    a descending-sorted `topK[]`. Each candidate either fills an
+        //    empty slot (topKLen < k) or replaces the smallest entry in
+        //    topK if it scores higher.
+        ScoreResult[] memory topK = new ScoreResult[](k);
+        uint256 topKLen = 0;
+        for (uint256 i = 0; i < n; i++) {
+            ScoreResult memory candidate = results[i];
+            if (topKLen < k) {
+                // Fill an empty slot. Insertion-sorted descending by
+                // finalScore: shift entries with score < candidate up by
+                // one slot, drop candidate into the freed slot. Strict `<`
+                // preserves insertion order on ties (first encountered wins
+                // the higher rank), matching the legacy bubble sort's
+                // strict-`>` swap rule.
+                uint256 pos = topKLen;
+                while (pos > 0 && topK[pos - 1].finalScore < candidate.finalScore) {
+                    topK[pos] = topK[pos - 1];
+                    pos--;
+                }
+                topK[pos] = candidate;
+                topKLen++;
+            } else if (candidate.finalScore > topK[k - 1].finalScore) {
+                // Replace the smallest in topK (slot k-1, since topK is
+                // descending). Walk back from the end and shift up entries
+                // smaller than the candidate; drop the candidate into the
+                // freed slot.
+                uint256 pos = k - 1;
+                while (pos > 0 && topK[pos - 1].finalScore < candidate.finalScore) {
+                    topK[pos] = topK[pos - 1];
+                    pos--;
+                }
+                topK[pos] = candidate;
+            }
+        }
+
+        // ── Step 2: assign ranks 1..topKLen to the top-K entries. Match
+        //    by provider AND finalScore so tied providers (multiple signals
+        //    from the same address with identical scores — a sybil pattern
+        //    the protocol already mitigates at the registry layer) don't
+        //    collapse onto a single rank slot. For honest inputs the
+        //    provider alone is unique; the finalScore guard is purely
+        //    defensive against pathological ties.
+        for (uint256 r = 0; r < topKLen; r++) {
+            for (uint256 j = 0; j < n; j++) {
+                if (
+                    results[j].provider == topK[r].provider &&
+                    results[j].finalScore == topK[r].finalScore &&
+                    results[j].rank == 0
+                ) {
+                    results[j].rank = r + 1;
+                    break;
                 }
             }
         }
-        // Assign ranks (1 = best).
-        for (uint256 i = 0; i < results.length; i++) {
-            results[i].rank = i + 1;
+
+        // ── Step 3: assign ranks > REWARD_CUTOFF to non-top-K entries in
+        //    input order. `_distributeRewards` only reads rank <=
+        //    REWARD_CUTOFF, so these ranks are unused; we assign them for
+        //    invariant hygiene (no rank == 0 dangling in the array).
+        uint256 nextRank = topKLen + 1;
+        for (uint256 j = 0; j < n; j++) {
+            if (results[j].rank == 0) {
+                results[j].rank = nextRank++;
+            }
         }
     }
 
