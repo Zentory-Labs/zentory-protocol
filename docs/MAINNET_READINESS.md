@@ -42,7 +42,7 @@ because these are six systemic problems, not 46 unrelated bugs.
 |---|---|---|---|
 | **CRITICAL: `applyPayout()` has no idempotency** — re-runnable per `signalId` → repeatable slash / unlimited reward mint. | Anyone can drain the reward path or repeatedly slash a provider's bond. | E | 🟢 closed (PR #56, `729d898` — `payoutApplied[signalId]` guard at `EpochScoring.sol:431-432`) |
 | `accuracyCache` defaults to `0`, and **0 is the maximum-slash input** — an unscored signal is indistinguishable from a maximally-wrong one. | A dead scoring oracle silently burns every provider's stake. | E | 🔴 |
-| O(n²) sort + ~10 external calls per signal over an attacker-growable list. | Permanent gas DoS of epoch settlement. | E | 🔴 |
+| O(n²) sort + ~10 external calls per signal over an attacker-growable list. | Permanent gas DoS of epoch settlement. | E | 🟢 closed (Q4 fix — branch `fix/0-a-4-on2-sort`; bounded top-K selection algorithm replaces the bubble sort in `EpochScoring._rankResults`, O(n²)→O(n×K) where K=REWARD_CUTOFF=10. Sort gas for n=1000: ~1.5M (was >100M). Regression test at `contracts/test/signals/EpochScoringSortDoSFix.t.sol` pins the bound. Pagination / per-provider caps remain out-of-scope for this Q-item and require follow-up work.) |
 | Reward payouts **silently never execute** (no ERC-20 allowance is ever granted; revert is swallowed). | Providers get slashed but never paid — the incentive model is inverted in production. | E | 🔴 |
 | A single hot-key EOA sets arbitrary, overwritable, unverified accuracy that drives real payouts. | One key compromise rewrites the entire performance record. | F+E | 🔴 |
 
