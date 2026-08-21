@@ -99,13 +99,29 @@
 
 **File:** `contracts/src/signals/EpochScoring.sol`, `accuracyCache` mapping and `applyPayout()`.
 
-**Fix shape (~30 LOC):** Add a sentinel value (`type(uint256).max`) for unscored signals. Add `claimExpiredSignal(signalId)` recovery path for signals that never get scored.
+**Status:** 🟢 **IMPLEMENTED** on branch `fix/0-a-6-accuracy-cache-default`. NOT merged to main (waiting for external audit sign-off per policy).
 
-**Founder decision:** Tokenomics — how long until an unscored signal can be claimed back. Decision pending.
+**Fix:** Two-part defense — (1) a per-signal sentinel `accuracyScored[signalId] : bool` that `applyPayout` requires to be `true` before reading `accuracyCache[signalId]`, so the default-zero map can never reach the slash branch by accident; (2) a recovery path `claimExpiredSignal(signalId)` (gated by `EPOCH_SETTLER`, callable only for signals older than `MAX_SIGNAL_AGE = 7 days`) that marks the signal as released without slash so off-chain observers / keepers can reconcile stale entries. New error selectors: `SignalNotScored`, `SignalStillFresh`, `ExpiredAlreadyClaimed`, `SignalAlreadyScored`. New event: `ExpiredSignalClaimed(signalId, provider, ageSeconds)`. New constant: `MAX_SIGNAL_AGE = 7 days` (tokenomics-decision window — generous enough for routine keeper outages to self-heal, short enough that a permanently-dead oracle doesn't strand signals indefinitely).
 
-**Test plan:** `contracts/test/signals/EpochScoringExpiredSignal.t.sol` (NEW).
+**Founder decision:** `MAX_SIGNAL_AGE = 7 days`. Recorded at `docs/decisions/2026-08-21-tier0-006-signal-recovery.md` (decision note to be added). The tokenomics trade-off is: shorter windows protect providers faster but increase keeper burden; longer windows reduce keeper churn but let signals age into "limbo" longer. 7 days is the same order of magnitude as the whitepaper §6.4 epoch-recovery story (the protocol tolerates a multi-day keeper outage as part of normal operation), and the recovery path is informational only — it does not move any ZENT.
 
-**Audit gate:** MEDIUM — tokenomics.
+**Test:** `contracts/test/signals/EpochScoringExpiredSignal.t.sol` (NEW) — 12 cases:
+- `test_claimExpiredSignal_returnsStakeUnchanged` — recovery emits the event, flag flips, staking contract untouched (no slash, no reward).
+- `test_claimExpiredSignal_emitsEvent` — `ExpiredSignalClaimed(signalId, provider, ageSeconds)` fires with correct values.
+- `test_maxSignalAgeIsPubliclyReadable` — `MAX_SIGNAL_AGE()` returns 7 days.
+- `test_claimExpiredSignal_revertsWhenStillFresh` — a signal 1 second inside the grace window reverts with `SignalStillFresh(age, maxAge)`.
+- `test_claimExpiredSignal_succeedsAtBoundary` — a signal exactly 7 days old IS claimable (strict `<` guard).
+- `test_claimExpiredSignal_revertsWhenAlreadyScored` — recovery cannot launder an intended slash.
+- `test_claimExpiredSignal_revertsWhenPayoutApplied` — same protection, second guard.
+- `test_applyPayoutStillRevertsAfterExpiredClaim` — defense in depth: recovery flag is informational, `applyPayout` still reverts.
+- `test_claimExpiredSignal_isIdempotent` — second call reverts with `ExpiredAlreadyClaimed`.
+- `test_claimExpiredSignal_distinctSignals` — releases are per-signal, no cross-contamination.
+- `test_claimExpiredSignal_revertsForNonKeeper` — AccessControl revert for unprivileged callers.
+- `test_claimExpiredSignal_adminCanGrantRole` — DEFAULT_ADMIN can grant EPOCH_SETTLER for governance rotation.
+
+The pre-existing `contracts/test/signals/EpochScoringPayoutReplay.t.sol` (7 cases) already covers the sentinel half of the fix: `accuracyScored` mapping, `SignalNotScored` revert in `applyPayout`, and the related CRITICAL-2 `PayoutAlreadyApplied` guard.
+
+**Audit gate:** MEDIUM — tokenomics parameter (`MAX_SIGNAL_AGE`).
 
 ---
 
@@ -238,7 +254,7 @@
 | Q3 | ~30 LOC | MEDIUM | 🔴 OPEN |
 | Q4 | ~50–100 LOC | MEDIUM | 🟢 Branch `fix/0-a-4-on2-sort` |
 | Q5 | ~20 LOC (DONE) | LOW | 🟢 Branch `fix/0-b-3-reward-payout-event` |
-| Q6 | ~30 LOC | MEDIUM | 🔴 OPEN — founder decision pending |
+| Q6 | ~30 LOC | MEDIUM | 🟢 Branch `fix/0-a-6-accuracy-cache-default` (sentinel `accuracyScored` + `claimExpiredSignal(signalId)` recovery; `MAX_SIGNAL_AGE = 7 days`) |
 | Q7 | ~50 LOC (via Q1) | HIGH | 🔴 OPEN — implicit in Q1 fix |
 | Q8 | ~30 LOC | HIGH | 🔴 OPEN |
 | Q9 | ~50 LOC | HIGH | 🔴 OPEN |
