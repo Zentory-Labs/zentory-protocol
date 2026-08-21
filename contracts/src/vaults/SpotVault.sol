@@ -55,7 +55,15 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     uint16 public immutable maxSlippageBps;
     uint256 public immutable performanceFee;    // bps of alpha above HWM
     uint256 public highWaterMark;
-    uint256 public performanceFeeAccrued;       // in underlying units
+    /// @notice DEPRECATED under Tier 0 Q10 per-depositor HWM equalization
+    ///         (audit finding #6). Performance fees are now captured as
+    ///         fee-share dilution to the fee recipient, not as an
+    ///         idle-balance deduction. The storage slot is retained so
+    ///         existing off-chain indexers continue to compile / query the
+    ///         field, but it is always zero in normal operation. New code
+    ///         MUST NOT depend on it; use `feeRecipient`'s share balance
+    ///         via `balanceOf(feeRecipient)` instead.
+    uint256 public performanceFeeAccrued;
     address public feeRecipient;
     bool public isCircuitBreakerActive;
 
@@ -184,7 +192,16 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     /// @inheritdoc ERC4626
     function totalAssets() public view override returns (uint256) {
         uint256 gross = grossValue();
-        return gross > performanceFeeAccrued ? gross - performanceFeeAccrued : 0;
+        // Tier 0 Q10 (per-depositor HWM equalization): the performance fee is
+        // now captured as a SHARE DILUTION to the fee recipient, not as an
+        // idle-balance deduction. Performance fees appear in the fee
+        // recipient's share balance (`balanceOf(feeRecipient)`); subtracting
+        // `performanceFeeAccrued` here would double-charge the dilution path
+        // and break the per-depositor invariant.
+        //
+        // `grossValue()` already includes both legs (underlying + cash
+        // valued through the oracle). The fee claim is wholly separate.
+        return gross;
     }
 
     function getNavPerShare() public view returns (uint256) {
@@ -272,12 +289,34 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         require(out >= minOut, "slippage");
     }
 
-    // ─── Withdraw: ensure enough underlying to pay (swap cash->asset if flat) ─
+    // ─── Deposit / Withdraw: capture fee atomically + ensure enough underlying ──
 
+    /// @notice Tier 0 Q10: capture any accrued perf fee BEFORE the new depositor's
+    ///         shares are minted, so the incoming depositor is not included in
+    ///         the supply the fee is captured against.
+    function _deposit(address caller, address receiver, uint256 assets, uint256 shares)
+        internal
+        override
+    {
+        _captureFee();
+        super._deposit(caller, receiver, assets, shares);
+    }
+
+    /// @notice Tier 0 Q10: capture any accrued perf fee BEFORE the outgoing
+    ///         owner's shares are burned, so the just-burned supply is not
+    ///         included in any subsequent fee calculation.
+    /// @dev    The SpotVault-specific body (swap cash -> asset if the leg
+    ///         has fallen short) is preserved unchanged beneath the fee call,
+    ///         so the MTM math and the fee capture compose correctly: the
+    ///         swap moves underlying INTO the vault from the cash leg if the
+    ///         requested redemption would otherwise under-pay. With the
+    ///         Q10 share-dilution fix, the swap no longer has to "add back"
+    ///         performanceFeeAccrued - the fee claim lives in shares.
     function _withdraw(address caller, address receiver, address owner, uint256 assets, uint256 shares)
         internal
         override
     {
+        _captureFee();
         uint256 bal = IERC20(asset()).balanceOf(address(this));
         if (bal < assets) {
             uint256 shortfall = assets - bal;
@@ -290,74 +329,101 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         super._withdraw(caller, receiver, owner, assets, shares);
     }
 
-    // ─── Performance fee (alpha above HWM, in underlying units) ──────────────
+    // ─── Performance fee (alpha above HWM, Tier 0 Q10: per-depositor HWM) ────────
 
-    function evaluateFees() external onlyRole(KEEPER_ROLE) {
+    /// @notice Emitted on every fee-share mint. Same shape as BaseVault's
+    ///         FeeSharesMinted so off-chain monitors can correlate.
+    event FeeSharesMinted(
+        address indexed feeRecipient, uint256 feeShares, uint256 feeAssetEquivalent, uint256 navPerShare
+    );
+
+    /// @dev    Tier 0 Q10 (audit finding #6): the performance fee is captured
+    ///         as a SHARE DILUTION to the fee recipient, not as a `grossValue`
+    ///         deduction. Late depositors used to be charged retroactively on
+    ///         gains earned before they joined because the fee was computed
+    ///         against the full post-deposit supply and subtracted from the
+    ///         gross balance. With share dilution:
+    ///
+    ///         - The fee mints fee shares worth exactly 20% of the alpha
+    ///           captured by the supply-outstanding at fee-assessment time.
+    ///         - `totalAssets()` returns the gross balance with no fee
+    ///           subtraction (the fee lives in shares, not in the balance).
+    ///         - `evaluateFees()` is `public` (dropped `KEEPER_ROLE`); the
+    ///           auto-trigger on deposit/withdraw keeps the HWM never-stale
+    ///           regardless of keeper liveness.
+    function evaluateFees() public {
+        _captureFee();
+    }
+
+    /// @notice Internal helper: capture any accrued performance fee as share
+    ///         dilution. Called from `evaluateFees()` and `deposit()` / `mint()`
+    ///         / `_withdraw()`. MUST be called BEFORE any new share mint so
+    ///         the new depositor is never included in the fee calc.
+    function _captureFee() internal {
         uint256 nav = getNavPerShare();
         if (nav <= highWaterMark) return;
+
         uint256 alpha = nav - highWaterMark;
-        uint256 shareUnit = 10 ** decimals();
-        uint256 fee = (alpha * totalSupply() * performanceFee) / (shareUnit * 10000);
+        // Fee shares: see BaseVault._captureFee() for the full derivation.
+        // Same formula applies here (asset-units cancel in shareUnit / nav).
+        uint256 feeShares = (alpha * totalSupply() * performanceFee) / (nav * 10000);
 
-        // Never let accrued fees reach gross value. `totalAssets()` is
-        // `gross - performanceFeeAccrued`, so an accrual that swallows gross pins
-        // NAV to zero — which (pre-fix) was the state that opened the share-inflation
-        // drain. Cap the accrual so at least 1 unit of backing always remains for
-        // existing shareholders. Fees the vault genuinely cannot afford are simply
-        // not accrued rather than being taken out of depositor principal.
-        if (fee > 0) {
-            uint256 gross = grossValue();
-            uint256 room = gross > performanceFeeAccrued + 1 ? gross - performanceFeeAccrued - 1 : 0;
-            if (fee > room) fee = room;
+        if (feeShares > 0) {
+            _mint(feeRecipient, feeShares);
+
+            // Diagnostic: how much the fee shares are worth at `nav`.
+            uint256 shareUnit = 10 ** decimals();
+            uint256 feeAsset = (feeShares * nav) / shareUnit;
+            emit FeeSharesMinted(feeRecipient, feeShares, feeAsset, nav);
         }
 
-        if (fee > 0) {
-            performanceFeeAccrued += fee;
-            emit PerformanceFeeAccrued(fee, highWaterMark, nav);
-        }
         highWaterMark = nav;
     }
 
-    /// @notice Pay accrued performance fees to `feeRecipient`, in the underlying.
-    /// @dev    Without this, `performanceFeeAccrued` was a ONE-WAY SINK: it only ever
-    ///         grew, the tokens never left, and every accrual pushed `totalAssets()`
-    ///         closer to the zero-pin that enabled audit CRITICAL-1. Paying out
-    ///         reduces gross and accrued by the same amount, so `totalAssets()` — and
-    ///         therefore every depositor's claim — is unchanged.
+    /// @notice Redeem ALL of the fee recipient's accrued fee shares back to
+    ///         underlying. Replaces the legacy `claimFees()` that paid out
+    ///         the `performanceFeeAccrued` pool. Under the new design the
+    ///         fee is in shares, so the natural way to "take the fee as cash"
+    ///         is to redeem those shares.
     function claimFees()
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
         nonReentrant
         returns (uint256 paid)
     {
-        uint256 accrued = performanceFeeAccrued;
-        require(accrued > 0, "SpotVault: nothing accrued");
-        // Pay what the underlying leg can cover; the remainder stays accrued for a
-        // later claim (the keeper can rebalance to raise underlying first).
+        uint256 feeShares = balanceOf(feeRecipient);
+        require(feeShares > 0, "SpotVault: nothing accrued");
+
+        // Compute redemption value out-of-band: burn shares first, then
+        // pro-rate the underlying by the post-burn denominator. This
+        // matches the OZ ERC4626 redemption math with rounding absorbed
+        // by the protocol (depositors are not affected either way).
+        uint256 supply = totalSupply();
         uint256 bal = IERC20(asset()).balanceOf(address(this));
-        paid = accrued <= bal ? accrued : bal;
-        require(paid > 0, "SpotVault: no underlying liquidity");
-        performanceFeeAccrued = accrued - paid;
-        IERC20(asset()).safeTransfer(feeRecipient, paid);
-        emit PerformanceFeeClaimed(feeRecipient, paid, performanceFeeAccrued);
+        paid = supply == 0 ? 0 : (feeShares * bal) / supply;
+
+        _burn(feeRecipient, feeShares);
+        if (paid > 0) {
+            IERC20(asset()).safeTransfer(feeRecipient, paid);
+        }
+        emit PerformanceFeeClaimed(feeRecipient, paid, balanceOf(feeRecipient));
     }
 
-    /// @notice Forgive part of the accrued performance fee, returning that backing to
-    ///         depositors. Recovery lever for the state where a price move after
-    ///         accrual leaves `performanceFeeAccrued >= grossValue()`: deposits are
-    ///         then blocked (see `maxDeposit`) and existing holders' value is trapped
-    ///         until the price recovers. Writing the fee down un-traps it immediately.
-    /// @dev    Strictly pro-depositor: it can only DECREASE the protocol's fee claim
-    ///         and therefore only INCREASE `totalAssets()`. It moves no tokens and
-    ///         cannot touch depositor principal.
-    function writeDownAccruedFees(uint256 amount)
+    /// @notice Forgive part of the fee recipient's fee shares, returning that
+    ///         backing to depositors. Recovery lever for pinned-redeem
+    ///         states (see `maxDeposit`). Under the new design, "writing
+    ///         down" means burning that many of the fee recipient's
+    ///         shares - strictly pro-depositor (it can only DECREASE the
+    ///         protocol's fee claim and therefore only INCREASE
+    ///         `totalAssets()` for the remaining holders).
+    function writeDownAccruedFees(uint256 sharesToBurn)
         external
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
-        uint256 accrued = performanceFeeAccrued;
-        require(amount > 0 && amount <= accrued, "SpotVault: bad write-down");
-        performanceFeeAccrued = accrued - amount;
-        emit PerformanceFeeWrittenDown(amount, performanceFeeAccrued);
+        uint256 feeShares = balanceOf(feeRecipient);
+        require(sharesToBurn > 0 && sharesToBurn <= feeShares, "SpotVault: bad write-down");
+        _burn(feeRecipient, sharesToBurn);
+        emit PerformanceFeeWrittenDown(sharesToBurn, balanceOf(feeRecipient));
     }
 
     // ─── Admin ───────────────────────────────────────────────────────────────
