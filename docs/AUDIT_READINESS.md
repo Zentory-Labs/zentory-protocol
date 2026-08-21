@@ -356,32 +356,44 @@ inflation variants; JELLY oracle manipulation; CoreWriter async/silent-failure t
   ALSO anchored on-chain by the keeper's per-cycle head-hash self-tx, 2026-06-12;
   signature enhancement still a candidate).
 
-Live suite after fixes: **343 passed / 0 failed / 1 skipped (344)**, engine 47/1.
+Live suite at the 2026-08-21 refreeze: **383 passed / 0 failed / 1 skipped (384 total)**, engine 47/1 (historical 2026-06-12 line: 343/0/1 / 344 total — superseded by §4 below).
 
 ---
 
 ## 4. Test coverage
 
-> **Live run (2026-06-12):** `forge test` against `main` (`d465482`) →
-> **343 passed, 0 failed, 1 skipped** (344 total) across 34 suites, ~19s wall.
-> An actual run, not a static count. The single skip is an intentional gated test.
-> This run includes the #68 capture-scoring formula, the GOV-001 uniform 66%
-> supermajority, and their 14 pinning tests (see `docs/decisions/`).
+> **Live run (2026-08-21):** `forge test` against the frozen `audit/2026-Q3b`
+> refreeze commit (`3585752`) → **383 passed, 0 failed, 1 skipped (384 total)**
+> across 38 suites, ~54s wall. An actual run, not a static count. The single
+> skip is an intentional gated test. This run includes the full M2 Tier 0
+> fix-queue landing — CRITICAL-1 (SpotVault share-inflation drain) +
+> CRITICAL-2 (replayable payouts) (#56), `setFeeRecipient` consolidation
+> (#53), emergency redeem for stale-oracle exit (#65), mark-to-market NAV +
+> leverage cap on `BaseVault.recordTrade` (#59), CI timeouts (#67) + pinned
+> GH Actions (#66), and viem fallback transport for RPC failover (#57).
 
-- **Frozen audit branch:** **`audit/2026-Q3b`** (cut 2026-06-12 from `main` after the
-  decision merges; supersedes `audit/2026-Q3` @ `9dc3ad7`, which predates PRs #40–47).
-  Hand firms this branch — `main` continues to move.
-- **Latest live result:** **343 passed / 0 failed / 1 skipped** (2026-06-12, on `main`).
-- **Static count:** **344 test functions** across 34 test files under `contracts/test/`.
-  To reproduce:
+- **Frozen audit branch:** **`audit/2026-Q3b`** re-frozen at `3585752`
+  (2026-08-21, fast-forward of `main`). Supersedes the prior `4457ff7` freeze
+  (2026-06-12, 343/0/1 / 344 total across 34 suites) and the older `9dc3ad7`
+  freeze (2026-06-08, 327/0/1 / 328 total). Hand firms this branch — `main`
+  continues to move.
+- **Latest live result:** **383 passed / 0 failed / 1 skipped (384 total)**
+  (2026-08-21, on `audit/2026-Q3b @ 3585752`).
+- **Static count:** **384 test functions** across 38 test files under
+  `contracts/test/`. New since the 343/0/1 freeze: `SpotVaultCritical1.t.sol`,
+  `SpotVaultEmergency.t.sol`, `BaseVaultNavAndLeverage.t.sol`, and
+  `EpochScoringPayoutReplay.t.sol` (40 new tests covering the two CRITICAL
+  fixes, the new `setFeeRecipient` path, the emergency-exit redeem path, the
+  mark-to-market NAV / leverage cap on `BaseVault.recordTrade`, and the
+  payout-replay guard). To reproduce:
   ```bash
   cd contracts
   export PATH="$PATH:$HOME/.foundry/bin"
   forge test 2>&1 | tail -4
   ```
-  Actual tail (2026-06-12, on `main` at the freeze):
+  Actual tail (2026-08-21, on `audit/2026-Q3b` at the refreeze):
   ```
-  Ran 34 test suites in 19.21s (113.19s CPU time): 343 tests passed, 0 failed, 1 skipped (344 total tests)
+  Ran 38 test suites in 53.60s (406.72s CPU time): 383 tests passed, 0 failed, 1 skipped (384 total tests)
   ```
 
 **Test directories (`contracts/test/`):**
