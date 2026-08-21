@@ -41,21 +41,21 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
     bytes32 public constant RISK_COUNCIL_ROLE = keccak256("RISK_COUNCIL_ROLE");
 
-    IERC20 public immutable cashAsset;              // e.g. USDC
-    AggregatorV3Interface public immutable oracle;  // underlying/USD
-    uint256 public immutable maxOracleStaleness;    // seconds; reverts if feed older
+    IERC20 public immutable cashAsset; // e.g. USDC
+    AggregatorV3Interface public immutable oracle; // underlying/USD
+    uint256 public immutable maxOracleStaleness; // seconds; reverts if feed older
     ISpotSwapAdapter public swapAdapter;
 
     uint8 internal immutable _assetDec;
     uint8 internal immutable _cashDec;
     uint8 internal immutable _priceDec;
 
-    uint16 public targetWeightBps;              // 0..10000 (last commanded exposure)
+    uint16 public targetWeightBps; // 0..10000 (last commanded exposure)
     uint16 public immutable rebalanceThresholdBps; // dust deadband
     uint16 public immutable maxSlippageBps;
-    uint256 public immutable performanceFee;    // bps of alpha above HWM
+    uint256 public immutable performanceFee; // bps of alpha above HWM
     uint256 public highWaterMark;
-    uint256 public performanceFeeAccrued;       // in underlying units
+    uint256 public performanceFeeAccrued; // in underlying units
     address public feeRecipient;
     bool public isCircuitBreakerActive;
 
@@ -152,8 +152,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     ///         on a bad price — the conservative choice. Operational outages are
     ///         handled by the circuit breaker, not by trusting a dead feed.
     function _oraclePrice() internal view returns (uint256) {
-        (uint80 roundId, int256 answer, , uint256 updatedAt, uint80 answeredInRound) =
-            oracle.latestRoundData();
+        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = oracle.latestRoundData();
         if (answer <= 0) revert InvalidOraclePrice(answer);
         if (answeredInRound < roundId) revert StaleOracle(updatedAt, block.timestamp);
         if (updatedAt == 0 || block.timestamp - updatedAt > maxOracleStaleness) {
@@ -164,7 +163,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
 
     /// @notice Value `cashAmt` (raw cash units) in underlying units.
     function cashToAsset(uint256 cashAmt) public view returns (uint256) {
-        if (cashAmt == 0) return 0;   // fully-long vault needs no oracle
+        if (cashAmt == 0) return 0; // fully-long vault needs no oracle
         uint256 p = _oraclePrice();
         return (cashAmt * (10 ** _assetDec) * (10 ** _priceDec)) / ((10 ** _cashDec) * p);
     }
@@ -258,8 +257,9 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         }
 
         targetWeightBps = targetBps;
-        emit Rebalanced(targetBps, IERC20(asset()).balanceOf(address(this)),
-                        cashAsset.balanceOf(address(this)), getNavPerShare());
+        emit Rebalanced(
+            targetBps, IERC20(asset()).balanceOf(address(this)), cashAsset.balanceOf(address(this)), getNavPerShare()
+        );
     }
 
     function _swap(address tokenIn, address tokenOut, uint256 amountIn, uint256 minOut) internal {
@@ -324,12 +324,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     ///         closer to the zero-pin that enabled audit CRITICAL-1. Paying out
     ///         reduces gross and accrued by the same amount, so `totalAssets()` — and
     ///         therefore every depositor's claim — is unchanged.
-    function claimFees()
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-        nonReentrant
-        returns (uint256 paid)
-    {
+    function claimFees() external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant returns (uint256 paid) {
         uint256 accrued = performanceFeeAccrued;
         require(accrued > 0, "SpotVault: nothing accrued");
         // Pay what the underlying leg can cover; the remainder stays accrued for a
@@ -350,10 +345,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     /// @dev    Strictly pro-depositor: it can only DECREASE the protocol's fee claim
     ///         and therefore only INCREASE `totalAssets()`. It moves no tokens and
     ///         cannot touch depositor principal.
-    function writeDownAccruedFees(uint256 amount)
-        external
-        onlyRole(DEFAULT_ADMIN_ROLE)
-    {
+    function writeDownAccruedFees(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 accrued = performanceFeeAccrued;
         require(amount > 0 && amount <= accrued, "SpotVault: bad write-down");
         performanceFeeAccrued = accrued - amount;
@@ -461,13 +453,7 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         // the vault's available liquidity).
         uint256 haircut = owed > paid ? owed - paid : 0;
         emit EmergencyRedeem(
-            msg.sender,
-            receiver,
-            owner,
-            shares,
-            paid,
-            haircut,
-            shares > 0 ? haircut * supply / shares : 0
+            msg.sender, receiver, owner, shares, paid, haircut, shares > 0 ? haircut * supply / shares : 0
         );
     }
 
@@ -478,5 +464,79 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         uint256 old = emergencyRedeemCooldown;
         emergencyRedeemCooldown = cooldown;
         emit EmergencyRedeemCooldownSet(old, cooldown);
+    }
+
+    /// @notice Admin-override variant of `redeemEmergency`. Lets the risk
+    ///         council burn a victim's shares and pay a designated receiver
+    ///         during a stale-oracle incident — when the victim is unreachable
+    ///         or the victim's UI is down. Closes the Tier-0.A admin-override
+    ///         gap (see `docs/MAINNET_READINESS.md` §0.A, "Oracle going quiet
+    ///         freezes all withdrawals; no fallback, no admin override. Users
+    ///         cannot exit").
+    /// @dev    Same accounting as `redeemEmergency`; same `EmergencyRedeem`
+    ///         event (with `caller = msg.sender`, the admin) so off-chain
+    ///         monitors can distinguish admin-initiated exits from user exits.
+    ///
+    ///         Preserves the per-address MEV cooldown keyed on `owner`:
+    ///           - Admin-initiated calls consume the SAME cooldown clock on
+    ///             `owner` as user-initiated calls would. The admin cannot
+    ///             bypass the cooldown for a victim — every admin call
+    ///             advances `lastEmergencyRedeemAt[owner]` by `cooldown`.
+    ///           - The cooldown gate is per-`owner`, not per-caller. Admin
+    ///             acting for alice does NOT consume bob's cooldown clock.
+    ///           - ERC-4626 allowance semantics are enforced: the admin must
+    ///             hold a sufficient allowance from `owner` for `shares`,
+    ///             OR `owner == msg.sender` (an admin who is also the owner).
+    ///             This is the same check `redeemEmergency` performs.
+    ///           - Circuit-breaker halts the admin path explicitly
+    ///             (`EmergencyBreakerActive`).
+    ///
+    ///         The function does NOT mutate `performanceFeeAccrued`; the
+    ///         protocol's fee claim is computed off this vault's bookkeeping
+    ///         and emergency payouts (user-initiated or admin-initiated) are
+    ///         paid from underlying the protocol already accounts for.
+    function redeemEmergencyFor(address owner, uint256 shares, address receiver)
+        external
+        onlyRole(RISK_COUNCIL_ROLE)
+        nonReentrant
+        returns (uint256 paid)
+    {
+        if (isCircuitBreakerActive) revert EmergencyBreakerActive();
+        require(shares > 0, "SpotVault: zero shares");
+        require(owner != address(0) && receiver != address(0), "SpotVault: zero addr");
+
+        // Cooldown gate — keyed on `owner` so admin-initiated and user-
+        // initiated calls consume the same clock. The admin CANNOT bypass
+        // the cooldown for the victim.
+        uint256 cooldown = emergencyRedeemCooldown;
+        uint256 lastTs = lastEmergencyRedeemAt[owner];
+        if (lastTs != 0 && cooldown != 0) {
+            uint256 nextAllowed = lastTs + cooldown;
+            if (block.timestamp < nextAllowed) revert EmergencyCooldownActive(nextAllowed);
+        }
+        lastEmergencyRedeemAt[owner] = block.timestamp;
+
+        // Allowance semantics — same as the user path. Admin must be approved
+        // by the owner (typical incident-response pattern: a multisig Safe
+        // holds both RISK_COUNCIL_ROLE and an allowance from each depositor).
+        if (owner != msg.sender) {
+            _spendAllowance(owner, msg.sender, shares);
+        }
+
+        // Pay pro-rata underlying. No oracle call — identical to the user path.
+        uint256 supply = totalSupply();
+        uint256 bal = IERC20(asset()).balanceOf(address(this));
+        uint256 owed = supply == 0 ? 0 : (shares * bal) / supply;
+
+        _burn(owner, shares);
+        paid = owed;
+        if (paid > 0) IERC20(asset()).safeTransfer(receiver, paid);
+
+        // Event — `caller = msg.sender` (the admin) so monitors can distinguish
+        // admin-initiated exits from user-initiated exits.
+        uint256 haircut = owed > paid ? owed - paid : 0;
+        emit EmergencyRedeem(
+            msg.sender, receiver, owner, shares, paid, haircut, shares > 0 ? haircut * supply / shares : 0
+        );
     }
 }
