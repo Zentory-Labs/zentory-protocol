@@ -356,32 +356,36 @@ inflation variants; JELLY oracle manipulation; CoreWriter async/silent-failure t
   ALSO anchored on-chain by the keeper's per-cycle head-hash self-tx, 2026-06-12;
   signature enhancement still a candidate).
 
-Live suite after fixes: **343 passed / 0 failed / 1 skipped (344)**, engine 47/1.
+Live suite after fixes: **383 passed / 0 failed / 1 skipped (384)** at `main` @ `3585752` (2026-08-21), engine pytest count per `zentory-engine`.
 
 ---
 
 ## 4. Test coverage
 
-> **Live run (2026-06-12):** `forge test` against `main` (`d465482`) →
-> **343 passed, 0 failed, 1 skipped** (344 total) across 34 suites, ~19s wall.
+> **Live run (2026-08-21):** `forge test` against `main` (`3585752`) →
+> **383 passed, 0 failed, 1 skipped** (384 total) across 38 suites, ~52s wall.
 > An actual run, not a static count. The single skip is an intentional gated test.
-> This run includes the #68 capture-scoring formula, the GOV-001 uniform 66%
-> supermajority, and their 14 pinning tests (see `docs/decisions/`).
+> This run includes the CRITICAL-1 + CRITICAL-2 audit fixes (vault share-inflation
+> drain + replayable payouts, PR #56), the SpotVault emergency exit (PR #65),
+> the `BaseVault` mark-to-market NAV + leverage cap (PR #59), and the
+> `TIER_0_FIX_QUEUE.md` publication to `main` (M2-F11).
 
-- **Frozen audit branch:** **`audit/2026-Q3b`** (cut 2026-06-12 from `main` after the
-  decision merges; supersedes `audit/2026-Q3` @ `9dc3ad7`, which predates PRs #40–47).
-  Hand firms this branch — `main` continues to move.
-- **Latest live result:** **343 passed / 0 failed / 1 skipped** (2026-06-12, on `main`).
-- **Static count:** **344 test functions** across 34 test files under `contracts/test/`.
+- **Frozen audit branch:** **`audit/2026-Q3b`** (last re-frozen 2026-08-21 at
+  `3585752`; supersedes `audit/2026-Q3` @ `9dc3ad7` and the earlier
+  2026-06-12 stamp at `4457ff7`). Hand firms this branch — `main` continues to
+  move. Re-stamp cadence is "at every audit-branch merge" (see `docs/runbooks/audit-refreeze.md` once it ships).
+- **Latest live result:** **383 passed / 0 failed / 1 skipped** (2026-08-21, on
+  `main` at the re-freeze commit `3585752`).
+- **Static count:** **384 test functions** across 38 test files under `contracts/test/`.
   To reproduce:
   ```bash
   cd contracts
   export PATH="$PATH:$HOME/.foundry/bin"
   forge test 2>&1 | tail -4
   ```
-  Actual tail (2026-06-12, on `main` at the freeze):
+  Actual tail (2026-08-21, on `main` at the re-freeze commit `3585752`):
   ```
-  Ran 34 test suites in 19.21s (113.19s CPU time): 343 tests passed, 0 failed, 1 skipped (344 total tests)
+  Ran 38 test suites in 52.21s (498.85s CPU time): 383 tests passed, 0 failed, 1 skipped (384 total tests)
   ```
 
 **Test directories (`contracts/test/`):**
@@ -513,7 +517,7 @@ within budget).
 |---|---|
 | Frozen audit commit | `git rev-parse main` on a frozen `audit/2026-Qx-<firm>` branch |
 | Scope + threat model | `docs/SECURITY_AUDIT_BRIEF.md` (§4 threat model) + §1–§2 above |
-| Existing tests | 33 forge test suites / 327 passing, 0 failing, 1 skipped — live run 2026-06-08 (§4) |
+| Existing tests | 38 forge test suites / 383 passing, 0 failing, 1 skipped — live run 2026-08-21 (§4) |
 | Static analysis history | `docs/reports/slither-2026-04-26.json`, CI slither job |
 | Pentest history | `docs/reports/pentest-2026-04-26.md` |
 | Prior internal audits | `AUDIT_REPORT.md`, `AUDIT_SPEC_CONFORMANCE.md` (workspace root) |
