@@ -97,7 +97,11 @@ contract SpotRebalanceLoopTest is Test {
             100,    // maxSlippageBps (1%)
             0,      // performanceFee off for clarity
             address(this), address(this),
-            1 hours // emergencyRedeemCooldown (1h)
+            1 hours, // emergencyRedeemCooldown (1h)
+            30 minutes, // twapWindow
+            0  // maxOracleDeviationBps (DISABLED — these integration tests exercise
+               // 50% price drops to validate the signed rebalance loop; the Q9
+               // guard is exercised in TwapCheck.t.sol)
         );
         exec = new StrategyExecutor(makeAddr("hyperCore"), governor);
 

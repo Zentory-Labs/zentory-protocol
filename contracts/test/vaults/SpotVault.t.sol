@@ -83,7 +83,11 @@ contract SpotVaultTest is Test {
             100,    // maxSlippageBps (1%)
             0,      // performanceFee (off for clarity)
             address(this), address(this),
-            1 hours // emergencyRedeemCooldown (matches production default)
+            1 hours, // emergencyRedeemCooldown (matches production default)
+            30 minutes, // twapWindow (production default)
+            0  // maxOracleDeviationBps (DISABLED — these tests intentionally use
+               // 50% price drops to test strategy alpha; the Q9 deviation guard is
+               // exercised in test/vaults/TwapCheck.t.sol. Production default is 1000.)
         );
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
@@ -158,7 +162,7 @@ contract SpotVaultTest is Test {
         vm.expectRevert(bytes("zero staleness"));
         new SpotVault(address(wbtc), address(usdc), address(oracle), 0,
             "x", "x", 0, 100, 0, address(this), address(this),
-            1 hours);
+            1 hours, 30 minutes, 1000);
     }
 
     // ─── setFeeRecipient (mainnet fee-consolidation: re-point to the treasury Safe) ──

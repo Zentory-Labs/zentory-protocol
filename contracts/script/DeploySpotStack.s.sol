@@ -59,6 +59,8 @@ contract DeploySpotStack is Script {
         uint16 slipBps   = uint16(vm.envOr("MAX_SLIPPAGE_BPS", uint256(100)));
         uint256 feeBps   = vm.envOr("PERFORMANCE_FEE_BPS", uint256(2000));
         uint256 emergencyCooldown = vm.envOr("EMERGENCY_REDEEM_COOLDOWN", uint256(3600));
+        uint256 twapWindow = vm.envOr("TWAP_WINDOW", uint256(1800));
+        uint256 maxOracleDeviationBps = vm.envOr("MAX_ORACLE_DEVIATION_BPS", uint256(1000));
 
         console2.log("Deployer:        ", deployer);
         console2.log("Router:          ", router);
@@ -78,7 +80,7 @@ contract DeploySpotStack is Script {
         SpotVault vault = new SpotVault(
             underlying, cash, oracle, maxStale,
             name_, symbol_, threshBps, slipBps, feeBps, feeRecip, deployer,
-            emergencyCooldown
+            emergencyCooldown, twapWindow, maxOracleDeviationBps
         );
 
         // ── Wire the production loop ──────────────────────────────────────

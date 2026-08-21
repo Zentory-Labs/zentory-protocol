@@ -68,6 +68,35 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     ///         called" — first call is always allowed.
     mapping(address => uint256) public lastEmergencyRedeemAt;
 
+    // ─── TWAP / deviation guard (Tier-0.A Q9) ──────────────────────────────────
+    /// @notice Time-weighted average price window (seconds). The vault tracks
+    ///         recent on-chain price observations and computes the TWAP over
+    ///         this window. Any new price that deviates by more than
+    ///         `maxOracleDeviationBps` from the TWAP is rejected. Designated
+    ///         `0` disables the guard (incident response uses
+    ///         `setMaxOracleDeviationBps(0)` rather than redeploying).
+    uint256 public immutable twapWindow;
+    /// @notice Maximum permitted deviation (in bps) between the current oracle
+    ///         price and the rolling TWAP. Set to 1000 (10%) for production;
+    ///         0 disables the guard. Settable by admin via
+    ///         `setMaxOracleDeviationBps` for incident response. Default 1000
+    ///         is the same order of magnitude as the documented
+    ///         5%-intra-window-move risk from the audit (`AUDIT_FINDINGS_2026-08-07.md`
+    ///         stale-price window finding).
+    uint256 public maxOracleDeviationBps;
+
+    /// @dev Ring buffer of recent price observations. Stored as a fixed-size
+    ///      array (gas-cheap) with an explicit count + write head. The TWAP
+    ///      is computed across observations within `twapWindow` seconds of
+    ///      `block.timestamp`. Ring size is a power of two for cheap modulo.
+    struct Observation {
+        uint64 timestamp;
+        uint128 price;
+    }
+    Observation[16] private _observations;
+    uint16 private _observationCount;
+    uint16 private _observationHead;
+
     event Rebalanced(uint16 targetBps, uint256 assetLeg, uint256 cashLeg, uint256 navPerShare);
     event PerformanceFeeAccrued(uint256 fee, uint256 navBefore, uint256 navAfter);
     event PerformanceFeeClaimed(address indexed recipient, uint256 paid, uint256 stillAccrued);
@@ -88,6 +117,10 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         uint256 haircutPerShare
     );
     event EmergencyRedeemCooldownSet(uint256 oldCooldown, uint256 newCooldown);
+    event MaxOracleDeviationBpsSet(uint256 oldBps, uint256 newBps);
+    event OracleDeviationRecorded(
+        uint256 currentPrice, uint256 twapPrice, uint256 deviationBps, uint256 maxDeviationBps, uint256 observationCount
+    );
 
     error CircuitBreakerActive();
     error BadWeight();
@@ -95,6 +128,12 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     error InvalidOraclePrice(int256 answer);
     error EmergencyBreakerActive();
     error EmergencyCooldownActive(uint256 nextAllowedAt);
+    /// @notice Emitted when the current oracle price deviates from the rolling
+    ///         TWAP by more than `maxOracleDeviationBps`. This is the
+    ///         Q9 (Tier-0.A stale-price window) guard. Closing this gap
+    ///         prevents adversarial price prints from being priced into NAV
+    ///         while the oracle is "fresh" but the price is suspect.
+    error OracleDeviationTooLarge(uint256 currentPrice, uint256 twapPrice, uint256 maxDeviationBps);
 
     /// @param emergencyRedeemCooldown_ seconds between successive `redeemEmergency`
     ///        calls per `owner` address. Settable later via
@@ -102,6 +141,15 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     ///        is 1 hour (3600) — long enough to deter MEV racing during a stale
     ///        oracle event, short enough that honest users are not inconvenienced
     ///        through a multi-hour outage.
+    /// @param twapWindow_ seconds for the rolling TWAP window. The vault
+    ///        computes the time-weighted average price over this window from
+    ///        on-chain observations. 0 disables the deviation guard entirely
+    ///        (the legacy pre-fix behaviour). Recommended: 1800 (30 min).
+    /// @param maxOracleDeviationBps_ max deviation (bps) between the current
+    ///        oracle price and the rolling TWAP before the vault reverts.
+    ///        0 disables the guard. Settable later via
+    ///        `setMaxOracleDeviationBps` (DEFAULT_ADMIN_ROLE). Recommended:
+    ///        1000 (10%).
     constructor(
         address asset_,
         address cashAsset_,
@@ -114,12 +162,15 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         uint256 performanceFeeBps_,
         address feeRecipient_,
         address admin_,
-        uint256 emergencyRedeemCooldown_
+        uint256 emergencyRedeemCooldown_,
+        uint256 twapWindow_,
+        uint256 maxOracleDeviationBps_
     ) ERC20(name_, symbol_) ERC4626(IERC20(asset_)) {
         require(asset_ != address(0) && cashAsset_ != address(0) && oracle_ != address(0), "zero addr");
         require(feeRecipient_ != address(0) && admin_ != address(0), "zero addr");
         require(rebalanceThresholdBps_ <= 10000 && maxSlippageBps_ <= 10000 && performanceFeeBps_ <= 10000, "bad bps");
         require(maxOracleStaleness_ > 0, "zero staleness");
+        require(maxOracleDeviationBps_ <= 10000, "bad bps");
 
         cashAsset = IERC20(cashAsset_);
         oracle = AggregatorV3Interface(oracle_);
@@ -136,6 +187,9 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
 
         emergencyRedeemCooldown = emergencyRedeemCooldown_;
 
+        twapWindow = twapWindow_;
+        maxOracleDeviationBps = maxOracleDeviationBps_;
+
         _grantRole(DEFAULT_ADMIN_ROLE, admin_);
     }
 
@@ -151,6 +205,16 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     ///         (and thus deposit/withdraw/rebalance) reverts rather than transact
     ///         on a bad price — the conservative choice. Operational outages are
     ///         handled by the circuit breaker, not by trusting a dead feed.
+    /// @dev    Also enforces the TWAP / deviation guard (Tier-0.A Q9): the
+    ///         price is checked against the rolling TWAP over the last
+    ///         `twapWindow` seconds, and if the deviation exceeds
+    ///         `maxOracleDeviationBps`, the vault reverts with
+    ///         `OracleDeviationTooLarge`. Set `maxOracleDeviationBps` to 0
+    ///         to disable the guard (incident response). The staleness check
+    ///         is the FIRST line of defence; the deviation guard is the SECOND.
+    ///         This function is a VIEW — it does NOT write to the observation
+    ///         ring buffer. State-changing entry points call
+    ///         `_recordOracleObservation()` to update the buffer.
     function _oraclePrice() internal view returns (uint256) {
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = oracle.latestRoundData();
         if (answer <= 0) revert InvalidOraclePrice(answer);
@@ -158,7 +222,154 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         if (updatedAt == 0 || block.timestamp - updatedAt > maxOracleStaleness) {
             revert StaleOracle(updatedAt, block.timestamp);
         }
+        uint256 price = uint256(answer);
+        _checkDeviation(price);
+        return price;
+    }
+
+    /// @dev View-only price read used by state-changing entry points AFTER
+    ///      they have already validated the price via `_oraclePrice()`. Reads
+    ///      the oracle (no deviation check, no buffer write) so the caller
+    ///      can record the post-operation observation without re-doing the
+    ///      deviation check.
+    function _oraclePriceView() internal view returns (uint256) {
+        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = oracle.latestRoundData();
+        if (answer <= 0) revert InvalidOraclePrice(answer);
+        if (answeredInRound < roundId) revert StaleOracle(updatedAt, block.timestamp);
+        if (updatedAt == 0 || block.timestamp - updatedAt > maxOracleStaleness) {
+            revert StaleOracle(updatedAt, block.timestamp);
+        }
         return uint256(answer);
+    }
+
+    /// @dev View-only deviation check. Compares `currentPrice` against the
+    ///      rolling TWAP of prior observations (within `twapWindow`) and
+    ///      reverts if the deviation reaches or exceeds `maxOracleDeviationBps`.
+    ///      Does NOT write to the ring buffer — the state-changing entry points
+    ///      call `_recordOracleObservation()` for that.
+    /// @dev    Uses `>=` (not `>`) so the boundary value is rejected: a "max
+    ///      deviation of 10%" means anything ≥ 10% is rejected. The bound
+    ///      itself is the disallowed case, not the allowed one.
+    function _checkDeviation(uint256 currentPrice) internal view {
+        uint256 bound = maxOracleDeviationBps;
+        if (bound == 0) return; // guard disabled
+        uint256 twap = _twap();
+        if (twap == 0) return; // no observations yet; safe (cold-start)
+
+        uint256 deviation;
+        if (currentPrice >= twap) {
+            deviation = ((currentPrice - twap) * 10000) / twap;
+        } else {
+            deviation = ((twap - currentPrice) * 10000) / twap;
+        }
+
+        if (deviation >= bound) {
+            revert OracleDeviationTooLarge(currentPrice, twap, bound);
+        }
+    }
+
+    /// @dev Write-path counterpart to `_checkDeviation`. Records the current
+    ///      price in the ring buffer for the TWAP computation. Must be called
+    ///      from state-changing entry points (deposit, mint, withdraw, redeem,
+    ///      rebalanceTo) before the operation completes. Cold-start: the first
+    ///      observation seeds the TWAP and the deviation is zero by definition.
+    /// @dev    Also emits `OracleDeviationRecorded` so off-chain monitoring can
+    ///      observe the deviation BEFORE the guard fires (the very next
+    ///      observation's deviation is the relevant signal).
+    function _recordOracleObservation(uint256 price) internal {
+        _recordObservation(price);
+
+        // Compute post-write deviation for the monitoring event. The guard
+        // check itself happens in `_oraclePrice()`; this emit lets monitors
+        // correlate price moves vs. the rolling TWAP. Skipping the emit when
+        // the guard is disabled keeps the event volume proportionate to the
+        // guard's actual threat surface.
+        uint256 bound = maxOracleDeviationBps;
+        if (bound == 0) return;
+        uint256 twap = _twap();
+        if (twap == 0) return;
+        uint256 deviation;
+        if (price >= twap) {
+            deviation = ((price - twap) * 10000) / twap;
+        } else {
+            deviation = ((twap - price) * 10000) / twap;
+        }
+        emit OracleDeviationRecorded(price, twap, deviation, bound, _observationCount);
+    }
+
+    /// @dev Append the current price to the ring buffer. Storage-cheap: one
+    ///      SSTORE per observation.
+    function _recordObservation(uint256 price) internal {
+        uint16 head = _observationHead;
+        uint16 idx = head % 16;
+        _observations[idx] = Observation({timestamp: uint64(block.timestamp), price: uint128(price)});
+        unchecked {
+            _observationHead = uint16((head + 1) % 16);
+            if (_observationCount < 16) _observationCount++;
+        }
+    }
+
+    /// @dev Time-weighted average price over the last `twapWindow` seconds.
+    ///      Walks the ring buffer in chronological order (oldest -> newest),
+    ///      accumulating `price * dt` for each segment between consecutive
+    ///      observations. The most recent observation's price extends to
+    ///      `block.timestamp`. Observations outside the window are skipped.
+    ///      Returns 0 if no observations exist (defensive).
+    function _twap() internal view returns (uint256) {
+        uint256 window = twapWindow;
+        if (window == 0) return 0; // guard disabled
+        uint16 n = _observationCount;
+        if (n == 0) return 0;
+
+        // Walk the ring buffer in chronological order. The oldest observation
+        // is at slot (headIdx - count) % 16 (count is bounded to 16).
+        uint256 headIdx = _observationHead;
+        uint256 startIdx = (headIdx + 16 - n) % 16;
+
+        uint256 sumPriceDt;
+        uint256 sumDt;
+        uint256 prevTs;
+        uint256 prevPrice;
+        bool first = true;
+
+        for (uint256 i = 0; i < n; i++) {
+            uint256 idx = (startIdx + i) % 16;
+            Observation memory obs = _observations[idx];
+            uint256 ts = obs.timestamp;
+            uint256 price = obs.price;
+
+            // Skip observations outside the window.
+            if (block.timestamp - ts > window) {
+                continue;
+            }
+
+            if (first) {
+                prevTs = ts;
+                prevPrice = price;
+                first = false;
+            } else {
+                uint256 dt = ts >= prevTs ? ts - prevTs : 0;
+                sumPriceDt += prevPrice * dt;
+                sumDt += dt;
+                prevTs = ts;
+                prevPrice = price;
+            }
+        }
+
+        // Final segment: from the last in-window observation to now.
+        if (!first) {
+            uint256 dt = block.timestamp >= prevTs ? block.timestamp - prevTs : 0;
+            if (dt > 0) {
+                sumPriceDt += prevPrice * dt;
+                sumDt += dt;
+            }
+        }
+
+        if (sumDt == 0) {
+            // Single observation in the window — return its price.
+            return prevPrice;
+        }
+        return sumPriceDt / sumDt;
     }
 
     /// @notice Value `cashAmt` (raw cash units) in underlying units.
@@ -230,7 +441,14 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         if (targetBps > 10000) revert BadWeight();
 
         uint256 tvl = grossValue();
-        if (tvl == 0) { targetWeightBps = targetBps; return; }
+        if (tvl == 0) {
+            // Record the observation even on the empty-vault early-return so the
+            // TWAP is seeded for the next operation. The guard check is a no-op
+            // because the deviation guard fires only when the buffer has content.
+            _recordOracleObservation(_oraclePriceView());
+            targetWeightBps = targetBps;
+            return;
+        }
 
         uint256 desiredAsset = (tvl * targetBps) / 10000;
         uint256 curAsset = IERC20(asset()).balanceOf(address(this));
@@ -238,6 +456,8 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         uint256 diff = desiredAsset > curAsset ? desiredAsset - curAsset : curAsset - desiredAsset;
         // dust deadband: skip tiny rebalances
         if (diff * 10000 < uint256(rebalanceThresholdBps) * tvl) {
+            // Record the observation; the deviation check still runs.
+            _recordOracleObservation(_oraclePriceView());
             targetWeightBps = targetBps;
             return;
         }
@@ -255,6 +475,10 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
             uint256 minOut = (assetToCash(assetIn) * (10000 - maxSlippageBps)) / 10000;
             _swap(asset(), address(cashAsset), assetIn, minOut);
         }
+
+        // Record the observation AFTER the swap; the deviation check happens
+        // during the swap path (assetToCash -> _oraclePrice -> _checkDeviation).
+        _recordOracleObservation(_oraclePriceView());
 
         targetWeightBps = targetBps;
         emit Rebalanced(
@@ -288,6 +512,22 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
             _swap(address(cashAsset), asset(), cashIn, minOut);
         }
         super._withdraw(caller, receiver, owner, assets, shares);
+        // Record post-withdrawal observation for the next read.
+        if (cashAsset.balanceOf(address(this)) > 0) {
+            _recordOracleObservation(_oraclePriceView());
+        }
+    }
+
+    /// @inheritdoc ERC4626
+    /// @dev    Records an oracle observation so the TWAP / deviation guard (Q9)
+    ///         is seeded for subsequent operations. The deviation check itself
+    ///         already ran during `super.deposit` (which calls `_convertToShares`
+    ///         -> `totalAssets` -> `_oraclePrice`).
+    function _deposit(address caller, address receiver, uint256 assets, uint256 shares) internal override {
+        super._deposit(caller, receiver, assets, shares);
+        if (cashAsset.balanceOf(address(this)) > 0) {
+            _recordOracleObservation(_oraclePriceView());
+        }
     }
 
     // ─── Performance fee (alpha above HWM, in underlying units) ──────────────
@@ -376,6 +616,40 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     function setCircuitBreaker(bool active) external onlyRole(RISK_COUNCIL_ROLE) {
         isCircuitBreakerActive = active;
         emit CircuitBreakerSet(active);
+    }
+
+    /// @notice Re-set the maximum permitted deviation (in bps) between the
+    ///         current oracle price and the rolling TWAP. Settable by the
+    ///         default admin without redeploy; the constructor seeds the
+    ///         recommended default (1000 = 10%). Set to 0 to disable the
+    ///         guard entirely (incident response — the legacy pre-fix
+    ///         behaviour). Set to a higher bound to recover from a
+    ///         legitimate regime shift (e.g. a hyper-volatile market where
+    ///         the 10% default is too tight) without redeploying.
+    /// @dev    The TWAP window is set at construction time and is immutable;
+    ///         the bound is the only knob exposed here. The deviation guard
+    ///         is the SECOND line of defence (MedianOracle's freshness is
+    ///         the first); this setter only widens or narrows the second.
+    function setMaxOracleDeviationBps(uint256 newBps) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(newBps <= 10000, "SpotVault: bad bps");
+        uint256 old = maxOracleDeviationBps;
+        maxOracleDeviationBps = newBps;
+        emit MaxOracleDeviationBpsSet(old, newBps);
+    }
+
+    /// @notice Seed the oracle observation ring buffer with the current price.
+    ///         Keeper-callable; intended for the oracle-pusher service to
+    ///         keep the TWAP ring buffer warm even when no user-initiated
+    ///         deposits/redeems/rebalances are flowing. Cheap: one SSTORE.
+    /// @dev    The first observation seeds the TWAP (no deviation check).
+    ///         Subsequent calls may trip the deviation guard if the new
+    ///         price is too far from the running TWAP — which is the correct
+    ///         behaviour: if the oracle wants to write a price that deviates
+    ///         from the running TWAP, the operation should revert. Use
+    ///         `setMaxOracleDeviationBps(0)` to disable the guard when
+    ///         seeding in a known-volatile window.
+    function seedOracleObservation() external onlyRole(KEEPER_ROLE) {
+        _recordOracleObservation(_oraclePriceView());
     }
 
     // ─── Emergency exit (stale-oracle recovery) ───────────────────────────────

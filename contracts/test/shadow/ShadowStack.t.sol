@@ -41,7 +41,11 @@ contract ShadowStackTest is Test {
             100,    // max slippage bps (1%)
             0,      // perf fee
             address(this), address(this),
-            1 hours // emergencyRedeemCooldown (matches production default)
+            1 hours, // emergencyRedeemCooldown (matches production default)
+            30 minutes, // twapWindow
+            0  // maxOracleDeviationBps (DISABLED — shadow-stack tests use 50%
+               // price drops to test loop behavior; the Q9 guard is exercised
+               // in TwapCheck.t.sol)
         );
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));

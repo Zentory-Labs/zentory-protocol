@@ -186,6 +186,76 @@ cheapest to fix first."
 - **Test:** `contracts/test/vaults/TwapCheck.t.sol` — submit an adversarial
   oracle update that moves price 10% in 1 minute, observe revert.
 - **Audit gate:** high — pricing model change.
+- **Status:** 🟢 **IMPLEMENTED** on branch `fix/0-a-9-stale-price-twap` (Q9 PR;
+  awaiting external-audit sign-off per policy; not yet on `main`).
+- **Fix shape (delivered):** the SpotVault contract now maintains a rolling
+  TWAP over a `twapWindow` (default 30 min, immutable) of recent on-chain
+  price observations (16-slot ring buffer). Every state-changing entry
+  point (`rebalanceTo`, `_deposit`, `_withdraw`, plus a new
+  `seedOracleObservation()` for the oracle-pusher service) records an
+  observation. The view-path `_oraclePrice()` reads the oracle and checks
+  the deviation against the rolling TWAP — if the deviation reaches or
+  exceeds `maxOracleDeviationBps` (default 1000 = 10%), the vault reverts
+  with `OracleDeviationTooLarge(uint256 currentPrice, uint256 twapPrice,
+  uint256 maxDeviationBps)`. The MedianOracle freshness bound
+  (`maxOracleStaleness`) is preserved as the FIRST line of defence; the
+  deviation guard is the SECOND.
+- **Admin override:** `setMaxOracleDeviationBps(uint256 newBps)` is
+  `DEFAULT_ADMIN_ROLE` — settable for incident response without redeploy.
+  Setting to 0 disables the guard (legacy pre-fix behaviour).
+- **Cold-start safety:** the first observation seeds the TWAP (no deviation
+  check fires on the seed). The guard only fires on the SECOND observation
+  that would deviate from the running TWAP. After all observations evict
+  from the window (e.g. after 30 min of no activity), the next observation
+  re-seeds the TWAP — same cold-start semantics.
+- **Error:** `OracleDeviationTooLarge(currentPrice, twapPrice, maxDeviationBps)`
+  (custom error with structured fields for off-chain monitoring).
+- **Events:** `MaxOracleDeviationBpsSet(oldBps, newBps)`;
+  `OracleDeviationRecorded(currentPrice, twapPrice, deviationBps, maxDeviationBps, observationCount)`.
+- **Test cases (one per Q9 sub-assertion):**
+  - `test_deviationGuard_reverts_whenJumpingAboveThreshold` — VL-PROTO-061:
+    an adversarial 10% jump from a seeded TWAP reverts with
+    `OracleDeviationTooLarge` carrying the deviation context.
+  - `test_deviationGuard_acceptance_whenWithinThreshold` — a 1% move from
+    the seeded TWAP is accepted (no revert); the vault computes a fresh
+    NAV per share.
+  - `test_deviationGuard_noObservationsDoesNotPanic` — VL-PROTO-061
+    cold-start: the first observation seeds the TWAP; the guard fires on
+    the SECOND observation that deviates.
+  - `test_deviationGuard_rebalanceBlocked` — the keeper rebalance path
+    (Q9 fix shape: the keeper's `rebalanceTo(uint16)`) is gated by the
+    deviation guard; the vault halts on adversarial price rather than
+    transacting.
+  - `test_deviationGuard_depositBlocked` — the deposit/mint path is gated
+    the same way (depositor cannot extract mispricing by minting cheap
+    shares against a stale-but-fresh answer).
+  - `test_deviationGuard_adminCanSetThreshold` — admin can adjust the
+    threshold (incident response): loosening to 50% accepts the spike.
+  - `test_deviationGuard_adminCanDisable` — admin can set the threshold to
+    0 to disable the guard (legacy pre-fix behaviour).
+  - `test_deviationGuard_nonAdminCannotPause` — non-admin cannot change
+    the threshold (AccessControl).
+  - `test_deviationGuard_windowEvictsOldObservations` — observations older
+    than `twapWindow` are evicted from the TWAP computation; the next
+    observation re-seeds the TWAP.
+  - `test_constructor_acceptsZeroDeviation_disablesGuard` — constructor
+    validates `maxOracleDeviationBps == 0` is accepted (disables guard).
+  - `test_constructorRejectsDeviationAboveBps` — constructor rejects
+    `maxOracleDeviationBps > 10000` (i.e. > 100% deviation).
+  - `test_deviationGuard_stalenessGuardStillFires` — the staleness guard
+    fires FIRST; the deviation guard is the SECOND line of defence.
+  - `test_deviationGuard_e2e_longRebalanceAcceptsWithinThreshold` —
+    end-to-end: a 1% move lets the keeper complete a rebalance to fully
+    long.
+  - `test_deviationGuard_emitsEventOnRevert` — the revert carries the
+    deviation context for off-chain monitoring.
+  - `test_regressionTestPreFixVault_acceptsAdversarialSpike` — explicit
+    regression test: with `maxOracleDeviationBps = 0` (pre-fix state),
+    the adversarial spike is accepted (the bug).
+- **Suite impact:** 15 new tests in `TwapCheck.t.sol` + 2 new fuzz tests in
+  `SpotVaultNavMonotonicity.fuzz.t.sol`. Full Foundry suite passes
+  411/0/1 (was 394/0/1 post-Q8, +17 new tests).
+- **Audit gate:** high — pricing model change at the vault level.
 
 ### Q10 — [0.A.2] No per-depositor high-water-mark equalization
 - **Risk:** late depositors retroactively taxed on gains they never received.

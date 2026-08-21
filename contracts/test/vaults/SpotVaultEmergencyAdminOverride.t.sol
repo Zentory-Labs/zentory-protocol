@@ -148,7 +148,9 @@ contract SpotVaultEmergencyAdminOverrideTest is Test {
             0,
             address(this),
             address(this),
-            1 hours
+            1 hours,
+            30 minutes,
+            1000
         );
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
