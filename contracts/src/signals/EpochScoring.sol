@@ -2,6 +2,8 @@
 pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {SignalTypes} from "./SignalTypes.sol";
 import {ISignalRegistry} from "../interfaces/ISignalRegistry.sol";
 import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
@@ -25,6 +27,8 @@ import {IZENTStaking} from "../interfaces/IZENTStaking.sol";
 ///      direction=-10000, price up 5%  → accuracy ~0     (completely wrong)
 ///      direction=0,      price up 5%  → accuracy ~5000  (neutral/wrong)
 contract EpochScoring is AccessControl {
+    using SafeERC20 for IERC20;
+
     // ─── Roles ─────────────────────────────────────────────
     bytes32 public constant EPOCH_SETTLER = keccak256("EPOCH_SETTLER");
 
@@ -117,6 +121,30 @@ contract EpochScoring is AccessControl {
     ///         rewards (audit CRITICAL-2).
     mapping(bytes32 => bool) public payoutApplied;
 
+    /// @notice ZENT amount that failed to pay out to `provider` during `epochId`,
+    ///         claimable via `claimFailedPayouts(epochId, provider)`. Audit-finding
+    ///         Q5 (Tier 0 — 0.B.3): before this mapping existed, a `reward()` revert
+    ///         on `zentStaking` (e.g. provider un-staked between signal submit and
+    ///         epoch settle) silently swallowed the payout. The try/catch in
+    ///         `_distributeRewards` now records the missed amount here so it can be
+    ///         reconciled post-hoc by the keeper.
+    /// @dev    Keyed (epochId, provider) so each epoch's missed payouts are tracked
+    ///         independently. The outer mapping is `public` (auto-getter takes only
+    ///         `epochId`); the per-(epoch, provider) value is read via the explicit
+    ///         `failedPayoutFor` getter below — Solidity does not auto-generate a
+    ///         two-arg getter for nested public mappings.
+    mapping(uint256 => mapping(address => uint256)) public failedPayouts;
+
+    /// @notice Explicit per-(epoch, provider) accessor for `failedPayouts`.
+    /// @dev    Keepers can iterate epochs off-chain and call this to read the
+    ///         per-provider owed amount without going through `claimFailedPayouts`
+    ///         (which mutates state). The exposed single-arg `failedPayouts(epochId)`
+    ///         auto-getter returns a mapping value, which is not externally
+    ///         callable, so this explicit two-arg getter is necessary.
+    function failedPayoutFor(uint256 epochId, address provider) external view returns (uint256) {
+        return failedPayouts[epochId][provider];
+    }
+
     // ─── Roles ─────────────────────────────────────────────
     address public scoringOracle;
 
@@ -132,6 +160,20 @@ contract EpochScoring is AccessControl {
     event SignalScored(address indexed provider, uint256 accuracy, uint256 finalScore, uint256 rank);
     event ReferenceAssetSet(bytes32 indexed previous, bytes32 indexed current);
     event EpochClosePriceSet(uint256 indexed epochId, bytes32 indexed assetId, int256 price);
+    /// @notice Audit-finding Q5 (Tier 0 — 0.B.3): emitted when a per-provider
+    ///         `zentStaking.reward()` call reverts inside `_distributeRewards`.
+    ///         The provider's payout for that epoch is then recorded in
+    ///         `failedPayouts[epochId][provider]` and can be claimed later via
+    ///         `claimFailedPayouts`. `reason` is the raw revert payload — Solidity
+    ///         does not decode custom errors across external calls, so we surface
+    ///         the bytes for off-chain indexing.
+    event RewardPayoutFailed(address indexed provider, uint256 indexed epochId, uint256 amount, bytes reason);
+    /// @notice Emitted when `claimFailedPayouts` successfully transfers the
+    ///         previously-failed payout to the provider.
+    event FailedPayoutClaimed(uint256 indexed epochId, address indexed provider, uint256 amount);
+    /// @notice Emitted when `fundRewardPool` pulls ZENT into this contract so
+    ///         future `claimFailedPayouts` calls have liquidity to transfer.
+    event RewardPoolFunded(address indexed from, uint256 amount);
 
     // ─── Errors ─────────────────────────────────────────────
     error EpochNotReady();
@@ -145,6 +187,18 @@ contract EpochScoring is AccessControl {
     /// @dev Refuses to settle a signal the scoring oracle never scored (would
     ///      otherwise be treated as accuracy 0 == maximum slash).
     error SignalNotScored(bytes32 signalId);
+    /// @dev `claimFailedPayouts` was called for an epoch/provider pair with no
+    ///      recorded missed payout, or one that was already claimed (one-shot).
+    error NothingToClaim(uint256 epochId, address provider);
+    /// @dev `claimFailedPayouts` could not transfer the recorded amount because
+    ///      the contract's ZENT balance is insufficient. `fundRewardPool` must
+    ///      be called first. Surfaced as a typed error so the keeper bot can
+    ///      distinguish "no missed payout" from "need liquidity".
+    error InsufficientRewardPool(uint256 requested, uint256 available);
+    /// @dev `fundRewardPool` was called with a positive `amount` but the
+    ///      admin's ZENT allowance to this contract is below that amount.
+    ///      The keeper (or deployer) must approve before re-attempting.
+    error InsufficientAllowance(uint256 requested, uint256 allowance);
 
     // ─── Constructor ────────────────────────────────────────
     constructor(
@@ -313,7 +367,7 @@ contract EpochScoring is AccessControl {
         _rankResults(results);
 
         // Distribute rewards to top-ranked providers.
-        totalRewards = _distributeRewards(results);
+        totalRewards = _distributeRewards(epochId, results);
 
         // Apply payouts for all signals with cached accuracy values.
         _applyPayouts(epochId, startTime, endTime);
@@ -383,9 +437,15 @@ contract EpochScoring is AccessControl {
     ///      submission and epoch settlement. Previously, a single such case
     ///      reverted the entire settleEpoch transaction, bricking the keeper.
     ///      Now we emit a skip event and continue — the epoch still settles,
-    ///      and the missed payout is forfeit to the epoch reward pool budget
-    ///      rather than locking up the cron.
-    function _distributeRewards(ScoreResult[] memory results)
+    ///      and the missed payout is recorded for post-hoc reconciliation.
+    ///
+    ///      Audit Q5 (Tier 0 — 0.B.3): surfaces the previously-silent skip via
+    ///      `RewardPayoutFailed` and writes the missed amount into
+    ///      `failedPayouts[epochId][provider]` so keepers can claim it later.
+    ///      Keeping the `try/catch` rather than letting the revert propagate
+    ///      preserves the M-1 invariant (one bad provider must not brick the
+    ///      cron).
+    function _distributeRewards(uint256 epochId, ScoreResult[] memory results)
         internal
         returns (uint256 totalRewards)
     {
@@ -396,16 +456,61 @@ contract EpochScoring is AccessControl {
                 emit SignalScored(results[i].provider, results[i].accuracy, results[i].finalScore, results[i].rank);
                 try zentStaking.reward(results[i].provider, reward) {
                     totalRewards += reward;
-                } catch {
-                    // Provider has no active stake — skip silently. Emitting
-                    // a separate event would be useful but EpochScoring's
-                    // events are tightly packed and we don't want to add
-                    // surface area pre-audit. Keepers can detect skipped
-                    // payouts by reconciling SignalScored events with
-                    // expected reward sums.
+                } catch (bytes memory reason) {
+                    // Provider has no active stake (un-staked or fully slashed
+                    // between signal submit and epoch settle). Record the
+                    // missed amount so the keeper can reconcile later via
+                    // `claimFailedPayouts`. Stacking on top of any prior
+                    // failure for the same (epochId, provider) is the right
+                    // behavior: each epoch's distribution runs once, so two
+                    // distinct failure paths for the same provider in the
+                    // same epoch should accumulate rather than overwrite.
+                    failedPayouts[epochId][results[i].provider] += reward;
+                    emit RewardPayoutFailed(results[i].provider, epochId, reward, reason);
                 }
             }
         }
+    }
+
+    /// @notice Claim a previously-failed reward payout.
+    /// @param epochId  The epoch the payout was missed in.
+    /// @param provider The provider who should have received the payout.
+    /// @dev Audit-finding Q5 (Tier 0 — 0.B.3). One-shot: reverts with
+    ///      `NothingToClaim` after a successful claim. Requires this contract
+    ///      to hold enough ZENT — call `fundRewardPool` first if not.
+    ///      Permissionless: anyone may trigger the claim (the funds still go
+    ///      to `provider`), so the keeper bot can sweep missed payouts without
+    ///      holding any special role.
+    function claimFailedPayouts(uint256 epochId, address provider) external {
+        uint256 amount = failedPayouts[epochId][provider];
+        if (amount == 0) revert NothingToClaim(epochId, provider);
+        // One-shot: zero BEFORE the transfer so a re-entrant callback (none
+        // here today, but defense-in-depth) cannot double-claim.
+        failedPayouts[epochId][provider] = 0;
+
+        uint256 balance = IERC20(zentToken).balanceOf(address(this));
+        if (balance < amount) revert InsufficientRewardPool(amount, balance);
+        IERC20(zentToken).safeTransfer(provider, amount);
+
+        emit FailedPayoutClaimed(epochId, provider, amount);
+    }
+
+    /// @notice Pull ZENT into this contract so future `claimFailedPayouts`
+    ///         calls have liquidity. Keeper or admin calls this after the
+    ///         admin has approved this contract to spend their ZENT.
+    /// @dev Audit-finding Q5 (Tier 0 — 0.B.3): the on-chain contract holds a
+    ///      ZENT balance specifically so that the catch-block's recorded
+    ///      payouts can be honored out-of-band. Without a funded pool the
+    ///      keeper can detect missed payouts but cannot reconcile them —
+    ///      which defeats the purpose of the fix.
+    ///      Restricted to DEFAULT_ADMIN_ROLE because it pulls admin-owned
+    ///      tokens. Use a multisig / timelock for the admin in production.
+    function fundRewardPool(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (amount == 0) return;
+        uint256 allowance = IERC20(zentToken).allowance(msg.sender, address(this));
+        if (allowance < amount) revert InsufficientAllowance(amount, allowance);
+        IERC20(zentToken).safeTransferFrom(msg.sender, address(this), amount);
+        emit RewardPoolFunded(msg.sender, amount);
     }
 
     // ─── Payout Application ─────────────────────────────────
