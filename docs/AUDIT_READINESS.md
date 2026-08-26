@@ -356,33 +356,70 @@ inflation variants; JELLY oracle manipulation; CoreWriter async/silent-failure t
   ALSO anchored on-chain by the keeper's per-cycle head-hash self-tx, 2026-06-12;
   signature enhancement still a candidate).
 
-Live suite after fixes: **343 passed / 0 failed / 1 skipped (344)**, engine 47/1.
+Live suite after fixes: **383 passed / 0 failed / 1 skipped (384)** at `main` @ `3585752`, re-verified 2026-08-26 on `audit/2026-Q3b` @ `1f83fcbc`; engine pytest count per `zentory-engine`.
 
 ---
 
 ## 4. Test coverage
 
-> **Live run (2026-06-12):** `forge test` against `main` (`d465482`) →
-> **343 passed, 0 failed, 1 skipped** (344 total) across 34 suites, ~19s wall.
+> **Live run (2026-08-21):** `forge test` against `main` (`3585752`) →
+> **383 passed, 0 failed, 1 skipped** (384 total) across 38 suites, ~52s wall.
 > An actual run, not a static count. The single skip is an intentional gated test.
-> This run includes the #68 capture-scoring formula, the GOV-001 uniform 66%
-> supermajority, and their 14 pinning tests (see `docs/decisions/`).
+> This run includes the CRITICAL-1 + CRITICAL-2 audit fixes (vault share-inflation
+> drain + replayable payouts, PR #56), the SpotVault emergency exit (PR #65),
+> the `BaseVault` mark-to-market NAV + leverage cap (PR #59), and the
+> `TIER_0_FIX_QUEUE.md` publication to `main` (M2-F11).
 
-- **Frozen audit branch:** **`audit/2026-Q3b`** (cut 2026-06-12 from `main` after the
-  decision merges; supersedes `audit/2026-Q3` @ `9dc3ad7`, which predates PRs #40–47).
-  Hand firms this branch — `main` continues to move.
-- **Latest live result:** **343 passed / 0 failed / 1 skipped** (2026-06-12, on `main`).
-- **Static count:** **344 test functions** across 34 test files under `contracts/test/`.
+- **Frozen audit branch:** **`audit/2026-Q3b`** (last re-frozen 2026-08-21 at
+  `3585752`; supersedes `audit/2026-Q3` @ `9dc3ad7` and the earlier
+  2026-06-12 stamp at `4457ff7`). Hand firms this branch — `main` continues to
+  move. Re-stamp cadence is "at every audit-branch merge" (see `docs/runbooks/audit-refreeze.md` once it ships).
+- **Latest live result:** **383 passed / 0 failed / 1 skipped** (2026-08-21, on
+  `main` at the re-freeze commit `3585752`).
+- **Static count:** **384 test functions** across 38 test files under `contracts/test/`.
   To reproduce:
   ```bash
   cd contracts
   export PATH="$PATH:$HOME/.foundry/bin"
   forge test 2>&1 | tail -4
   ```
-  Actual tail (2026-06-12, on `main` at the freeze):
+  Actual tail (2026-08-26, on `audit/2026-Q3b` @ the frozen commit `1f83fcbc`,
+  re-run during M5-F5 handoff verification):
   ```
-  Ran 34 test suites in 19.21s (113.19s CPU time): 343 tests passed, 0 failed, 1 skipped (344 total tests)
+  Ran 38 test suites in 47.11s (299.58s CPU time): 383 tests passed, 0 failed, 1 skipped (384 total tests)
   ```
+  Prior tail (2026-08-21, on `main` at the re-freeze commit `3585752`):
+  ```
+  Ran 38 test suites in 52.21s (498.85s CPU time): 383 tests passed, 0 failed, 1 skipped (384 total tests)
+  ```
+
+**Tier 0 remediation ledger (Q1–Q17) — stamped 2026-08-26 (M5-F5).**
+One dated row per queue item; status vocabulary matches
+[`docs/security/TIER_0_FIX_QUEUE.md`](./security/TIER_0_FIX_QUEUE.md):
+`staged` = implemented + regression suite green + open PR awaiting the per-Q
+audit gate; `verified` = control already in place, no code change required;
+`open` / `in-progress` = not code-complete. Nothing is marked closed until it
+is merged to `main` with auditor sign-off.
+
+| Q-item | Finding | Status as of 2026-08-26 | Evidence (PR · branch · regression suite) |
+|---|---|---|---|
+| Q1 | 2026-08-26 · governance decay (`totalVeSupply` ratchet) | open — founder tokenomics decision pending (Option A checkpointed decay vs Option B totalStaked quorum) | — |
+| Q2 | 2026-08-26 · insurance routing (slash black-hole) | staged | PR [#78](https://github.com/Zentory-Labs/zentory-protocol/pull/78) · `fix/0-c-3-insurance-routing` @ `f82b65a` · `SlashRoutedToInsurance.t.sol` |
+| Q3 | 2026-08-26 · accuracy setter role-gating | staged | PR [#68](https://github.com/Zentory-Labs/zentory-protocol/pull/68) · `fix/0-a-3-accuracy-setter-role-gated` @ `c73743e` · `ScoringOracleRoleCheck.t.sol` |
+| Q4 | 2026-08-26 · O(n²) epoch sort gas DoS | staged | PR [#69](https://github.com/Zentory-Labs/zentory-protocol/pull/69) · `fix/0-a-4-on2-sort` @ `de1907e` · `EpochDoS.t.sol` |
+| Q5 | 2026-08-26 · silent reward-payout swallow | staged | PR [#79](https://github.com/Zentory-Labs/zentory-protocol/pull/79) · `fix/0-b-3-reward-payout-event` @ `ab2bb0e` · `RewardPayoutFailure.t.sol` |
+| Q6 | 2026-08-26 · accuracyCache max-slash default | staged | PR [#70](https://github.com/Zentory-Labs/zentory-protocol/pull/70) · `fix/0-a-6-accuracy-cache-default` @ `15a097c` · `ExpiredSignalClaim.t.sol` |
+| Q7 | 2026-08-26 · governor live-state reads | open — founder-gated governance semantics | — |
+| Q8 | 2026-08-26 · admin emergency exit on stale oracle | staged | PR [#71](https://github.com/Zentory-Labs/zentory-protocol/pull/71) · `fix/0-a-8-admin-emergency-exit` @ `7659d15` · `SpotVaultEmergencyAdminOverride.t.sol` |
+| Q9 | 2026-08-26 · stale-price window arbitrage | staged | PR [#77](https://github.com/Zentory-Labs/zentory-protocol/pull/77) · `fix/0-a-9-stale-price-twap` @ `683fa8c` · `TwapCheck.t.sol` |
+| Q10 | 2026-08-26 · per-depositor HWM equalization | staged | PR [#72](https://github.com/Zentory-Labs/zentory-protocol/pull/72) · `fix/0-a-10-hwm-equalization` @ `f974c75` · `PerDepositorHWM.t.sol` |
+| Q11 | 2026-08-26 · z-vaults deprecation decision | staged — decision: deprecate via circuit-breaker pause + PassiveVault | PR [#73](https://github.com/Zentory-Labs/zentory-protocol/pull/73) · `fix/0-a-11-zvaults-deprecation` @ `5a5073b` · z-vaults regression suite on branch |
+| Q12 | 2026-08-26 · backtest vs deployed strategy docs | in-progress — reconciliation written (`339e36b` marketing / `e14cb50` protocol) but not merged to main | `fix/0-f-9-doc-reconciliation` (both repos) |
+| Q13 | 2026-08-26 · fee-split doc reconciliation | in-progress — canonical 50/25/15/10 not yet on all main surfaces | `fix/0-f-9-doc-reconciliation` @ `339e36b` / `e14cb50` |
+| Q14 | 2026-08-26 · day counter vs ledger freshness | open — marketing-site only | — |
+| Q15 | 2026-08-26 · waitlist/subscriber RLS review | verified — RLS lockdown enforced + write-path regression test | zentory-app PR [#284](https://github.com/Zentory-Labs/zentory-app/pull/284) · `supabase/schema.sql` + `2026-08-07_lock_down_rls.sql` · M3-F7 test suite |
+| Q16 | 2026-08-26 · contributor API-key expiry | open — needs `api_keys.expires_at` column + route validation | — |
+| Q17 | 2026-08-26 · tamper-evident ledger verifier enforcement | in-progress — engine-side enforcement + tests green; health-monitor/CI wiring pending | `zentory-engine/ledger_guard.py` · `tests/test_ledger_verifier_enforced.py` |
 
 **Test directories (`contracts/test/`):**
 
@@ -513,7 +550,7 @@ within budget).
 |---|---|
 | Frozen audit commit | `git rev-parse main` on a frozen `audit/2026-Qx-<firm>` branch |
 | Scope + threat model | `docs/SECURITY_AUDIT_BRIEF.md` (§4 threat model) + §1–§2 above |
-| Existing tests | 33 forge test suites / 327 passing, 0 failing, 1 skipped — live run 2026-06-08 (§4) |
+| Existing tests | 38 forge test suites / 383 passing, 0 failing, 1 skipped — live run 2026-08-21 (§4) |
 | Static analysis history | `docs/reports/slither-2026-04-26.json`, CI slither job |
 | Pentest history | `docs/reports/pentest-2026-04-26.md` |
 | Prior internal audits | `AUDIT_REPORT.md`, `AUDIT_SPEC_CONFORMANCE.md` (workspace root) |

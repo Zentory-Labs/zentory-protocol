@@ -17,8 +17,12 @@ Send 1 + 3 + 5 today if you want the most leverage. The others are
 comparison quotes or fallbacks.
 
 **Audit anchor for all firm conversations:** frozen branch **`audit/2026-Q3b`**
-(cut 2026-06-12) — hand firms the branch, not `main`. Readiness package:
+(re-frozen 2026-08-21 at commit `1f83fcbc` = `main` @ `3585752` + the readiness
+re-stamp; verified green at that commit during M5-F5 handoff) — hand firms the
+branch, not `main`. Readiness package:
 [docs/AUDIT_READINESS.md](https://github.com/Zentory-Labs/zentory-protocol/blob/audit/2026-Q3b/docs/AUDIT_READINESS.md).
+Tier 0 remediation queue:
+[docs/security/TIER_0_FIX_QUEUE.md](https://github.com/Zentory-Labs/zentory-protocol/blob/main/docs/security/TIER_0_FIX_QUEUE.md).
 
 ---
 
@@ -51,7 +55,7 @@ comparison quotes or fallbacks.
 > - Readiness package (inventory, threat model, prior findings + dispositions): [docs/AUDIT_READINESS.md](https://github.com/Zentory-Labs/zentory-protocol/blob/audit/2026-Q3b/docs/AUDIT_READINESS.md)
 > - Audit brief: [docs/SECURITY_AUDIT_BRIEF.md](https://github.com/Zentory-Labs/zentory-protocol/blob/audit/2026-Q3b/docs/SECURITY_AUDIT_BRIEF.md)
 > - Internal Slither + manual pentest reports committed, all findings triaged with dispositions
-> - **344 Foundry tests across 34 files — including invariant suites (vault + executor), fuzz suites, a cross-language EIP-712 digest-parity test against our Python signer, and an end-to-end signed spot-rebalance integration test.** Live tail: 343 passed / 0 failed / 1 intentional skip.
+> - **384 Foundry tests across 38 files — including invariant suites (vault + executor), fuzz suites, a cross-language EIP-712 digest-parity test against our Python signer, and an end-to-end signed spot-rebalance integration test.** Live tail at the frozen commit (`1f83fcbc`): 383 passed / 0 failed / 1 intentional skip.
 > - Design-decision records for the two most recent changes (scoring formula, governance supermajority) in `docs/decisions/`
 >
 > The vault loop already runs autonomously on testnet (keeper-signed 4-hourly
@@ -99,8 +103,9 @@ comparison quotes or fallbacks.
 >
 > **What's already done:** Internal pentest + Slither (180 findings, triaged with
 > written dispositions; highs fixed and re-verified), two internal audit rounds, a
-> 2026 exploit-landscape re-scan, and **344 Foundry tests (incl. invariant + fuzz
-> suites and a cross-language EIP-712 digest-parity test)** — live tail 343/0/1.
+> 2026 exploit-landscape re-scan, and **384 Foundry tests across 38 files (incl.
+> invariant + fuzz suites and a cross-language EIP-712 digest-parity test)** —
+> live tail at the frozen commit (`1f83fcbc`) is 383 passed / 0 failed / 1 skip.
 > Full readiness package: [docs/AUDIT_READINESS.md](https://github.com/Zentory-Labs/zentory-protocol/blob/audit/2026-Q3b/docs/AUDIT_READINESS.md)
 >
 > Budget envelope is open up to ~$300k for the right firm + team — we're sourcing comparison quotes from Cantina and one contest provider as well. ToB's report carries the strongest institutional signal for our target LPs, so we'd weight your proposal accordingly.
@@ -261,8 +266,8 @@ comparison quotes or fallbacks.
 
 ---
 
-*Last updated: 2026-06-12 — refreshed to the `audit/2026-Q3b` freeze: 344-test
-suite (was "17 files, no invariant suite" — badly underselling), 29-contract
-inventory incl. the 2026-06 spot surface, honest ~Q1 2027 mainnet gating, the
-drawdown-defense positioning, and `info@zentorylabs.com` (the prior
+*Last updated: 2026-08-26 — refreshed to the 2026-08-21 `audit/2026-Q3b`
+re-freeze @ `1f83fcbc`: 384-test suite across 38 files (was "344 tests, 34
+files" from the 2026-06-12 freeze), Tier 0 remediation queue linked, honest
+mainnet gating, and `info@zentorylabs.com` (the prior
 `edge@zentorylabs.com` did not exist and would have bounced replies).*
