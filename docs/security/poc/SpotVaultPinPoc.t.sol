@@ -58,7 +58,10 @@ contract SpotVaultPinPoc is Test {
             address(wbtc), address(usdc), address(oracle), 1 hours,
             "Zentory BTC Spot Vault", "zBTCs",
             0, 100, 2000, // perf fee 20% (production default)
-            address(this), address(this)
+            address(this), address(this),
+            1 hours, // emergencyRedeemCooldown
+            30 minutes, // twapWindow
+            1000    // maxOracleDeviationBps (10%)
         );
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));

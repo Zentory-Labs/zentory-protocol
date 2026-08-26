@@ -356,7 +356,76 @@ inflation variants; JELLY oracle manipulation; CoreWriter async/silent-failure t
   ALSO anchored on-chain by the keeper's per-cycle head-hash self-tx, 2026-06-12;
   signature enhancement still a candidate).
 
-Live suite after fixes: **343 passed / 0 failed / 1 skipped (344)**, engine 47/1.
+### 3.7 Tier 0 remediation log
+
+Tier 0 audit items as defined in `docs/security/TIER_0_FIX_QUEUE.md`, with
+remediation status. Each closed item carries the PR/branch and the commit
+hash so the auditor can re-verify against an immutable reference.
+
+| Q | Theme | Status | Branch / commit | Notes |
+|---|---|---|---|---|
+| Q1 | `totalVeSupply` ratchet decay | 🔴 OPEN — founder decision (Curve-style) pending | — | Tokenomics-gated; not auto-fixed per `MAINNET_READINESS.md` §0.C. |
+| Q2 | Insurance routing | 🟢 closed | `fix/0-c-3-insurance-routing` (`f82b65a`) | `setInsuranceFund` admin-only, rejects zero, slash routes to insurance. |
+| Q3 | Single hot-key accuracy setter | 🔴 OPEN | — | Requires multisig-migration gate. |
+| Q4 | O(n²) settlement DoS | � closed | `fix/0-a-4-on2-sort` (`de1907e`) | Bounded top-K selection, O(n²)→O(n·K), 6 regression tests. |
+| Q5 | Silent reward payout failure | 🟢 closed | `fix/0-b-3-reward-payout-event` (`ab2bb0e`) | `RewardPayoutFailed` event + `claimFailedPayouts` post-hoc reconciliation. |
+| Q6 | `accuracyCache` default-0 ≡ max-slash | 🟢 closed | `fix/0-a-6-accuracy-cache-default` (`15a097c`) | Sentinel `accuracyScored` + `claimExpiredSignal(signalId)` recovery; `MAX_SIGNAL_AGE = 7 days`. |
+| Q7 | Governor snapshot manipulation | 🔴 OPEN — implicit in Q1 | — | Resolved when Q1 lands (checkpointed ve history enables snapshot reads). |
+| **Q8** | **Admin-override emergency exit (stale oracle)** | **🟢 closed** | **`fix/0-a-8-admin-emergency-exit`** | **`SpotVault.redeemEmergencyFor(address owner, uint256 shares, address receiver)` callable by `RISK_COUNCIL_ROLE`. Per-address MEV cooldown preserved (admin path uses the same `lastEmergencyRedeemAt[owner]` key as user path — admin cannot bypass the cooldown for a victim). Circuit-breaker halts admin path; admin respects ERC-4626 allowance (cannot drain a victim who has revoked). 11 new tests in `contracts/test/vaults/SpotVaultEmergencyAdminOverride.t.sol`.** |
+| **Q9** | **TWAP / deviation check (stale-price window)** | **🟢 closed** | **`fix/0-a-9-stale-price-twap`** | **SpotVault computes a time-weighted average price (TWAP) over a rolling window (`twapWindow`, default 30 min; immutable) of recent on-chain observations and rejects any new price whose deviation from the TWAP exceeds `maxOracleDeviationBps` (default 1000 = 10%; admin-settable). The MedianOracle freshness check (`maxOracleStaleness`) is the FIRST line of defence; the deviation guard is the SECOND. The guard is `setMaxOracleDeviationBps(0)`-disabled for incident response (and for the existing test fixtures that intentionally use 50% price drops to recreate the CRITICAL-1 pin state). 15 new tests in `contracts/test/vaults/TwapCheck.t.sol`; 2 new fuzz tests in `contracts/test/fuzz/SpotVaultNavMonotonicity.fuzz.t.sol`.** |
+| Q10 | Per-depositor HWM equalization | 🔴 OPEN | — | Separate work item (Q10). |
+| Q11 | z-vaults deprecation / live execution | 🔴 OPEN — founder decision | — | Tokenomics-gated. |
+| Q12 | Backtest vs deployed strategy reconciliation | 🔴 OPEN (doc only) | — | Doc-only item. |
+| Q13 | Fee-split reconciliation (50/25/15/10) | � OPEN (doc only) | — | Doc-only item. |
+| Q14 | "Recording live — day N" freshness | 🟡 partial | (zentory-app PR #276) | Staleness gate shipped; full freshness UI owed. |
+| Q15 | Waitlist + subscriber RLS review | 🔴 OPEN | — | Doc/schema item. |
+| Q16 | Contributor API-key expiry | 🔴 OPEN | — | Schema item. |
+| Q17 | Ledger verifier enforcement | 🟡 partial | (zentory-engine PR #17) | `ledger_guard.py` ships; single-leader EIP-712 enforcement still in flight. |
+
+**Q8 deliverable specifics (for the auditor):**
+
+- **File:** `contracts/src/vaults/SpotVault.sol`, function `redeemEmergencyFor`.
+- **Access:** `onlyRole(RISK_COUNCIL_ROLE)` — same role already gated to the
+  4/7 Safe / founder multisig on mainnet. `DEFAULT_ADMIN_ROLE` does NOT have
+  the right (admin powers partitioned across roles).
+- **MEV cooldown (preserved):** admin path uses the SAME
+  `lastEmergencyRedeemAt[owner]` mapping as `redeemEmergency`; every admin
+  call advances `owner`'s cooldown clock identically to a user-initiated
+  call. The cooldown is per-`owner`, not per-caller — admin acting for alice
+  does NOT consume bob's cooldown clock.
+- **Allowance (preserved):** admin must hold sufficient allowance from
+  `owner` for `shares`, mirroring `redeemEmergency` allowance semantics.
+  This prevents the admin from draining a victim who has revoked.
+- **Circuit-breaker (preserved):** `EmergencyBreakerActive` halts the admin
+  path explicitly.
+- **Event:** same `EmergencyRedeem(caller, receiver, owner, shares, paid,
+  haircutAssets, haircutPerShare)` event, with `caller = msg.sender` (the
+  admin). Off-chain monitors can distinguish admin-initiated exits from
+  user-initiated exits by the `caller` field.
+- **Audit gate:** HIGH — admin powers on user funds.
+
+Live suite after Q8 fix: **394 passed / 0 failed / 1 skipped (395)**, was
+383 / 0 / 1 pre-fix (+11 new tests).
+
+**Q9 deliverable specifics (for the auditor):**
+
+- **Files:** `contracts/src/vaults/SpotVault.sol` (new state + functions), `contracts/test/vaults/TwapCheck.t.sol` (15 tests), `contracts/test/fuzz/SpotVaultNavMonotonicity.fuzz.t.sol` (2 fuzz tests).
+- **New state on SpotVault:**
+  - `twapWindow` — immutable seconds for the rolling TWAP window (constructor-set, default 1800).
+  - `maxOracleDeviationBps` — admin-settable; 0 disables the guard (legacy pre-fix behaviour).
+  - `Observation[16]` ring buffer with `_observationHead` + `_observationCount`.
+- **New error:** `OracleDeviationTooLarge(uint256 currentPrice, uint256 twapPrice, uint256 maxDeviationBps)` — emitted with the deviation context for off-chain monitoring.
+- **New events:** `MaxOracleDeviationBpsSet(oldBps, newBps)`, `OracleDeviationRecorded(currentPrice, twapPrice, deviationBps, maxDeviationBps, observationCount)`.
+- **New functions:**
+  - `setMaxOracleDeviationBps(uint256)` — `DEFAULT_ADMIN_ROLE`; settable for incident response.
+  - `seedOracleObservation()` — `KEEPER_ROLE`; for the oracle-pusher service to keep the TWAP ring buffer warm.
+- **View-path preservation:** `_oraclePrice()` remains a pure view (no state writes); the deviation check is `view` and the buffer write happens only from state-changing entry points (`rebalanceTo`, `_deposit`, `_withdraw`, `seedOracleObservation`). The `previewX`/`convertToX` paths still surface the guard's revert for off-chain simulators.
+- **Test fixtures:** the existing `SpotVault.t.sol`, `SpotVaultCritical1.t.sol`, `SpotRebalanceLoop.t.sol`, `ShadowStack.t.sol` use `maxOracleDeviationBps = 0` since they intentionally use 50% price drops to recreate the CRITICAL-1 pin state and exercise the strategy alpha scenario; the guard is independently tested in `TwapCheck.t.sol`.
+- **NAV-per-share monotonicity fuzz (VAL-PROTO-070):** `test_fuzz_navPerShareMonotonic` runs 256 sequences of (price move × deposit attempt) and asserts no existing holder's `previewRedeem` ever decreases. `test_fuzz_depositDoesNotDiluteExisting` asserts that a new deposit cannot dilute the existing holders' NAV.
+- **Audit gate:** HIGH — pricing model change at the vault level.
+
+Live suite after Q9 fix: **411 passed / 0 failed / 1 skipped (412)**, was
+394 / 0 / 1 post-Q8 (+17 new tests, 15 TWAP + 2 fuzz).
 
 ---
 

@@ -114,7 +114,9 @@ contract SpotVaultEmergencyTest is Test {
             100,    // maxSlippageBps (1%)
             0,      // performanceFee off for clarity
             address(this), address(this),
-            1 hours // emergencyRedeemCooldown
+            1 hours, // emergencyRedeemCooldown
+            30 minutes, // twapWindow
+            1000    // maxOracleDeviationBps (10%)
         );
         vault.setSwapAdapter(address(adapter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
