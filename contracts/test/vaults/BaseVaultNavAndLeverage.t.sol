@@ -100,54 +100,67 @@ contract BaseVaultNavAndLeverageTest is Test {
     // Claim 1 — NAV accounting gap
     // ═══════════════════════════════════════════════════════════════════════
 
-    /// @notice Positive PnL must show up in `totalAssets()`.
-    /// Pre-fix: `totalAssets()` returned only the idle balance; the position's
-    /// gain was invisible on-chain. Post-fix: NAV rises by the marked PnL.
-    function test_totalAssetsReflectsOpenPositionGain() public {
+/// @notice Audit Critical-1 fix: `totalAssets()` is settle-able only and does
+    /// NOT include the open position's mark-to-market. The phantom-NAV PoC
+    /// paid out idle-balance from a non-existent position; the fix anchors
+    /// `totalAssets()` to the actually-withdrawable underlying (idle minus
+    /// accrued fees). Mark-driven PnL is exposed through
+    /// `getNavPerShareViewOnly()` for the circuit breaker and keeper dashboards.
+    function test_totalAssetsIsSettleableOnly() public {
         _deposit(vault, alice, 100 * ASSET_UNIT);
 
         // Idle = 100 WBTC. Open a 30 WBTC long at $50,000. Within both caps.
         vm.prank(keeper);
         vault.recordTrade(int8(1), 30 * ASSET_UNIT, 50_000 * 1e8);
 
-        // Push mark to $55,000 (+10%). For a long, MTM (mark-to-market, valued
-        // at the new mark) = size * (mark - entry) / mark = 30 * 5000 / 55000
-        // ≈ 2.727 WBTC. The exact value sits in [2, 3] WBTC.
+        // Push mark to $55,000 (+10%). Under the old code this would have
+        // raised totalAssets by ~2.7 WBTC of phantom NAV. Under the fix,
+        // totalAssets stays pinned to the idle balance.
         vm.prank(keeper);
         vault.updateMarkPrice(55_000 * 1e8);
 
         uint256 idle = asset.balanceOf(address(vault));
         assertEq(idle, 100 * ASSET_UNIT, "idle unchanged by bookkeeping");
 
-        uint256 ta = vault.totalAssets();
-        assertGt(ta, idle, "totalAssets must reflect open position gain (Claim 1)");
+        // totalAssets is now settle-able only: idle minus accrued fees (0 here).
+        assertEq(vault.totalAssets(), idle, "totalAssets = settle-able NAV (phantom-NAV fixed)");
 
-        uint256 mtmAsset = ta - idle;
-        assertGe(mtmAsset, 2 * ASSET_UNIT);
-        assertLe(mtmAsset, 3 * ASSET_UNIT);
+        // View-only NAV (for dashboards / circuit breaker) DOES see the gain.
+        assertGt(
+            vault.getNavPerShareViewOnly(),
+            vault.getNavPerShare(),
+            "view-only NAV reflects MTM; settle-able NAV does not"
+        );
     }
 
-    /// @notice NEGATIVE PnL must subtract from `totalAssets()`. This is the
-    /// load-bearing assertion for Claim 1: pre-fix `totalAssets()` would still
-    /// equal the idle balance because the position was invisible. Post-fix the
-    /// drawdown is reflected, which is what the circuit breaker needs.
-    function test_totalAssetsReflectsOpenPositionLoss() public {
+    /// @notice Negative PnL must NOT push `totalAssets()` below the idle
+    /// balance — that was the phantom-NAV PoC in reverse (a keeper could
+    /// fabricate losses to enable a share-inflation drain on the last
+    /// redeemer). The fix clamps totalAssets at settle-able.
+    function test_totalAssetsDoesNotReflectOpenPositionLoss() public {
         _deposit(vault, alice, 100 * ASSET_UNIT);
 
         vm.prank(keeper);
         vault.recordTrade(int8(1), 30 * ASSET_UNIT, 50_000 * 1e8);
 
         // Mark 50k → 25k (−50%). Long 30 WBTC: MTM = 30 * (25k − 50k) / 25k
-        // = −30 WBTC. NAV = 100 + (−30) = 70 WBTC.
+        // = −30 WBTC. Under the old code this would have dropped totalAssets
+        // to 70 WBTC, enabling the share-inflation drain on the last
+        // redeemer. Under the fix, totalAssets stays at the idle balance.
         vm.prank(keeper);
         vault.updateMarkPrice(25_000 * 1e8);
 
-        assertEq(vault.totalAssets(), 70 * ASSET_UNIT, "negative MTM subtracts from NAV");
+        assertEq(
+            vault.totalAssets(),
+            100 * ASSET_UNIT,
+            "negative MTM cannot drop settle-able NAV below idle (no phantom loss)"
+        );
     }
 
-    /// @notice `getNavPerShare()` must use the MTM-inclusive NAV. This is the
-    /// bit the depositor sees — and the bit the HWM fee keys off of.
-    function test_getNavPerShareReflectsOpenPositionGain() public {
+    /// @notice `getNavPerShare()` (settle-able) does NOT move with MTM; only
+    /// `getNavPerShareViewOnly()` does. This is the load-bearing behavioural
+    /// delta vs. the pre-fix state.
+    function test_getNavPerShareIsSettleableOnly() public {
         _deposit(vault, alice, 100 * ASSET_UNIT);
 
         vm.prank(keeper);
@@ -155,8 +168,12 @@ contract BaseVaultNavAndLeverageTest is Test {
         vm.prank(keeper);
         vault.updateMarkPrice(55_000 * 1e8);
 
-        uint256 nav = vault.getNavPerShare();
-        assertGt(nav, ASSET_UNIT, "NAV per share must rise with MTM gain (Claim 1)");
+        uint256 navSettleable = vault.getNavPerShare();
+        uint256 navViewOnly   = vault.getNavPerShareViewOnly();
+
+        // Settle-able NAV per share is exactly 1 unit (100 underlying / 100 shares).
+        assertEq(navSettleable, ASSET_UNIT, "settle-able NAV per share = 1 unit");
+        assertGt(navViewOnly, navSettleable, "view-only NAV strictly greater");
     }
 
     /// @notice `checkCircuitBreaker()` is permissionless and MUST fire on an
@@ -197,10 +214,12 @@ contract BaseVaultNavAndLeverageTest is Test {
         );
     }
 
-    /// @notice While mark == entry, MTM is 0 and NAV = idle. The first mark
-    /// update is what moves NAV. This is the precise behavioural delta vs.
-    /// the pre-fix state (where NAV was always idle, regardless of mark).
-    function test_totalAssetsIsStableUntilFirstMarkUpdate() public {
+    /// @notice Audit Critical-1 fix: `totalAssets()` does NOT move with MTM at
+    /// all — it is settle-able only. The previous test asserted that the
+    /// first mark update moved NAV; the new contract intentionally decouples
+    /// them. The view-only NAV (used by the circuit breaker and dashboards)
+    /// moves with the mark.
+    function test_totalAssetsIsStableUnderAllMarkUpdates() public {
         _deposit(vault, alice, 100 * ASSET_UNIT);
 
         uint256 beforeTrade = vault.totalAssets();
@@ -208,12 +227,25 @@ contract BaseVaultNavAndLeverageTest is Test {
         vm.prank(keeper);
         vault.recordTrade(int8(1), 30 * ASSET_UNIT, 50_000 * 1e8);
 
+        // Mark == entry → MTM = 0 anyway. totalAssets still equal to idle.
         assertEq(vault.totalAssets(), beforeTrade, "NAV unchanged while mark == entry");
 
         vm.prank(keeper);
         vault.updateMarkPrice(55_000 * 1e8);
 
-        assertGt(vault.totalAssets(), beforeTrade, "first mark update moves NAV up");
+        // Settle-able NAV MUST stay pinned to idle (no phantom MTM).
+        assertEq(
+            vault.totalAssets(),
+            beforeTrade,
+            "settle-able NAV does NOT move on mark update (phantom-NAV fixed)"
+        );
+
+        // View-only NAV DOES move on mark update.
+        assertGt(
+            vault.getNavPerShareViewOnly(),
+            vault.getNavPerShare(),
+            "view-only NAV moves on mark update; settle-able does not"
+        );
     }
 
     /// @notice `updateMarkPrice` is gated by `KEEPER_ROLE`.
