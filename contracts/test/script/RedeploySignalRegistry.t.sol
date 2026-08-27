@@ -50,8 +50,9 @@ contract RedeploySignalRegistryInvariantTest is Test {
         // Pretend the deployer is broadcasting the deployment so DEFAULT_ADMIN_ROLE
         // lands on the deployer (matches the production script where the deployer
         // EOA is msg.sender).
-        vm.prank(deployer);
+        vm.startPrank(deployer);
         registry = new SignalRegistry(address(staking), deployer);
+        vm.stopPrank();
     }
 
     // ─── Constructor invariants ───────────────────────────────────────
