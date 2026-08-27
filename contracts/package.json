@@ -15,5 +15,8 @@
   "license": "ISC",
   "dependencies": {
     "ethers": "^6.16.0"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "^5.1.0"
   }
 }

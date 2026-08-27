@@ -95,6 +95,52 @@ Externally-created **Gnosis Safe** multisig (not a protocol contract) — the ca
 | `EpochScoring` (4-hour epochs) | [`0x659569A6f195698745779E59fef88e3B5Fe0484A`](https://testnet.purrsec.com/address/0x659569A6f195698745779E59fef88e3B5Fe0484A) | [`contracts/src/signals/EpochScoring.sol`](contracts/src/signals/EpochScoring.sol) |
 | `SubscriptionVault` (ZENT-paid signal subs) | [`0xb053b9a1A82D57B2BEa7cC4a472924Fb6926933E`](https://testnet.purrsec.com/address/0xb053b9a1A82D57B2BEa7cC4a472924Fb6926933E) | [`contracts/src/signals/SubscriptionVault.sol`](contracts/src/signals/SubscriptionVault.sol) |
 
+> **M2-F13 — Redeploy plan staged, awaiting founder broadcast.** The current
+> SignalRegistry `0xA71cfdA…` is the 2026-06-04 redeploy from `RedeploySignalStack.s.sol`
+> and is wired correctly, but its bytecode is **8,858 B** while the current source
+> compiles to **10,487 B** (Δ = 1,629 B of un-shipped source: `_hashTypedDataV4`
+> override, `getEpochSignalProvider` / `getEpochSignalReturn`, `transferAdmin`,
+> `MAX_BATCH_SIZE` guard, etc.). A parallel stale deployment
+> [`0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c`](https://testnet.purrsec.com/address/0x7745B22B2C73E422154Fcd1ECD283765c4BF6e8c)
+> (5,560 B, referenced in `services.yaml`) lacks `getSignalCount`, `SCORING_ORACLE`,
+> and `signalIds(uint256)` selectors entirely — view calls revert on it.
+>
+> Single-contract redeploy script is at
+> [`contracts/script/RedeploySignalRegistry.s.sol`](contracts/script/RedeploySignalRegistry.s.sol)
+> (PR-branch `chore/m2-f13-redeploy-signal-registry-script`, dry-run verified:
+> 1 CREATE + 3 CALLs, gas ≈ 2.85 M, predicted new address = `0x8341FcB21884C0e619c60881231C41f7952E9c25`
+> for the anvil test deployer — actual address depends on the founder's nonce).
+> Companion regression tests at
+> [`contracts/test/script/RedeploySignalRegistry.t.sol`](contracts/test/script/RedeploySignalRegistry.t.sol)
+> (13 tests, all passing).
+>
+> **Founder runbook** (after PR lands):
+> ```powershell
+> # 1. Ensure contracts/.env has the LIVE staking address (not the stale 0x4E2e7Fd3):
+> #    STAKING_ADDRESS=0x93A14D1c60e054038980965CF3CAa50CEB848de9
+> #    EPOCH_SCORING_ADDRESS=0x659569A6f195698745779E59fef88e3B5Fe0484A
+> #    ZENT_ADDRESS=0x271cd48c1297CacCD810c7B1BCD904f459df7117
+> #    PRIVATE_KEY=<your testnet deployer key>
+> #    EXPECTED_CHAIN_ID=998
+> cd contracts
+> forge script script/RedeploySignalRegistry.s.sol --rpc-url https://rpc.hyperliquid-testnet.xyz/evm --broadcast
+>
+> # 2. Copy the printed SIGNAL_REGISTRY=0x… and re-point:
+> #    - zentory-app/lib/contracts.ts: addresses.SignalRegistry
+> #    - zentory-engine .env (Railway): SIGNAL_REGISTRY_ADDRESS
+> #    - engine indexer: reset last_block in indexer_state to the deploy block
+>
+> # 3. Verify: cast call <NEW_REG> "getSignalCount()(uint256)" --rpc-url <998>
+> #    (must return a real value; old 0xA71cfdA still works but will not match new source)
+> ```
+>
+> **Epoch realignment caveat:** the new SignalRegistry starts at
+> `currentEpochId = 1` (source-fixed genesis), while the existing EpochScoring is
+> at ~410. Both advance in lockstep via `settleEpoch()` (every 4h) — they
+> realign within ~410 settleEpoch calls (~68 days). Signals submitted during
+> the catch-up window land in low epochIds on the new registry but are
+> otherwise unaffected.
+
 ## Shadow Stack — SpotVault research vault (testnet only)
 
 Oracle-valued ERC-4626 vault that rebalances long ⇄ flat on signed signals, with a self-contained testnet swap venue so the full loop (deposit → signal rebalance → NAV moves with PnL → redeem) runs end-to-end without a real Hyperliquid spot integration. **None of these ship to mainnet** — production uses real USDC + a CoreWriter spot adapter behind an external audit.
