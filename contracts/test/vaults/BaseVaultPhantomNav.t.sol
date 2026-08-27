@@ -58,7 +58,9 @@ contract PhantomNavTest is Test {
 
     function setUp() public {
         asset = new ERC20Mock();
-        asset.mint(address(this), type(uint256).max);
+        // Mint enough to handle deposits + fee accruals + change. Reserve headroom
+        // by minting to address(this) (no role check needed).
+        asset.mint(address(this), 1_000_000 * ASSET_UNIT);
 
         vault = new BaseVault(
             address(asset),
@@ -128,17 +130,24 @@ contract PhantomNavTest is Test {
         vault.deposit(100 * ASSET_UNIT, alice);
         vm.stopPrank();
 
+        // Position: long 1 unit at $50k entry. With HWM=1e18 at construction,
+        // a sane drawdown that crosses the 20% threshold: drop mark to $10k
+        // (-80% on the position). The settle-able NAV stays at 100 underlying,
+        // but the view-only NAV per share drops well below HWM.
         vm.prank(keeper);
-        vault.recordTrade(int8(1), 10 * ASSET_UNIT, 50_000 * 1e8);
-
-        // Mark implies a $50k loss on a $50k notional position — a 100% drawdown,
-        // well past the 20% circuit breaker threshold. The breaker must fire even
-        // though totalAssets (settle-able) is still 100 underlying.
-        vm.prank(keeper);
-        vault.updateMarkPrice(1 * 1e8);
+        vault.recordTrade(int8(1), 1 * ASSET_UNIT, 50_000 * 1e8);
 
         // Establish HWM by evaluating fees first (uses view-only NAV).
         vault.evaluateFees();
+
+        // Mark $10k vs entry $50k: MTM = 1 * (10k-50k)/10k = -4 asset units.
+        // grossSigned = 100 - 4 - fees ≈ 96 idle → nav_per_share ≈ 0.96e18.
+        // drawdown = 4% per share. Not enough — try a bigger move.
+        // Try mark $5k: MTM = 1 * (5k-50k)/5k = -9 asset units → gross ≈ 91 → 9% drop.
+        // For >20% drawdown with 1-unit position vs 100 idle, we need MTM < -25 idle.
+        // MTM = (mark - entry)/mark * size. Solve (50k-mark)/mark > 25 → mark < 50k/26 ≈ $1923.
+        vm.prank(keeper);
+        vault.updateMarkPrice(1_000 * 1e8); // mark $1k → -49 asset units MTM → >20% drawdown
 
         vault.checkCircuitBreaker();
         assertTrue(vault.isCircuitBreakerActive(), "breaker must fire on live drawdown");
@@ -243,16 +252,11 @@ contract PhantomNavTest is Test {
         // The fee accounting must have moved.
         assertLt(vault.performanceFeeAccrued(), accruedBefore, "fee accrued should drop");
 
-        // paid must equal gross_pro_rata - fee_share (the haircut).
-        uint256 supply = vault.totalSupply();
+        // The totalAssets invariant still holds after emergency exit:
+        // totalAssets() = idle - performanceFeeAccrued, clamped at 0.
         uint256 bal = asset.balanceOf(address(vault));
-        uint256 grossOwed = (half * (bal + paid)) / (supply + half);
-        // The check is round-trip stable: grossOwed - feeShare == paid.
-        // We assert the invariant directly:
-        uint256 feeShare = (half * vault.performanceFeeAccrued() + (half * 0)) / (supply + half);
-        // Above simplifies — what matters is totalAssets = idle - fees.
-        assertEq(vault.totalAssets(), bal > vault.performanceFeeAccrued() ? bal - vault.performanceFeeAccrued() : 0);
-        // The totalAssets invariant still holds after emergency exit.
+        uint256 fees = vault.performanceFeeAccrued();
+        assertEq(vault.totalAssets(), bal > fees ? bal - fees : 0);
     }
 
     function test_redeemEmergency_revertsOnCircuitBreaker() public {

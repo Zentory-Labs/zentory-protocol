@@ -133,7 +133,11 @@ contract HyperCoreAdapter is AccessControl {
         uint64 sz = szHuman; // keep raw units as provided
 
         if (limitPx == 0) revert PriceTooSmall(limitPx);
-        if (sz == 0) revert SizeTooSmall(sz);
+        // A reduce-only close may carry sz=0 to mark the nonce without
+        // submitting a real order (audit H-3 hardening: the executor allows
+        // direction=2 with size=0 as a no-op close). Reject zero size only
+        // for non-reduce-only submissions, which represent real orders.
+        if (sz == 0 && !reduceOnly) revert SizeTooSmall(sz);
 
         cloid_ = cloid;
 
