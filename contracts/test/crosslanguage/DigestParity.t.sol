@@ -91,6 +91,7 @@ contract DigestParityTest is Test {
     function test_digestParity_soliditySignVerify() external {
         address vault = address(0x1234567890123456789012345678901234567890);
         uint256 nonce = 1; // Avoid collision with printVector (nonce 0)
+        uint256 validExpiry = block.timestamp + 1 hours; // within MAX_SIGNAL_EXPIRY cap (audit H-3.2)
 
         bytes32 domainSep = keccak256(abi.encode(
             keccak256("EIP712Domain(uint256 chainId,address executor)"),
@@ -105,7 +106,7 @@ contract DigestParityTest is Test {
             uint256(1_000_000),
             uint64(65_000_00000),
             nonce,
-            type(uint256).max
+            validExpiry
         ));
 
         bytes32 digest = keccak256(abi.encodePacked(
@@ -118,7 +119,7 @@ contract DigestParityTest is Test {
         bytes memory sig = abi.encodePacked(r, s, bytes1(v));
 
         executor.grantRole(executor.KEEPER_ROLE(), address(this));
-        executor.executeSignal(vault, 1, 1_000_000, 65_000_00000, nonce, type(uint256).max, sig);
+        executor.executeSignal(vault, 1, 1_000_000, 65_000_00000, nonce, validExpiry, sig);
 
         assertEq(executor.nonces(vault), 1, "nonce should be consumed");
         console2.log("Digest parity confirmed: Solidity sign + on-chain verify SUCCESS");

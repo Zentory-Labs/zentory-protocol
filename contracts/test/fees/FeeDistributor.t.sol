@@ -145,10 +145,10 @@ contract FeeDistributorTest is Test {
         vm.expectEmit();
         emit IFeeDistributor.FeesDistributed(
             fee * 50 / 100, // buyback stays in distributor
-            fee * 10 / 100, // buyback dust (rounding leftover kept in distributor) — #9
+            0,              // dust — fee=10M is divisible by 100, no rounding remainder
             fee * 10 / 100, // gpEngineAmount (ops/research engine) — finding #9
             fee * 15 / 100, // insurance
-            fee * 25 / 100 // treasuryAmount → Protocol Treasury — finding #9
+            fee * 25 / 100  // treasuryAmount → Protocol Treasury — finding #9
         );
         distributor.distribute(vault);
     }
