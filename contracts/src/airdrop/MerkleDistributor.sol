@@ -56,6 +56,10 @@ contract MerkleDistributor is AccessControl {
     error ClaimWindowClosed();
     error SweepBeforeDeadline();
     error InvalidConfig();
+    /// @notice Recipient address passed to sweep() was zero. Surfaced as a typed
+    ///         error so off-chain monitoring / tenderly can match the exact reason
+    ///         (matches the audit AIRDROP-1 hygiene recommendation).
+    error ZeroRecipient();
 
     // ─── Constructor ────────────────────────────────────────────────────
     /// @param token_         ZENT token contract
@@ -134,7 +138,7 @@ contract MerkleDistributor is AccessControl {
     ///         claim deadline. Only callable by SWEEPER_ROLE — should
     ///         be the protocol multisig.
     function sweep(address recipient) external onlyRole(SWEEPER_ROLE) {
-        require(recipient != address(0), "MerkleDistributor: zero recipient"); // audit AIRDROP-1
+        if (recipient == address(0)) revert ZeroRecipient(); // audit AIRDROP-1 (typed)
         if (block.timestamp <= claimDeadline) revert SweepBeforeDeadline();
         uint256 balance = token.balanceOf(address(this));
         if (balance == 0) return;

@@ -107,12 +107,31 @@ contract FeeDistributor is AccessControl, IFeeDistributor {
         uint256 insuranceAmount = accumulated * 15 / 100;
         uint256 gpAmount = accumulated * 10 / 100;
 
-        pools[POOL_BUYBACK] += buyback;
+        // Dust-routing fix (audit H-3 follow-up): integer division of
+        // `accumulated / 100` over four buckets can leave 1–3 wei stranded
+        // in this contract for amounts not divisible by 100. We never read
+        // contract balances for accounting — `pools[*]` is the source of
+        // truth — so unallocated tokens would sit forever. Sweep any
+        // rounding remainder into the buyback pool where the next
+        // `triggerBuyback` will use it (or the next epoch's accounting
+        // will reconcile it via the next distribute call). This is
+        // strictly value-additive: the buyback pool's accounting now
+        // matches the contract's actual asset balance modulo any
+        // legitimately received direct transfers.
+        uint256 allocated = buyback + treasuryAmount + insuranceAmount + gpAmount;
+        uint256 dust = accumulated - allocated;
+
+        pools[POOL_BUYBACK] += buyback + dust;
         pools[POOL_GP_ENGINE] += gpAmount;
         pools[POOL_INSURANCE] += insuranceAmount;
 
-        // Send non-buyback portions to their destinations immediately.
-        emit FeesDistributed(buyback, gpAmount, insuranceAmount, treasuryAmount);
+        // Emit BEFORE the external transfers (CEI) so monitoring sees the
+        // allocation even if a downstream transfer reverts. The dust value
+        // is emitted as its own field so off-chain accounting can attribute
+        // the buyback pool's increment to a rounding remainder vs an
+        // intentional 50% allocation — and so the emitted buybackAmount
+        // matches the field incremented on `pools[POOL_BUYBACK]`.
+        emit FeesDistributed(buyback, dust, gpAmount, insuranceAmount, treasuryAmount);
 
         if (gpAmount > 0) asset.safeTransfer(gpEngine, gpAmount);
         if (insuranceAmount > 0) asset.safeTransfer(insurance, insuranceAmount);

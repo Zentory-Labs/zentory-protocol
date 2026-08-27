@@ -149,6 +149,15 @@ contract StrategyExecutor is AccessControl {
     error ZeroSize();
     error InvalidWeight(uint16 weight);
     error UnauthorizedKeeper(address account);
+    /// @notice Signal expiry must be within MAX_SIGNAL_EXPIRY of `block.timestamp`.
+    ///         Audit H-3 hardening: unbounded expiry let a once-signed signal
+    ///         sit in storage forever, replayable if the nonce ever collided
+    ///         with a future, valid signal from the same signer.
+    error ExpiryTooFar(uint256 expiry, uint256 maxExpiry);
+    /// @notice Maximum signal expiry window (7 days). Matches
+    ///         SignalRegistry.MAX_EXPIRY so the off-chain engine's upper bound
+    ///         is symmetric between the two submission paths.
+    uint256 public constant MAX_SIGNAL_EXPIRY = 7 days;
 
     // ─── Modifiers ────────────────────────────────────────────────────────
 
@@ -222,12 +231,25 @@ contract StrategyExecutor is AccessControl {
         returns (bool)
     {
         if (size == 0) {
-            emit SignalRejected(vault, "zero size");
-            revert ZeroSize();
+            // Direction 2 (close) is allowed with size=0 — a no-op close that
+            // simply marks a nonce. Audit H-3 hardening: previously rejected
+            // outright, blocking keepers from recording a "close" signal at
+            // all when the position was already flat.
+            if (direction != 2) {
+                emit SignalRejected(vault, "zero size");
+                revert ZeroSize();
+            }
         }
         if (block.timestamp > expiry) {
             emit SignalRejected(vault, "signal expired");
             revert SignalExpired(expiry, block.timestamp);
+        }
+        // Audit H-3: cap signal expiry so a signed signal cannot be hoarded
+        // indefinitely and replayed against a future nonce collision.
+        uint256 maxExpiry = block.timestamp + MAX_SIGNAL_EXPIRY;
+        if (expiry > maxExpiry) {
+            emit SignalRejected(vault, "expiry too far");
+            revert ExpiryTooFar(expiry, maxExpiry);
         }
         if (nonces[vault] >= nonce) {
             emit SignalRejected(vault, "nonce used");
@@ -250,8 +272,11 @@ contract StrategyExecutor is AccessControl {
 
         // ─── Risk checks ────────────────────────────────────────────────
 
+        // Per-vault cap. Skipped for close (direction=2) — close reduces
+        // existing exposure and must never be blocked by an upstream cap.
+        // Audit H-3: close also bypasses size=0 rejection (handled above).
         uint256 maxSize = maxPositionSize[vault];
-        if (maxSize > 0 && size > maxSize) {
+        if (maxSize > 0 && size > maxSize && direction != 2) {
             emit SignalRejected(vault, "size exceeds max");
             revert PositionSizeExceedsLimit(size, maxSize);
         }
@@ -274,7 +299,7 @@ contract StrategyExecutor is AccessControl {
         // This rejects size > maxLevBPS/10000 × vault NAV. With maxLevBPS=30000
         // (3x), a $100k-NAV vault is capped at $300k position notional.
         uint256 maxLevBPS = maxLeverageBPS[vault];
-        if (maxLevBPS > 0 && direction != 2) {
+        if (maxLevBPS > 0 && direction != 2 && size > 0) {
             uint256 vaultAssets = IVault(vault).totalAssets();
             if (vaultAssets == 0) {
                 emit SignalRejected(vault, "vault has zero assets");
@@ -288,6 +313,15 @@ contract StrategyExecutor is AccessControl {
                 revert LeverageExceedsLimit(leverageBps, maxLevBPS);
             }
         }
+
+        // ─── Effects BEFORE interactions (CEI, audit H-3) ───────────────
+        // Mark the nonce as used BEFORE the external CoreWriter call. If the
+        // call reverts (out-of-gas, paused writer, bad encoding — see
+        // HyperCoreAdapter C-2 fix), the nonce stays consumed so the same
+        // signal cannot be replayed. The keeper must rotate nonce on a
+        // failed submission, but that is the cheaper failure mode than the
+        // prior one: nonce still free → replay → double-order.
+        nonces[vault] = nonce;
 
         // ─── Submit to HyperCore ───────────────────────────────────────
 
@@ -306,9 +340,6 @@ contract StrategyExecutor is AccessControl {
             2,   // TIF_GTC
             uint128(nonce)
         );
-
-        // Mark nonce as used
-        nonces[vault] = nonce;
 
         emit TradeSignalExecuted({
             vault:      vault,
@@ -361,6 +392,12 @@ contract StrategyExecutor is AccessControl {
         if (block.timestamp > expiry) {
             emit SignalRejected(vault, "signal expired");
             revert SignalExpired(expiry, block.timestamp);
+        }
+        // Audit H-3: bound the rebalance expiry symmetrically with executeSignal.
+        uint256 maxExpiryReb = block.timestamp + MAX_SIGNAL_EXPIRY;
+        if (expiry > maxExpiryReb) {
+            emit SignalRejected(vault, "expiry too far");
+            revert ExpiryTooFar(expiry, maxExpiryReb);
         }
         if (nonces[vault] >= nonce) {
             emit SignalRejected(vault, "nonce used");

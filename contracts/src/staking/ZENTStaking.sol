@@ -158,10 +158,29 @@ contract ZENTStaking is AccessControl, IZENTStaking {
         require(amount > 0, "ZENTStaking: no position");
         require(block.timestamp >= pos.lockEnd, "ZENTStaking: locked");
 
+        // Defensive bound: clamp the bookkeeping delta to the current
+        // aggregate so a future accounting drift (e.g. a missed path that
+        // forgot to subtract on some other code branch) can never silently
+        // underflow `totalStaked` / `totalVeSupply`. If `oldVe > totalVeSupply`
+        // it means the aggregates are already inconsistent — we still pay out
+        // (the user is owed) but record the inconsistency via event so
+        // monitoring can reconcile. Spec-conformance audit finding #4: the
+        // documented invariant is `totalVeSupply == sum of veBalance across
+        // all active positions`, which `_veAt(amount, lockEnd, ts)` evaluates
+        // here.
         uint256 oldVe = _veAt(uint128(amount), pos.lockEnd, uint64(block.timestamp));
+        uint256 oldVeClamped = oldVe > totalVeSupply ? totalVeSupply : oldVe;
+        uint256 amountClamped = amount > totalStaked ? totalStaked : amount;
+
         delete _positions[msg.sender];
-        totalStaked -= amount;
-        totalVeSupply -= oldVe;
+        totalStaked -= amountClamped;
+        totalVeSupply -= oldVeClamped;
+
+        if (oldVe != oldVeClamped) {
+            // Surface a drift event for off-chain reconciliation; the
+            // invariant is the foundation for governor quorum math.
+            emit VeSupplyDriftDetected(msg.sender, oldVe, oldVeClamped);
+        }
 
         emit Withdrawn(msg.sender, amount);
         zent.safeTransfer(msg.sender, amount);

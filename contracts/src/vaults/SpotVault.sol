@@ -408,11 +408,12 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
     ///             underlying.
     ///           - Refuses to run while the circuit breaker is active. A halted
     ///             vault must halt EXITS too — the halt is explicit, not silent.
-    ///           - Does NOT mutate `performanceFeeAccrued`; the protocol's fee claim
-    ///             is computed off this vault's bookkeeping and emergency payouts
-    ///             are paid from underlying the protocol already accounts for. A
-    ///             fee-pinning interaction during a stale-oracle event would be
-    ///             worse than the bug we're fixing.
+    ///           - Proportionally decrements `performanceFeeAccrued` for the
+    ///             redeemed shares (audit H-1, Berkay Çarıkçıoğlu). Without
+    ///             this, an emergency exit during a fee-accrual event leaves
+    ///             the protocol's fee claim stranded against depositors who
+    ///             have already exited, and a follow-on `claimFees()` can drain
+    ///             value from remaining depositors.
     ///           - Emits `EmergencyRedeem` with the haircut so the loss is
     ///             auditable and proportional across all callers in a stale-oracle
     ///             event.
@@ -446,20 +447,39 @@ contract SpotVault is ERC4626, AccessControl, ReentrancyGuard {
         // Compute what the depositor is owed purely from current supply and the
         // actual underlying balance the vault can pay right now. No oracle call.
         uint256 supply = totalSupply();
+        require(supply > 0, "SpotVault: empty vault");
         uint256 bal = IERC20(asset()).balanceOf(address(this));
-        uint256 owed = supply == 0 ? 0 : (shares * bal) / supply;
+
+        // Gross proportional claim against the underlying balance, then net of
+        // the protocol's accrued performance-fee share for the redeemed shares.
+        // Without the fee haircut (audit H-1, Berkay Çarıkçıoğlu), emergency
+        // exits leave `performanceFeeAccrued` stranded against depositors who
+        // have already left — a later `claimFees()` call can then withdraw
+        // tokens the protocol never actually earned, taking value out of the
+        // pockets of remaining depositors.
+        uint256 grossOwed = (shares * bal) / supply;
+        uint256 feeShare = (shares * performanceFeeAccrued) / supply;
+        uint256 owed = grossOwed > feeShare ? grossOwed - feeShare : 0;
 
         _burn(owner, shares);
+        // Clamp against drift: rounding in the proportional split can leave
+        // `feeShare > performanceFeeAccrued` by 1 wei at most. Cap the
+        // decrement so we never underflow (Solidity 0.8 would revert) — the
+        // dust stays in the accounting as protocol surplus, which is the
+        // safe direction (extra-protocol value rather than under-claim).
+        uint256 accrued = performanceFeeAccrued;
+        if (feeShare > accrued) feeShare = accrued;
+        performanceFeeAccrued = accrued - feeShare;
         paid = owed;
         if (paid > 0) IERC20(asset()).safeTransfer(receiver, paid);
 
-        // `haircut` is `owed - paid` — in this path `owed == paid` by construction
-        // (we compute owed FROM the current balance), so it is zero here. Kept as
-        // an explicit, audited field so any future partial-pay path is symmetric
-        // with the event shape and so off-chain monitoring can alert on any
-        // non-zero value (signals that a stale-oracle event has over-subscribed
-        // the vault's available liquidity).
-        uint256 haircut = owed > paid ? owed - paid : 0;
+        // `haircut` is `grossOwed - paid` — i.e. the portion of the depositor's
+        // gross proportional claim that is NOT paid because it represents the
+        // protocol's accrued performance fee. Kept as an explicit, audited
+        // field so off-chain monitoring can alert on any non-zero value
+        // (signals a stale-oracle event in progress or a meaningful
+        // performance-fee accrual that the depositor is forgoing).
+        uint256 haircut = grossOwed > paid ? grossOwed - paid : 0;
         emit EmergencyRedeem(
             msg.sender,
             receiver,

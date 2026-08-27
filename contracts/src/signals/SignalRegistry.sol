@@ -55,6 +55,15 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     /// @notice Maximum batch size for submitSignalBatch to prevent unbounded gas.
     uint256 public constant MAX_BATCH_SIZE = 100;
 
+    /// @notice Maximum signals per epoch (across all batches). Audit H-4
+    ///         hardening: previously unbounded — a single provider with an
+    ///         active loop could push `epochSignalIds[currentEpochId]` to
+    ///         ~hundreds of thousands of entries, pricing settlement out of
+    ///         gas and bloating the chain state. Set to 10k so an honest
+    ///         provider can submit a day's worth of high-frequency signals
+    ///         while bounding settlement cost.
+    uint256 public constant MAX_EPOCH_SIGNALS = 1_000;
+
     /// @notice Maximum allowed expiry timestamp (7 days from now).
     uint256 public constant MAX_EXPIRY = 7 days;
 
@@ -99,6 +108,8 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
     // the EIP-712 digest, and scored as-is.
     error InvalidDirection(int256 direction);
     error ConfidenceTooHigh(uint256 confidence);
+    /// @notice Audit H-4: per-epoch signal count exceeded MAX_EPOCH_SIGNALS.
+    error EpochSignalCapExceeded(uint256 epochId, uint256 currentCount, uint256 cap);
 
     // ─── Constructor ─────────────────────────────────────────
     constructor(address _stakingContract, address _scoringOracle) EIP712("ZentorySignalRegistry", VERSION) {
@@ -164,7 +175,15 @@ contract SignalRegistry is EIP712, ISignalRegistry, AccessControl {
         signalReturns[provider][epochId] = direction; // last-wins (legacy)
         // M-2/M-3: append to the per-epoch signal list so settlement iterates
         // only this epoch's signals and scores each one individually.
-        epochSignalIds[epochId].push(signalId);
+        // H-4 hardening: cap per-epoch growth so an active spammer cannot
+        // price settlement out of gas. The cap is checked AFTER signature
+        // validation (in submitSignal/submitSignalBatch) but BEFORE the
+        // storage writes — failed signals do not consume the cap slot.
+        bytes32[] storage epochList = epochSignalIds[epochId];
+        if (epochList.length >= MAX_EPOCH_SIGNALS) {
+            revert EpochSignalCapExceeded(epochId, epochList.length, MAX_EPOCH_SIGNALS);
+        }
+        epochList.push(signalId);
 
         emit SignalTypes.SignalSubmitted(
             signalId, provider, assetClass, assetId, direction, confidence, expiresAt

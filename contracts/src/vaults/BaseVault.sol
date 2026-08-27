@@ -56,6 +56,23 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     /// @notice Emitted when a keeper closes the current vault position.
     event PositionClosed();
 
+    /// @notice Emitted on every `redeemEmergency` call. Mirrors SpotVault's
+    ///         event shape so off-chain monitoring can alert on any non-zero
+    ///         `haircutAssets` (a stale-oracle / unsettled-PnL event in progress).
+    event EmergencyRedeem(
+        address indexed caller,
+        address indexed receiver,
+        address indexed owner,
+        uint256 sharesBurned,
+        uint256 paid,
+        uint256 haircutAssets,
+        uint256 haircutPerShare
+    );
+
+    /// @notice Reverted from `redeemEmergency` when the vault's circuit breaker
+    ///         is active. Halt must halt EXITS too — the halt is explicit, not silent.
+    error EmergencyBreakerActive();
+
     // ─── Trade Log ─────────────────────────────────────────────────────────
     struct Trade {
         int8 direction;
@@ -123,6 +140,24 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
 
     // ─── ERC4626 Overrides ─────────────────────────────────────────────────
 
+    /// @dev Mirror SpotVault's guard: refuse deposits when the vault is halted
+    ///      (we already gate deposit itself with `onlyWhenCircuitBreakerInactive`)
+    ///      or when existing shareholders' shares are unbacked (NAV = 0 with
+    ///      supply > 0). Returning 0 here makes the ERC-4626 standard library's
+    ///      `deposit`/`mint` paths revert cleanly with `ERC4626ExceededMaxDeposit`.
+    ///      See SpotVault.maxDeposit docstring (audit CRITICAL-1 follow-up).
+    function maxDeposit(address) public view override returns (uint256) {
+        if (isCircuitBreakerActive) return 0;
+        if (totalSupply() > 0 && totalAssets() == 0) return 0;
+        return type(uint256).max;
+    }
+
+    function maxMint(address) public view override returns (uint256) {
+        if (isCircuitBreakerActive) return 0;
+        if (totalSupply() > 0 && totalAssets() == 0) return 0;
+        return type(uint256).max;
+    }
+
     function deposit(uint256 assets, address receiver)
         public
         override
@@ -161,29 +196,41 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     }
 
     /// @inheritdoc IVault
-    /// @dev    NAV = idle balance + signed mark-to-market of the open position
-    ///         − accrued performance fees. The open position is sized in
-    ///         `currentPositionSize` units (same units as the underlying) and is
-    ///         marked against `currentMarkPrice`. `_markToMarket()` may be
-    ///         overridden by subclasses (e.g. SpotVault v2 will keep this hook as
-    ///         a no-op since its legs are already in-vault and self-valued).
-    ///         Without this hook, an off-EVM perp position's PnL is invisible
-    ///         on-chain — the circuit breaker would never see a drawdown until
-    ///         value settled back into the idle balance, and the HWM fee math
-    ///         would understate alpha (or fail to fire at all).
+    /// @dev    NAV (settle-able) = idle balance − accrued performance fees. The
+    ///         off-EVM perp position's mark-to-market PnL is intentionally
+    ///         EXCLUDED here. Audit Critical-1 fix: previously `totalAssets()`
+    ///         valued the open position against `currentMarkPrice`, inflating
+    ///         share value by unrealized PnL that the contract could never pay
+    ///         out. That allowed honest depositors (no attacker required) to
+    ///         withdraw more than the vault held — every profitable mark
+    ///         silently drained the last redeemer's principal.
+    ///
+    ///         Mark-to-market is preserved as a *signal* via `_markToMarket()`
+    ///         and `getNavPerShareViewOnly()`. The circuit breaker and keeper
+    ///         risk views continue to react to live PnL (they MUST — otherwise
+    ///         a -50% position would never trip the breaker), but no
+    ///         ERC-4626 entrypoint that touches user funds ever sees it.
+    ///         Only the IDLE balance is settle-able; only the idle balance is
+    ///         real. SpotVault keeps its in-vault two-leg model and overrides
+    ///         this hook implicitly via its own `totalAssets()`.
     function totalAssets() public view override(ERC4626, IVault) returns (uint256) {
         uint256 idle = IERC20(asset()).balanceOf(address(this));
+        return idle > performanceFeeAccrued ? idle - performanceFeeAccrued : 0;
+    }
+
+    /// @notice Mark-to-market NAV including off-EVM PnL. View-only — NOT used
+    ///         by ERC-4626 math, withdraw, or redeem. Used by the circuit
+    ///         breaker (`checkCircuitBreaker`) and keeper dashboards to see
+    ///         live drawdowns. Returns 0 if the mark would be negative to
+    ///         avoid wrapping signed-underflow in a `uint` return.
+    function getNavPerShareViewOnly() public view returns (uint256) {
+        uint256 supply = totalSupply();
+        if (supply == 0) return 0;
+        uint256 idle = IERC20(asset()).balanceOf(address(this));
         int256 mtm = _markToMarket();
-        // NAV is `idle + mtm` (signed add). When MTM is negative we DO want it
-        // to subtract from NAV — that is the whole point of mark-to-market:
-        // the circuit breaker must see the drawdown, not just an idle-balance
-        // change. The result is clamped at zero only if `idle + mtm` would
-        // underflow (i.e. the loss has exceeded the entire idle balance, the
-        // theoretical-maximum-loss case where `size` × (mark-entry)/mark < -idle).
-        // In that pathological case NAV is treated as 0 (effectively insolvent).
-        int256 grossSigned = int256(idle) + mtm;
+        int256 grossSigned = int256(idle) + mtm - int256(performanceFeeAccrued);
         uint256 gross = grossSigned > 0 ? uint256(grossSigned) : 0;
-        return gross > performanceFeeAccrued ? gross - performanceFeeAccrued : 0;
+        return (gross * (10 ** decimals())) / supply;
     }
 
     /// @notice Signed mark-to-market of the open position in asset units (raw
@@ -222,12 +269,17 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     }
 
     /// @inheritdoc IVault
-    /// @dev    NAV per share denominated in asset units. With `_decimalsOffset()`
-    ///         set to 6 (audit H-1 inflation-attack mitigation), share decimals
-    ///         = asset decimals + 6. `shareUnit` accounts for that offset so the
-    ///         "1 share" denominator matches the actual ERC20 decimals of the
-    ///         share token, keeping NAV in asset-unit terms exactly as before
-    ///         the offset was introduced.
+    /// @dev    NAV per share denominated in asset units, settle-able basis. With
+    ///         `_decimalsOffset()` set to 6 (audit H-1 inflation-attack
+    ///         mitigation), share decimals = asset decimals + 6. `shareUnit`
+    ///         accounts for that offset so the "1 share" denominator matches the
+    ///         actual ERC20 decimals of the share token, keeping NAV in asset-
+    ///         unit terms exactly as before the offset was introduced.
+    ///
+    ///         IMPORTANT: this returns the SETTLE-ABLE NAV per share — i.e. the
+    ///         amount of underlying each share is actually entitled to at this
+    ///         instant, excluding off-EVM PnL. Use `getNavPerShareViewOnly()`
+    ///         for live mark-to-market (circuit breaker / dashboards).
     function getNavPerShare() public view returns (uint256) {
         uint256 supply = totalSupply();
         // slither-disable-next-line incorrect-equality
@@ -239,7 +291,12 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     // ─── Performance Fee ───────────────────────────────────────────────────
 
     function evaluateFees() external onlyRole(KEEPER_ROLE) {
-        uint256 nav = getNavPerShare();
+        // HWM is tracked against the view-only (mark-to-market) NAV so fee
+        // accrual captures alpha from off-EVM PnL once it materialises. Fee
+        // math remains bounded by the SETTLE-ABLE totalAssets() so we never
+        // accrue fees the vault cannot pay out (audit Critical-1 follow-up).
+        uint256 nav = getNavPerShareViewOnly();
+        if (nav == 0) nav = getNavPerShare();
         uint256 hwm = highWaterMark;
 
         if (nav <= hwm) {
@@ -248,12 +305,18 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
         }
 
         uint256 alpha = nav - hwm;
-        // Fee is computed in asset units: alpha (asset units per share) × supply
-        // (shares) / shareUnit (raw units per share) × performanceFee / 10000.
-        // shareUnit replaces the previous assetUnit denominator to stay
-        // consistent with the share-decimals offset (audit H-1).
         uint256 shareUnit = 10 ** decimals();
         uint256 fee = (alpha * totalSupply() * performanceFee) / (shareUnit * 10000);
+
+        // Cap the accrual by what settle-able NAV can actually afford. Fees
+        // the vault genuinely cannot pay (off-EVM PnL not yet settled) are
+        // skipped rather than taken out of depositor principal. The HWM
+        // still moves up — closing the future gap — so the protocol's
+        // claim against future settled alpha is preserved.
+        if (fee > 0) {
+            uint256 room = totalAssets();
+            if (fee > room) fee = room;
+        }
 
         if (fee > 0) {
             performanceFeeAccrued += fee;
@@ -267,16 +330,47 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     function claimFees() external nonReentrant returns (uint256 claimed) {
         claimed = performanceFeeAccrued;
         require(claimed > 0, "No fees to claim");
-        performanceFeeAccrued = 0;
 
         address recipient = feeRecipient;
+        uint256 paid;
+
+        // Compute the destination first; only zero `performanceFeeAccrued`
+        // AFTER we know how the transfer succeeded. A failure mid-way (an
+        // approve that reverts on a non-standard ERC20, a FeeDistributor
+        // whose `accumulate` reverts) must not silently burn the accrued
+        // fees — the next call would see `claimed = 0` and the protocol
+        // would lose the revenue permanently.
         if (recipient.code.length > 0) {
+            // Approval + accumulate may revert if `recipient` is not actually
+            // an IFeeDistributor (e.g. setFeeRecipient was pointed at a
+            // generic contract). In that case fall back to a direct ERC20
+            // transfer so governance can fix the misconfiguration without
+            // permanently burning the accrued fees.
             IERC20(asset()).forceApprove(recipient, claimed);
-            IFeeDistributor(recipient).accumulate(address(this), claimed);
+            try IFeeDistributor(recipient).accumulate(address(this), claimed) {
+                paid = claimed;
+            } catch {
+                // Revoke the unused approval and pay the recipient directly.
+                IERC20(asset()).forceApprove(recipient, 0);
+                IERC20(asset()).safeTransfer(recipient, claimed);
+                paid = claimed;
+                emit FeeRecipientFallbackUsed(recipient, claimed);
+            }
         } else {
             IERC20(asset()).safeTransfer(recipient, claimed);
+            paid = claimed;
         }
+
+        // Only zero the accounting after the transfer has settled.
+        performanceFeeAccrued -= paid;
     }
+
+    /// @notice Emitted when `claimFees` falls back to a direct ERC20 transfer
+    ///         because the configured `feeRecipient` is a contract but is not
+    ///         a working IFeeDistributor. Off-chain monitoring should alert
+    ///         so governance can fix the misconfiguration (recipient was set
+    ///         to a non-FeeDistributor contract address).
+    event FeeRecipientFallbackUsed(address indexed recipient, uint256 amount);
 
     /// @notice Emitted when the performance-fee recipient is changed. Lets
     ///         off-chain monitoring alert on any admin/governance fee re-routing
@@ -363,11 +457,15 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     ///         from the high-water mark exceeds circuitBreakerDrawdownBPS.
     ///         Anyone can call this — it is not access-controlled — so keepers, keepers-of-last-resort,
     ///         or monitoring bots can trigger it without needing a role.
+    /// @dev    Reads the VIEW-ONLY (mark-to-market) NAV so live off-EVM PnL
+    ///         still trips the breaker. Settle-able NAV (used by withdraw)
+    ///         cannot move the breaker — only signals can.
     function checkCircuitBreaker() external {
         if (isCircuitBreakerActive) return;
 
         uint256 hwm = highWaterMark;
-        uint256 nav = getNavPerShare();
+        uint256 nav = getNavPerShareViewOnly();
+        if (nav == 0) nav = getNavPerShare();
         if (nav >= hwm) return;
 
         uint256 drawdownBPS = ((hwm - nav) * 10000) / hwm;
@@ -381,6 +479,64 @@ contract BaseVault is ERC4626, AccessControl, ReentrancyGuard, IVault {
     /// @inheritdoc IVault
     function isKeeper(address caller) external view returns (bool) {
         return hasRole(KEEPER_ROLE, caller);
+    }
+
+    // ─── Emergency exit (stale-mark / unsettled-PnL recovery) ────────────
+
+    /// @notice Opt-in emergency exit that pays whatever underlying the vault
+    ///         currently holds, in proportion to shares, ignoring the off-EVM
+    ///         position. Required because a stale-oracle / unsettled PnL state
+    ///         can otherwise leave `totalAssets()` under-declared and honest
+    ///         users locked in. Mirrors SpotVault.redeemEmergency — same
+    ///         semantics, same haircut accounting.
+    /// @dev    The haircut proportionally reduces `performanceFeeAccrued` so a
+    ///         fee claim cannot later withdraw tokens that have already left
+    ///         the vault via this path (audit H-1 hardening, see Berkay
+    ///         Çarıkçıoğlu's SpotVault finding — same shape of bug, same
+    ///         shape of fix).
+    function redeemEmergency(uint256 shares, address receiver, address owner)
+        external
+        nonReentrant
+        returns (uint256 paid)
+    {
+        if (isCircuitBreakerActive) revert EmergencyBreakerActive();
+        require(shares > 0, "BaseVault: zero shares");
+        require(receiver != address(0) && owner != address(0), "BaseVault: zero addr");
+
+        if (owner != msg.sender) {
+            _spendAllowance(owner, msg.sender, shares);
+        }
+
+        uint256 supply = totalSupply();
+        require(supply > 0, "BaseVault: empty vault");
+        uint256 bal = IERC20(asset()).balanceOf(address(this));
+
+        // What the depositor is owed under the documented share-supply rule,
+        // minus the protocol's accrued fee share — both prorated to shares.
+        uint256 grossOwed = (shares * bal) / supply;
+        uint256 feeShare = (shares * performanceFeeAccrued) / supply;
+        uint256 owed = grossOwed > feeShare ? grossOwed - feeShare : 0;
+
+        _burn(owner, shares);
+        // Clamp against rounding drift (see SpotVault.redeemEmergency — same
+        // shape of fix). Solidity 0.8 would revert on underflow; dust stays
+        // as protocol surplus.
+        uint256 accrued = performanceFeeAccrued;
+        if (feeShare > accrued) feeShare = accrued;
+        performanceFeeAccrued = accrued - feeShare;
+        paid = owed;
+        if (paid > 0) IERC20(asset()).safeTransfer(receiver, paid);
+
+        uint256 haircut = grossOwed > paid ? grossOwed - paid : 0;
+        emit EmergencyRedeem(
+            msg.sender,
+            receiver,
+            owner,
+            shares,
+            paid,
+            haircut,
+            shares > 0 ? haircut * supply / shares : 0
+        );
     }
 
     function supportsInterface(bytes4 interfaceId) public view override(AccessControl) returns (bool) {

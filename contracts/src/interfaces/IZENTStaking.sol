@@ -11,6 +11,12 @@ interface IZENTStaking {
     event MinStakeUpdated(uint256 oldValue, uint256 newValue);
     event ProviderSlashed(address indexed provider, uint256 amount, address indexed reason);
     event ProviderRewarded(address indexed provider, uint256 amount);
+    /// @notice Surfaced when a withdrawal path clamps the ve-supply decrement
+    ///         (i.e. the invariant `totalVeSupply == sum of veBalance` was
+    ///         already violated before the withdrawal). Off-chain monitoring
+    ///         should alert so governance can reconcile. The user is still paid
+    ///         out in full.
+    event VeSupplyDriftDetected(address indexed user, uint256 observedVe, uint256 clampedVe);
 
     /// @notice Lock ZENT for `lockDuration` seconds. Reverts if the caller already has a position.
     /// @return lockEnd timestamp at which the lock expires

@@ -145,6 +145,7 @@ contract FeeDistributorTest is Test {
         vm.expectEmit();
         emit IFeeDistributor.FeesDistributed(
             fee * 50 / 100, // buyback stays in distributor
+            fee * 10 / 100, // buyback dust (rounding leftover kept in distributor) — #9
             fee * 10 / 100, // gpEngineAmount (ops/research engine) — finding #9
             fee * 15 / 100, // insurance
             fee * 25 / 100 // treasuryAmount → Protocol Treasury — finding #9
@@ -243,6 +244,25 @@ contract FeeDistributorTest is Test {
         distributor.distribute(vault);
 
         assertEq(wbtc.balanceOf(protocolTreasury), protocolTreasuryBalanceBefore + fee * 25 / 100);
+    }
+
+    // Audit H-3 dust-routing fix: when `accumulated` is not a multiple of 100,
+    // integer division over four buckets leaves a 1–3 wei remainder stranded
+    // in the contract. We sweep that remainder into the buyback pool so the
+    // pool accounting tracks the actual contract balance.
+    function test_distributeSweepsDustIntoBuybackPool() external {
+        // 99 wei accumulated → 49 buyback + 24 treasury + 14 insurance + 9 gp = 96, dust = 3
+        uint256 fee = 99;
+        vm.startPrank(vault);
+        wbtc.approve(address(distributor), type(uint256).max);
+        distributor.accumulate(vault, fee);
+        vm.stopPrank();
+
+        vm.prank(stranger);
+        distributor.distribute(vault);
+
+        // Buyback pool should hold 50% + the 3 wei dust.
+        assertEq(distributor.pools(0), fee * 50 / 100 + 3);
     }
 
     function test_withdrawToRejectsFromBuybackPool() external {

@@ -43,6 +43,8 @@ contract HyperCoreAdapter is AccessControl {
     error AssetNotSupported(uint32 asset);
     error PriceTooSmall(uint64 limitPx);
     error SizeTooSmall(uint64 sz);
+    error CoreWriterCallFailed();
+    error CoreWriterReverted(bytes returndata);
 
     /// @notice Asset configuration for a single supported asset.
     struct AssetConfig {
@@ -147,12 +149,46 @@ contract HyperCoreAdapter is AccessControl {
         );
 
         // slither-disable-next-line low-level-calling
-        bool success;
         /// @dev Inline assembly needed because via-IR miscompiles the high-level call with
         ///      CORE_WRITER constant. The address 0x3333...3333 is the HyperCore CoreWriter precompile.
-        assembly { success := call(gas(), 0x3333333333333333333333333333333333333333, 0, add(data, 32), mload(data), 0, 0) }
-        // CoreWriter actions are fire-and-forget; HyperCore executes in next block.
-        // We emit the event for off-chain indexing.
+        ///
+        ///      Audit Critical-2 fix: previously `success` was read but never
+        ///      checked, and the event was emitted regardless. A failed
+        ///      CoreWriter call (out of gas, bad encoding, paused writer) was
+        ///      indistinguishable from success to off-chain monitoring — the
+        ///      keeper saw an OrderSubmitted event, the trade never reached
+        ///      HyperCore, and the on-chain nonce was still burned. Now we
+        ///      capture returndatasize / returndata, revert on failure with
+        ///      the returndata attached (best-effort), and emit the event only
+        ///      when the call succeeded.
+        bytes memory returndata;
+        bool success;
+        assembly {
+            success := call(
+                gas(),
+                0x3333333333333333333333333333333333333333,
+                0,
+                add(data, 32),
+                mload(data),
+                0,
+                0
+            )
+            // `returndatasize` is 0 on OOG-with-no-data; copy whatever the
+            // precompile wrote back so the revert reason survives the trip up.
+            let rdSize := returndatasize()
+            if gt(rdSize, 0) {
+                returndata := mload(0x40)
+                mstore(0x40, add(returndata, add(rdSize, 0x20)))
+                mstore(returndata, rdSize)
+                returndatacopy(returndata, 0, rdSize)
+            }
+        }
+        if (!success) {
+            if (returndata.length == 0) revert CoreWriterCallFailed();
+            revert CoreWriterReverted(returndata);
+        }
+        // CoreWriter actions execute on HyperCore in the next block; emit only on
+        // successful enqueue so monitoring can distinguish "submitted" from "failed".
 
         emit OrderSubmitted({
             localAsset:     localAsset,
