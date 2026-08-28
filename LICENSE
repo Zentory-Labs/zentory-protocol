@@ -1,0 +1,27 @@
+Zentory Protocol — Source-Available License (BUSL 1.1)
+
+The Solidity smart contracts, deployment scripts, and Foundry tooling
+contained in this repository (everything under `contracts/`, including
+`contracts/src/`, `contracts/script/`, `contracts/test/`, and the
+keeper under `contracts/keeper/`) are licensed under the Business
+Source License 1.1 (Zentory-customized edition) — see
+[`LICENSE_BSL_1_1.txt`](./LICENSE_BSL_1_1.txt) for the full legal text.
+
+  - Change Date:        September 30, 2030
+  - Change License:     GNU General Public License v3.0 (GPL-3.0)
+  - Competing-service restriction applies until the Change Date.
+  - All non-commercial, research, integration, and security-audit
+    uses are permitted without prior written permission.
+
+Sub-licenses for vendored dependencies (preserved verbatim):
+
+  - contracts/lib/forge-std             — MIT OR Apache-2.0 (dual)
+  - contracts/lib/openzeppelin-contracts/   — MIT
+  - contracts/lib/openzeppelin-contracts-upgradeable/  — MIT
+  - contracts/lib/erc4626-tests/        — AGPL-3.0 (test suite only)
+
+For any commercial deployment, managed-service use, or integration
+into a product offered to third parties before the Change Date,
+contact licensing@zentorylabs.com.
+
+— Zentory Labs
