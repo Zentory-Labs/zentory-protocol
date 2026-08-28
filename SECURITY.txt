@@ -1,0 +1,46 @@
+# Zentory Labs — Security Disclosure Policy
+# (RFC 9116 draft format — github.com/zentries/securitytxt)
+
+Contact:        mailto:security@zentorylabs.com
+Contact:        https://github.com/Zentory-Labs/zentory-protocol/security/advisories/new
+Encryption:     https://keybase.io/zentory/pgp_keys.asc
+Expires:        2027-09-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical:      https://github.com/Zentory-Labs/zentory-protocol/blob/main/SECURITY.txt
+
+# Scope — in-scope assets
+#   Smart contracts under contracts/src/ deployed to:
+#     - HyperEVM testnet  (chain ID 998)
+#     - HyperEVM mainnet  (chain ID 999, post-audit)
+#   The Zentory dApp at https://app.zentorylabs.com (read-only)
+#   The Zentory keeper services (only the deployed on-chain counterparties)
+
+# Out-of-scope
+#   - Test contracts under contracts/test/ and contracts/script/ (no economic value)
+#   - Marketing site at https://zentorylabs.com (static; report to standard channels)
+#   - Vendored libraries under contracts/lib/ — report upstream to OpenZeppelin / forge-std
+#   - Known leaked testnet deployer EOAs (0x3f07..., 0xe56E...) — already documented; do NOT report
+
+# Rules of engagement
+#   - Do not exploit a vulnerability beyond what is necessary to demonstrate it.
+#   - Do not perform social engineering, phishing, DDoS, or physical attacks.
+#   - Do not access, modify, retain, transfer, or destroy user funds.
+#   - Stop immediately and contact us if you encounter user data.
+
+# Severity response targets (business days, from report acknowledgement)
+#   Critical (loss of funds, access control bypass):          24 hours
+#   High (likely fund loss under specific conditions):        3 days
+#   Medium (denial of service, info disclosure w/o funds):    7 days
+#   Low / informational:                                      14 days
+
+# Recognition
+#   Public acknowledgement on the Zentory Labs website hall-of-fame
+#   (with researcher consent). Bug bounty payouts — see
+#   https://immunefi.com/bounty/zentorylabs/ for live program details
+#   (program to be listed once paid audit is complete).
+
+# Safe harbor
+#   Zentory Labs will not pursue legal action against researchers who
+#   follow this policy in good faith. We will work with researchers
+#   on coordinated disclosure timelines appropriate to the severity
+#   of the finding.
